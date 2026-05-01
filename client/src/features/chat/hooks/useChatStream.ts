@@ -8,6 +8,7 @@ import {
 import { toast } from "sonner";
 
 export const useChatStream = () => {
+  console.log("Initializing useChatStream hook");
   const { user } = useUser();
   const {
     currentChatId,
