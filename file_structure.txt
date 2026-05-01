@@ -1,0 +1,105 @@
+.
+├── AI_ARCHITECTURE.md
+├── client
+│   ├── components.json
+│   ├── dist
+│   │   ├── assets
+│   │   │   ├── index-B0SPJ7vD.js
+│   │   │   ├── index-DHTCzio1.css
+│   │   │   ├── inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2
+│   │   │   ├── inter-cyrillic-wght-normal-DqGufNeO.woff2
+│   │   │   ├── inter-greek-ext-wght-normal-DlzME5K_.woff2
+│   │   │   ├── inter-greek-wght-normal-CkhJZR-_.woff2
+│   │   │   ├── inter-latin-ext-wght-normal-DO1Apj_S.woff2
+│   │   │   ├── inter-latin-wght-normal-Dx4kXJAl.woff2
+│   │   │   └── inter-vietnamese-wght-normal-CBcvBZtf.woff2
+│   │   ├── favicon.svg
+│   │   ├── icons.svg
+│   │   └── index.html
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── public
+│   │   ├── favicon.svg
+│   │   └── icons.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── App.tsx
+│   │   ├── components
+│   │   │   ├── auth
+│   │   │   │   └── ProtectedRoute.tsx
+│   │   │   └── ui
+│   │   │       ├── button.tsx
+│   │   │       ├── dropdown-menu.tsx
+│   │   │       └── sonner.tsx
+│   │   ├── features
+│   │   │   └── chat
+│   │   │       ├── components
+│   │   │       │   ├── ChatHeader.tsx
+│   │   │       │   ├── CodeBlock.tsx
+│   │   │       │   ├── InputArea.tsx
+│   │   │       │   ├── MarkdownConfig.tsx
+│   │   │       │   ├── MessageItem.tsx
+│   │   │       │   ├── MessageList.tsx
+│   │   │       │   └── Sidebar.tsx
+│   │   │       ├── hooks
+│   │   │       │   ├── useAvailableProviders.ts
+│   │   │       │   ├── useChatInput.ts
+│   │   │       │   ├── useChatList.ts
+│   │   │       │   ├── useChatMessages.ts
+│   │   │       │   └── useChatStream.ts
+│   │   │       ├── services
+│   │   │       │   └── chat.service.ts
+│   │   │       └── store
+│   │   │           └── useChatStore.ts
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   ├── api.ts
+│   │   │   └── utils.ts
+│   │   ├── main.tsx
+│   │   └── pages
+│   │       ├── Auth.tsx
+│   │       └── Chat.tsx
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── CODE_FLOW.md
+├── file_structure.txt
+├── package.json
+├── README.md
+└── server
+    ├── package.json
+    ├── package-lock.json
+    ├── src
+    │   ├── app.ts
+    │   ├── config
+    │   │   └── db.ts
+    │   ├── controllers
+    │   │   ├── ai.controller.ts
+    │   │   └── chat.controller.ts
+    │   ├── middleware
+    │   │   └── error.middleware.ts
+    │   ├── models
+    │   │   └── Chat.model.ts
+    │   ├── routes
+    │   │   ├── ai.routes.ts
+    │   │   └── chat.routes.ts
+    │   ├── server.ts
+    │   ├── services
+    │   │   └── ai
+    │   │       ├── ai.factory.ts
+    │   │       ├── ai.interface.ts
+    │   │       ├── constants.ts
+    │   │       ├── providers
+    │   │       │   ├── claude.adapter.ts
+    │   │       │   ├── gemini.adapter.ts
+    │   │       │   ├── nvidia.adapter.ts
+    │   │       │   └── openai.adapter.ts
+    │   │       └── types.ts
+    │   └── utils
+    │       └── asyncHandler.ts
+    └── tsconfig.json
+
+27 directories, 75 files
