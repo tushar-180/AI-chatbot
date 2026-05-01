@@ -19,6 +19,7 @@ export const useChatList = () => {
     setIsNewChat,
     setSidebarOpen,
     removeChat,
+    updateChatTitle,
   } = useChatStore();
 
   const createChat = () => {
@@ -40,8 +41,18 @@ export const useChatList = () => {
       toast.error("Could not delete chat.");
     }
   };
-
-  const selectChat = (chatId: string) => {
+  const renameChat = async (chatId: string, title: string) => {
+    try {
+      await api.patch(`/chat/${chatId}`, { title });
+      updateChatTitle(chatId, title);
+      toast.success("Chat renamed successfully.");
+    } catch (err) {
+      console.error("Error renaming chat", err);
+      toast.error("Could not rename chat.");
+      throw err; // Propagate error to handle UI state in component
+    }
+  };
+   const selectChat = (chatId: string) => {
     setIsNewChat(false);
     setCurrentChat(chatId);
     setMessages([]); // Clear messages immediately for smoother transition
@@ -101,6 +112,7 @@ export const useChatList = () => {
     currentChatId,
     createChat,
     deleteChat,
+    renameChat,
     selectChat,
   };
 };

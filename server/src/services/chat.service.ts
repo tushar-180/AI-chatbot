@@ -209,4 +209,11 @@ export const chatService = {
 
     return chat;
   },
+
+  async updateChatTitle(chatId: string, title: string) {
+    const chat = await requireChat(chatId);
+    chat.title = requireMessage(title, "Title is required");
+    await chat.save();
+    return chat;
+  },
 };
