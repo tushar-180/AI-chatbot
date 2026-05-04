@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useEffectEvent } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
@@ -8,7 +8,6 @@ import {
 import { toast } from "sonner";
 
 export const useChatStream = () => {
-  console.log("Initializing useChatStream hook");
   const { user } = useUser();
   const {
     currentChatId,
@@ -16,36 +15,57 @@ export const useChatStream = () => {
     loading,
     isStreaming,
     setCurrentChat,
-    setChats,
+    setMessages,
     setIsNewChat,
     setLoading,
     setIsStreaming,
+    upsertChat,
   } = useChatStore();
 
   const [optimisticMessages, setOptimisticMessages] = useState<
     Message[] | null
   >(null);
+  const optimisticMessagesRef = useRef<Message[] | null>(null);
+  const optimisticChatIdRef = useRef<string | null>(null);
+  const pendingNewChatTitleRef = useRef("");
+  const lastResumeAttemptChatIdRef = useRef<string | null>(null);
 
-  // Sync optimistic messages with store when stream ends or chat changes
-  useEffect(() => {
-    if (!currentChatId || isStreaming) return;
-
-    queueMicrotask(() => {
-      setOptimisticMessages(null);
-    });
-  }, [currentChatId, isStreaming]);
-
-  const refreshChats = async (userId: string, nextChatId?: string) => {
-    const chats = await chatService.fetchChats(userId);
-    setChats(chats);
-
-    if (nextChatId) {
-      setCurrentChat(nextChatId);
-      setIsNewChat(false);
-    }
+  const buildLocalChatTitle = (input: string) => {
+    const normalized = input.trim().replace(/\s+/g, " ");
+    return normalized.length > 60
+      ? `${normalized.slice(0, 57).trimEnd()}...`
+      : normalized;
   };
 
-  const processStream = async (response: Response, isCreatingChat: boolean, initialChatId: string | null) => {
+  useEffect(() => {
+    optimisticMessagesRef.current = optimisticMessages;
+  }, [optimisticMessages]);
+
+  // Keep streamed messages mounted for the active chat. Only drop them after the user changes chats.
+  useEffect(() => {
+    if (isStreaming) return;
+
+    if (!currentChatId) {
+      optimisticChatIdRef.current = null;
+      queueMicrotask(() => {
+        setOptimisticMessages(null);
+      });
+      return;
+    }
+
+    if (optimisticChatIdRef.current && optimisticChatIdRef.current !== currentChatId) {
+      optimisticChatIdRef.current = null;
+      queueMicrotask(() => {
+        setOptimisticMessages(null);
+      });
+    }
+  }, [currentChatId, isStreaming]);
+
+  const processStream = async (
+    response: Response,
+    isCreatingChat: boolean,
+    initialChatId: string | null,
+  ) => {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let fullContent = "";
@@ -60,6 +80,7 @@ export const useChatStream = () => {
 
       if (data.chatId) {
         resolvedChatId = data.chatId;
+        optimisticChatIdRef.current = data.chatId;
         if (isCreatingChat) {
           setCurrentChat(data.chatId);
           setIsNewChat(false);
@@ -94,9 +115,22 @@ export const useChatStream = () => {
       if (data.error) toast.error(data.error);
 
       if (data.done) {
-        if (user?.id) {
-          await refreshChats(user.id, resolvedChatId || undefined);
+        if (optimisticMessagesRef.current?.length) {
+          setMessages(optimisticMessagesRef.current);
         }
+
+        if (resolvedChatId) {
+          optimisticChatIdRef.current = resolvedChatId;
+          if (isCreatingChat) {
+            upsertChat({
+              _id: resolvedChatId,
+              title: pendingNewChatTitleRef.current,
+            });
+          }
+          setCurrentChat(resolvedChatId);
+          setIsNewChat(false);
+        }
+
         setIsStreaming(false);
         setLoading(false);
       }
@@ -120,7 +154,7 @@ export const useChatStream = () => {
     }
   };
 
-  const resumeStream = async (chatId: string) => {
+  const resumeCurrentChatStream = useEffectEvent(async (chatId: string) => {
     try {
       const url = chatService.getStreamUpdatesUrl(chatId);
       const response = await fetch(url, {
@@ -130,46 +164,59 @@ export const useChatStream = () => {
         },
       });
 
-      if (!response.ok) return false;
+      if (!response.ok) return;
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("text/event-stream")) {
-        return false;
+        return;
       }
 
-      // Add a placeholder message for the incoming stream
       const assistantPlaceholder: Message = {
         role: "assistant",
         content: "",
-        model: "gemini", // Will be updated by stream
+        model: "gemini",
       };
 
+      optimisticChatIdRef.current = chatId;
       setLoading(true);
       setIsStreaming(true);
       setOptimisticMessages([...messages, assistantPlaceholder]);
 
       await processStream(response, false, chatId);
-      return true;
     } catch (err) {
       console.error("Error resuming stream", err);
       setLoading(false);
       setIsStreaming(false);
       setOptimisticMessages(null);
-      return false;
     }
-  };
+  });
 
   // Attempt to resume stream when chat changes or component mounts
   useEffect(() => {
-    if (currentChatId && !isStreaming) {
-      // Small timeout to ensure messages are loaded first before attempting recovery
-      // This prevents visual glitches where the AI placeholder appears before user messages
-      const timer = setTimeout(() => {
-        resumeStream(currentChatId);
-      }, 500);
-      return () => clearTimeout(timer);
+    if (!currentChatId) {
+      lastResumeAttemptChatIdRef.current = null;
+      return;
     }
-  }, [currentChatId]);
+
+    if (isStreaming) {
+      lastResumeAttemptChatIdRef.current = currentChatId;
+      return;
+    }
+
+    if (lastResumeAttemptChatIdRef.current === currentChatId) {
+      return;
+    }
+
+    lastResumeAttemptChatIdRef.current = currentChatId;
+
+    // Small timeout to ensure messages are loaded first before attempting recovery
+    // This prevents visual glitches where the AI placeholder appears before user messages
+    const timer = setTimeout(() => {
+      void resumeCurrentChatStream(currentChatId);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [currentChatId, isStreaming]);
 
 
   const streamMessage = async (input: string, provider: string) => {
@@ -186,8 +233,14 @@ export const useChatStream = () => {
       model: provider,
     };
     const isCreatingChat = !currentChatId;
+    const nextOptimisticChatId = currentChatId;
+
+    pendingNewChatTitleRef.current = isCreatingChat
+      ? buildLocalChatTitle(input)
+      : "";
 
     // Set optimistic UI
+    optimisticChatIdRef.current = nextOptimisticChatId;
     setOptimisticMessages([...messages, userMessage, assistantPlaceholder]);
 
     setLoading(true);

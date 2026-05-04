@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 
 export const useChatList = () => {
   const { user } = useUser();
+  const fetchedUserIdRef = useRef<string | null>(null);
   const {
     chats,
     currentChatId,
@@ -58,15 +59,18 @@ export const useChatList = () => {
   };
 
   useEffect(() => {
-    if (!user?.id || loading || isStreaming) return;
+    if (!user?.id || loading || isStreaming || fetchedUserIdRef.current === user.id) {
+      return;
+    }
+
     const fetchChats = async () => {
-      console.log("fetch")
       try {
         const res = await api.get("/chat", {
           params: { userId: user.id },
         });
 
         const fetchedChats = res.data || [];
+        fetchedUserIdRef.current = user.id;
         setChats(fetchedChats);
 
         if (fetchedChats.length === 0) {
