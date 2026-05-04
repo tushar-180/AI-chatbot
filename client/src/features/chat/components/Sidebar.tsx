@@ -286,7 +286,6 @@ const Sidebar = () => {
             )
           )}
          </div>
-        </div>
       </aside>
 
       {/* Delete Confirmation Modal */}
