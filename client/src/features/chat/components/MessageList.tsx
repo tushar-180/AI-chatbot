@@ -1,4 +1,4 @@
-import { useRef, useEffect, memo } from "react";
+import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
 import { Bot, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
@@ -59,22 +59,116 @@ const MessageList = ({
   isNewChat,
   onSuggestionClick,
 }: MessageListProps) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
+  const programmaticScrollTimeoutRef = useRef<number | null>(null);
+  const userIsInteractingRef = useRef(false);
+  const previousMessageCountRef = useRef(messages.length);
+  const previousChatIdRef = useRef<string | null>(currentChatId);
+  const previousIsNewChatRef = useRef(isNewChat);
 
-  const scrollToBottom = (instant = false) => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: instant ? "auto" : "smooth",
-      block: "end",
+  const isAtBottom = useCallback(() => {
+    if (!scrollContainerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    // Consider "at bottom" if within 50px of the bottom
+    return scrollHeight - (scrollTop + clientHeight) < 50;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (!scrollContainerRef.current) return;
+
+    if (programmaticScrollTimeoutRef.current) {
+      window.clearTimeout(programmaticScrollTimeoutRef.current);
+    }
+
+    isProgrammaticScrollRef.current = true;
+    scrollContainerRef.current?.scrollTo({
+      top: scrollContainerRef.current.scrollHeight,
+      behavior,
     });
+
+    programmaticScrollTimeoutRef.current = window.setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+      programmaticScrollTimeoutRef.current = null;
+      userIsInteractingRef.current = false;
+      shouldAutoScrollRef.current = isAtBottom();
+    }, behavior === "smooth" ? 250 : 0);
+  }, [isAtBottom]);
+
+  const stopProgrammaticScroll = useCallback(() => {
+    userIsInteractingRef.current = true;
+    isProgrammaticScrollRef.current = false;
+
+    if (programmaticScrollTimeoutRef.current) {
+      window.clearTimeout(programmaticScrollTimeoutRef.current);
+      programmaticScrollTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Handle user scroll - detect if scrolling up or if reached bottom
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const atBottom = isAtBottom();
+
+    if (isProgrammaticScrollRef.current && !userIsInteractingRef.current) {
+      if (atBottom) {
+        shouldAutoScrollRef.current = true;
+      }
+      return;
+    }
+
+    const wasAutoScrollEnabled = shouldAutoScrollRef.current;
+
+    shouldAutoScrollRef.current = atBottom;
+
+    if (atBottom && !wasAutoScrollEnabled) {
+      userIsInteractingRef.current = false;
+      scrollToBottom("auto");
+    }
   };
 
+  useLayoutEffect(() => {
+    const previousMessageCount = previousMessageCountRef.current;
+    const previousChatId = previousChatIdRef.current;
+    const previousIsNewChat = previousIsNewChatRef.current;
+
+    const hasNewMessageStarted = messages.length > previousMessageCount;
+    const chatChanged = currentChatId !== previousChatId;
+    const newChatStarted = isNewChat && !previousIsNewChat;
+    const shouldJumpToBottom = chatChanged || newChatStarted || hasNewMessageStarted;
+
+    if (shouldJumpToBottom || shouldAutoScrollRef.current) {
+      scrollToBottom(shouldJumpToBottom ? "smooth" : "auto");
+    }
+
+    previousMessageCountRef.current = messages.length;
+    previousChatIdRef.current = currentChatId;
+    previousIsNewChatRef.current = isNewChat;
+  }, [messages, currentChatId, isNewChat, scrollToBottom]);
+
   useEffect(() => {
-    // Use instant scroll during streaming to prevent jitter/shaking
-    scrollToBottom(isStreaming);
-  }, [messages, isStreaming]);
+    shouldAutoScrollRef.current = true;
+    userIsInteractingRef.current = false;
+  }, [currentChatId, isNewChat]);
+
+  useEffect(() => {
+    return () => {
+      if (programmaticScrollTimeoutRef.current) {
+        window.clearTimeout(programmaticScrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]">
+    <div 
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      onWheel={stopProgrammaticScroll}
+      onTouchStart={stopProgrammaticScroll}
+      onMouseDown={stopProgrammaticScroll}
+      className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]"
+    >
       <div className="mx-auto flex max-w-5xl flex-col gap-7">
         {!currentChatId && messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 md:py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
@@ -121,7 +215,7 @@ const MessageList = ({
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-slate-700">
                 <Bot size={18} className="animate-pulse" />
               </div>
-              <div className="flex items-center gap-1.5 py-2">
+              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
@@ -149,7 +243,7 @@ const MessageList = ({
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-slate-700">
                 <Bot size={18} className="animate-pulse" />
               </div>
-              <div className="flex items-center gap-1.5 py-2">
+              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
@@ -157,7 +251,6 @@ const MessageList = ({
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
     </div>
   );

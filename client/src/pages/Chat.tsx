@@ -39,7 +39,7 @@ const Chat = () => {
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
       <Sidebar />
 
-      <main className="flex flex-1 flex-col bg-linear-to-br overflow-hidden from-slate-950 via-slate-900/50 to-slate-950">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-linear-to-br from-slate-950 via-slate-900/50 to-slate-950">
         <ChatHeader
           currentChatId={currentChatId}
           onMenuClick={() => setSidebarOpen(true)}

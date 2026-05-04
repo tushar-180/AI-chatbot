@@ -1,15 +1,15 @@
 import { IAIService } from "./ai.interface";
 import { GeminiAdapter } from "./providers/gemini.adapter";
-// import { OpenAIAdapter } from "./providers/openai.adapter";
-// import { ClaudeAdapter } from "./providers/claude.adapter";
+import { OpenAIAdapter } from "./providers/openai.adapter";
+import { ClaudeAdapter } from "./providers/claude.adapter";
 import { NvidiaAdapter } from "./providers/nvidia.adapter";
 import { AI_PROVIDERS, getDisplayProviderName } from "./constants";
 
 export class AIServiceFactory {
   private static providers: Record<string, IAIService> = {
     gemini: new GeminiAdapter(),
-    // openai: new OpenAIAdapter(),
-    // claude: new ClaudeAdapter(),
+    openai: new OpenAIAdapter(),
+    claude: new ClaudeAdapter(),
     nvidia: new NvidiaAdapter(),
   };
 
