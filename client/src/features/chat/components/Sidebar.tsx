@@ -81,8 +81,8 @@ const SidebarChatItem = memo(
         onClick={() => !isEditing && onSelect(chat._id)}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-2 py-1.5 text-sm transition-all cursor-pointer ${
           isActive
-            ? "bg-slate-900 text-white shadow-lg ring-1 ring-slate-800"
-            : "text-slate-400 hover:bg-slate-900/50 hover:text-slate-200"
+            ? "bg-white/10 text-white shadow-lg ring-1 ring-white/10 backdrop-blur-md"
+            : "text-slate-400 hover:bg-white/5 hover:text-slate-200 transition-all duration-200"
         }`}
       >
         <div className="flex flex-1 items-center gap-3 truncate">
@@ -207,15 +207,15 @@ const Sidebar = () => {
       >
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-linear-to-tr from-indigo-600 to-sky-500 text-white shadow-lg shadow-indigo-500/20">
-              <Sparkles size={22} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl">
+              <img src="./logo.png" alt="" className="w-10 h-10" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white leading-none">
-                Code-Bot
+              <h2 className="font-display text-lg font-bold tracking-tight text-white leading-none">
+                Velora
               </h2>
-              <p className="mt-1.5 text-[10px] uppercase tracking-[0.2em] font-semibold text-slate-500">
-                v1.0 Professional
+              <p className="mt-1.5 text-[10px] uppercase tracking-[0.25em] font-bold text-slate-500">
+                Always with you
               </p>
             </div>
           </div>
@@ -231,7 +231,7 @@ const Sidebar = () => {
 
         <button
           onClick={createChat}
-          className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-3 text-sm font-bold text-slate-950 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
+          className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-3 text-sm font-display font-bold text-slate-950 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-white/5"
         >
           <Plus size={18} strokeWidth={3} />
           <span>New Chat</span>
@@ -278,6 +278,7 @@ const Sidebar = () => {
                     isActive={currentChatId === chat._id}
                     onSelect={selectChat}
                     onDelete={(id) => setDeleteId(id)}
+                  
                     onRename={renameChat}
                   />
                 ))}
@@ -285,6 +286,7 @@ const Sidebar = () => {
             )
           )}
          </div>
+        </div>
       </aside>
 
       {/* Delete Confirmation Modal */}
