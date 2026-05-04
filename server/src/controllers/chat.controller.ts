@@ -148,6 +148,18 @@ export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
+export const updateChatTitle = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.updateChatTitle(
+      String(req.params.id),
+      req.body.title
+    );
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to update chat title");
+  }
+});
+
 export const getStreamUpdates = async (req: Request, res: Response) => {
   const chatId = req.params.id as string;
   const activeStream = chatStreamRegistry.get(chatId);

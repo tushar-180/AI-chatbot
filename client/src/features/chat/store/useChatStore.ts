@@ -21,6 +21,7 @@ type ChatState = {
   setIsStreaming: (isStreaming: boolean) => void;
   setIsNewChat: (isNew: boolean) => void;
   removeChat: (id: string) => void;
+  updateChatTitle: (id: string, title: string) => void;
   clearMessages: () => void;
 };
 
@@ -85,6 +86,13 @@ export const useChatStore = create<ChatState>()(
           currentChatId:
             state.currentChatId === id ? null : state.currentChatId,
           messages: state.currentChatId === id ? [] : state.messages,
+        })),
+
+      updateChatTitle: (id, title) =>
+        set((state) => ({
+          chats: state.chats.map((chat) =>
+            chat._id === id ? { ...chat, title } : chat
+          ),
         })),
 
       clearMessages: () => set({ messages: [] }),

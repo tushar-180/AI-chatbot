@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import {
@@ -8,15 +8,165 @@ import {
   Sparkles,
   X,
   Trash2,
+  Edit2,
+  Check,
+  MoreVertical,
 } from "lucide-react";
 
 /**
  * Sidebar Component
  * Manages the list of chat threads and navigation.
  */
+interface ChatItemProps {
+  chat: any;
+  currentChatId: string | null;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onRename: (id: string, title: string) => Promise<void>;
+}
+
+const SidebarChatItem = memo(({ chat, currentChatId, isActive, onSelect, onDelete, onRename }: ChatItemProps) => {
+   const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(chat.title || "");
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMenu]);
+
+  const handleStartEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
+    setShowMenu(false);
+    setEditValue(chat.title || "");
+  };
+
+  const handleCancel = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setIsEditing(false);
+    setEditValue(chat.title || "");
+  };
+
+  const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+    e?.stopPropagation();
+    if (!editValue.trim() || editValue === chat.title) {
+      handleCancel();
+      return;
+    }
+    await onRename(chat._id, editValue);
+    setIsEditing(false);
+  };
+
+  return (
+    <div
+      onClick={() => !isEditing && onSelect(chat._id)}
+      className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-sm transition-all cursor-pointer ${
+        isActive
+          ? "bg-slate-900 text-white shadow-lg ring-1 ring-slate-800"
+          : "text-slate-400 hover:bg-slate-900/50 hover:text-slate-200"
+      }`}
+    >
+      <div className="flex flex-1 items-center gap-3 truncate">
+        <div
+          className={`flex h-2 w-2 shrink-0 rounded-full transition-all ${
+            isActive
+              ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"
+              : "bg-slate-700 group-hover:bg-slate-500"
+          }`}
+        />
+        {isEditing ? (
+          <input
+            autoFocus
+            className="flex-1 bg-slate-800 text-white border-none outline-none rounded px-2 py-0.5 text-sm ring-1 ring-indigo-500"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") handleCancel();
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : (
+          <span className="truncate font-medium">
+            {chat.title || "Untitled chat"}
+          </span>
+        )}
+      </div>
+
+       <div className="flex items-center gap-1">
+        {isEditing ? (
+          <div className="flex items-center gap-1">
+            <div
+              onClick={handleSave}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-emerald-500 hover:bg-slate-800 transition-all"
+            >
+              <Check size={14} />
+            </div>
+            <div
+              onClick={handleCancel}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-800 hover:text-white transition-all"
+            >
+              <X size={14} />
+            </div>
+          </div>
+        ) : (
+          <div className="relative" ref={menuRef}>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(!showMenu);
+              }}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-800 hover:text-white transition-all ${
+                showMenu ? "bg-slate-800 text-white" : "opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              <MoreVertical size={14} />
+            </div>
+
+            {showMenu && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-32 origin-top-right rounded-xl border border-slate-800 bg-slate-900 p-1 shadow-2xl animate-in fade-in zoom-in duration-200">
+                <button
+                  onClick={handleStartEdit}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                >
+                  <Edit2 size={12} />
+                  <span>Rename</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onDelete(chat._id);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 size={12} />
+                  <span>Delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
 const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useChatStore();
-  const { chats, currentChatId, createChat, deleteChat, selectChat } =
+  const { chats, currentChatId, createChat, deleteChat, renameChat, selectChat } =
     useChatList();
 
   return (
@@ -89,39 +239,15 @@ const Sidebar = () => {
           ) : (
             <div className="flex flex-col gap-1.5">
               {chats.map((chat) => (
-                <button
+                <SidebarChatItem
                   key={chat._id}
-                  onClick={() => { selectChat(chat._id); console.log("i clicked")}}
-                  className={`group flex items-center justify-between gap-3 rounded-2xl px-4 py-3.5 text-sm transition-all ${
-                    currentChatId === chat._id
-                      ? "bg-slate-900 text-white shadow-lg ring-1 ring-slate-800"
-                      : "text-slate-400 hover:bg-slate-900/50 hover:text-slate-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    <div
-                      className={`flex h-2 w-2 shrink-0 rounded-full transition-all ${
-                        currentChatId === chat._id
-                          ? "bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"
-                          : "bg-slate-700 group-hover:bg-slate-500"
-                      }`}
-                    />
-                    <span className="truncate font-medium">
-                      {chat.title || "Untitled chat"}
-                    </span>
-                  </div>
-
-                  {/* Delete Button - Hidden by default, visible on hover */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteChat(chat._id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-800 hover:text-red-400 transition-all"
-                  >
-                    <Trash2 size={14} />
-                  </div>
-                </button>
+                  chat={chat}
+                  currentChatId={currentChatId}
+                  isActive={currentChatId === chat._id}
+                  onSelect={selectChat}
+                  onDelete={deleteChat}
+                  onRename={renameChat}
+                />
               ))}
             </div>
           )}
