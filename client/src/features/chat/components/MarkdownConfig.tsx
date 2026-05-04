@@ -4,19 +4,19 @@ import CodeBlock from "./CodeBlock";
 export const assistantMarkdownComponents = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
     <h1
-      className="mt-8 text-3xl font-semibold tracking-tight text-white first:mt-0"
+      className="mt-8 font-display text-3xl font-bold tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h2: (props: React.ComponentPropsWithoutRef<"h2">) => (
     <h2
-      className="mt-7 text-2xl font-semibold tracking-tight text-white first:mt-0"
+      className="mt-7 font-display text-2xl font-bold tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h3: (props: React.ComponentPropsWithoutRef<"h3">) => (
     <h3
-      className="mt-6 text-xl font-semibold tracking-tight text-white first:mt-0"
+      className="mt-6 font-display text-xl font-bold tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
@@ -60,7 +60,7 @@ export const assistantMarkdownComponents = {
     <strong className="font-semibold text-white" {...props} />
   ),
   table: (props: React.ComponentPropsWithoutRef<"table">) => (
-    <div className="my-6 w-full overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/30">
+    <div className="my-6 w-full overflow-x-auto">
       <table className="w-full border-collapse text-left text-sm" {...props} />
     </div>
   ),
@@ -80,10 +80,7 @@ export const assistantMarkdownComponents = {
     />
   ),
   td: (props: React.ComponentPropsWithoutRef<"td">) => (
-    <td
-      className="px-4 py-3 text-slate-300 first:pl-6 last:pr-6"
-      {...props}
-    />
+    <td className="px-4 py-3 text-slate-300 first:pl-6 last:pr-6" {...props} />
   ),
   code: (props: React.ComponentPropsWithoutRef<"code">) => {
     const { children, className } = props;
@@ -95,16 +92,16 @@ export const assistantMarkdownComponents = {
     }
 
     return (
-      <code className="rounded-md border border-slate-700/80 bg-slate-900 px-1.5 py-1 text-[0.85em] text-slate-100">
+      <code className="bg-slate-800/40 px-1 py-0.5 rounded text-[0.9em] text-slate-100">
         {children}
       </code>
     );
   },
   img: (props: React.ComponentPropsWithoutRef<"img">) => (
-    <div className="my-6 overflow-hidden rounded-2xl border border-slate-800/60 shadow-xl">
-      <img className="h-auto max-w-full" {...props} loading="lazy" />
+    <div className="my-6">
+      <img className="h-auto max-w-full rounded-lg" {...props} loading="lazy" />
       {props.alt && (
-        <span className="block border-t border-slate-800/60 bg-slate-900/50 px-4 py-2 text-center text-[11px] font-medium text-slate-500 italic">
+        <span className="mt-2 block text-center text-[11px] font-medium text-slate-500 italic">
           {props.alt}
         </span>
       )}

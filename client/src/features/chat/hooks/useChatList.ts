@@ -31,8 +31,6 @@ export const useChatList = () => {
   };
 
   const deleteChat = async (chatId: string) => {
-    if (!window.confirm("Are you sure you want to delete this chat?")) return;
-
     try {
       await api.delete(`/chat/${chatId}`);
       removeChat(chatId);
