@@ -260,6 +260,7 @@ const Sidebar = () => {
             </div>
           )}
 
+
           {chats.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
               <MessageSquare size={24} className="text-slate-700" />
