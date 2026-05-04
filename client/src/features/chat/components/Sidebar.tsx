@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
+import type { Chat } from "@/features/chat/types/chat.types";
 import {
   Plus,
   MessageSquare,
@@ -22,7 +23,7 @@ import GalleryModal from "./GalleryModal";
  * Manages the list of chat threads and navigation.
  */
 interface ChatItemProps {
-  chat: any;
+  chat: Chat;
   currentChatId: string | null;
   isActive: boolean;
   onSelect: (id: string) => void;
@@ -257,7 +258,7 @@ const Sidebar = () => {
               </div>
             )
           )}
-         </div>
+        </div>
       </aside>
 
       <DeleteConfirmModal

@@ -1,4 +1,4 @@
-import { useRef, useEffect, memo } from "react";
+import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
 import { Bot, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
@@ -133,7 +133,7 @@ const MessageList = ({
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-3xl">
+            <div className="grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
               {SUGGESTIONS.map((suggestion, idx) => (
                 <button
                   key={idx}
