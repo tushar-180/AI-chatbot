@@ -4,7 +4,7 @@ import { chatService } from "@/features/chat/services/chat.service";
 import { toast } from "sonner";
 
 export const useChatMessages = () => {
-  const { currentChatId, isStreaming, setMessages } = useChatStore();
+  const { currentChatId, isStreaming, messages, setMessages } = useChatStore();
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
 
@@ -18,15 +18,21 @@ export const useChatMessages = () => {
       return;
     }
 
-    // 2. If we are currently streaming, reset loadedChatId to force refetch when stream ends
+    // 2. Never fetch while the active chat is still streaming.
     if (isStreaming) {
+      return;
+    }
+
+    // 3. If this chat already has local streamed messages, keep them until the user changes chats.
+    if (loadedChatId !== currentChatId && messages.length > 0) {
       queueMicrotask(() => {
-        setLoadedChatId(null);
+        setLoadedChatId(currentChatId);
+        setMessagesLoading(false);
       });
       return;
     }
 
-    // 3. If the chat is already loaded, don't fetch
+    // 4. If the chat is already loaded, don't fetch.
     if (loadedChatId === currentChatId) {
       queueMicrotask(() => {
         setMessagesLoading(false);
@@ -63,7 +69,7 @@ export const useChatMessages = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentChatId, isStreaming, loadedChatId, setMessages]);
+    }, [currentChatId, isStreaming, loadedChatId, messages.length, setMessages]);
 
   return {
     messagesLoading,
