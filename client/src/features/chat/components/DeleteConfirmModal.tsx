@@ -1,4 +1,14 @@
-export default function DeleteConfirmModal({ isOpen, onClose, onConfirm }) {
+type DeleteConfirmModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+};
+
+export default function DeleteConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+}: DeleteConfirmModalProps) {
   if (!isOpen) return null;
 
   return (

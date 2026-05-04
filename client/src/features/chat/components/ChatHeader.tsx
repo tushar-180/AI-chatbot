@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { UserButton, useUser } from "@clerk/react";
-import { Sparkles, Menu, Cpu } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 
 interface ChatHeaderProps {
@@ -12,9 +12,12 @@ const ChatHeader = ({ currentChatId, onMenuClick }: ChatHeaderProps) => {
   const { user } = useUser();
   const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
+  const streamingChatId = useChatStore((state) => state.streamingChatId);
 
   const currentChat = chats.find((chat) => chat._id === currentChatId);
   const chatTitle = currentChat?.title || "New Conversation";
+  const isStreamingCurrentChat =
+    isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-slate-950/40 backdrop-blur-xl transition-all duration-300 shadow-sm">
@@ -41,7 +44,7 @@ const ChatHeader = ({ currentChatId, onMenuClick }: ChatHeaderProps) => {
                 <h1 className="font-display text-sm md:text-lg font-bold text-slate-100 truncate">
                   {chatTitle}
                 </h1>
-                {isStreaming && (
+                {isStreamingCurrentChat && (
                   <span className="flex h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
                 )}
               </div>

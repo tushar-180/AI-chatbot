@@ -8,6 +8,7 @@ type ChatState = {
   messages: Message[];
   loading: boolean;
   isStreaming: boolean;
+  streamingChatId: string | null;
   isNewChat: boolean;
   sidebarOpen: boolean;
 
@@ -18,7 +19,7 @@ type ChatState = {
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string, model?: string) => void;
   setLoading: (loading: boolean) => void;
-  setIsStreaming: (isStreaming: boolean) => void;
+  setIsStreaming: (isStreaming: boolean, chatId?: string | null) => void;
   setIsNewChat: (isNew: boolean) => void;
   removeChat: (id: string) => void;
   updateChatTitle: (id: string, title: string) => void;
@@ -33,6 +34,7 @@ export const useChatStore = create<ChatState>()(
       messages: [],
       loading: false,
       isStreaming: false,
+      streamingChatId: null,
       isNewChat: false,
       sidebarOpen: false,
 
@@ -76,7 +78,13 @@ export const useChatStore = create<ChatState>()(
 
       setLoading: (loading) => set({ loading }),
 
-      setIsStreaming: (isStreaming) => set({ isStreaming }),
+      setIsStreaming: (isStreaming, chatId) =>
+        set((state) => ({
+          isStreaming,
+          streamingChatId: isStreaming
+            ? (chatId ?? state.currentChatId)
+            : null,
+        })),
 
       setIsNewChat: (isNew) => set({ isNewChat: isNew }),
 
@@ -102,7 +110,8 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) =>
         Object.fromEntries(
           Object.entries(state).filter(
-            ([key]) => !["loading", "isStreaming"].includes(key),
+            ([key]) =>
+              !["loading", "isStreaming", "streamingChatId"].includes(key),
           ),
         ) as ChatState,
     },

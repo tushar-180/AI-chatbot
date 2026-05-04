@@ -5,7 +5,6 @@ import {
   Plus,
   MessageSquare,
   LayoutDashboard,
-  Sparkles,
   X,
   Trash2,
   Edit2,
