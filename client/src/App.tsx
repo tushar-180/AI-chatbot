@@ -3,12 +3,14 @@ import Chat from "./pages/Chat";
 import Auth from "./pages/Auth";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import Loading from "./features/chat/components/Loading";
+
 function App() {
   const { isSignedIn, isLoaded } = useUser();
 
   if (!isLoaded)
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100">Loading...</div>
+      <Loading />
     );
 
   return (

@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 /**
  * Sidebar Component
@@ -155,7 +156,15 @@ const SidebarChatItem = memo(
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-red-400 transition-colors"
                   >
                     <Trash2 size={12} />
-                    <span>Delete</span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        onDelete(chat._id); // 👈 open modal
+                      }}
+                    >
+                      Delete
+                    </span>{" "}
                   </button>
                 </div>
               )}
@@ -178,6 +187,7 @@ const Sidebar = () => {
     selectChat,
   } = useChatList();
   const [showRecent, setShowRecent] = useState(true);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   return (
     <>
@@ -267,15 +277,27 @@ const Sidebar = () => {
                     currentChatId={currentChatId}
                     isActive={currentChatId === chat._id}
                     onSelect={selectChat}
-                    onDelete={deleteChat}
+                    onDelete={(id) => setDeleteId(id)}
+                  
                     onRename={renameChat}
                   />
                 ))}
               </div>
             )
           )}
+         </div>
         </div>
       </aside>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={() => {
+          if (deleteId) deleteChat(deleteId);
+          setDeleteId(null);
+        }}
+      />
     </>
   );
 };
