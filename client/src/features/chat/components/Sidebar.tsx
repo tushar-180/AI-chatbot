@@ -11,7 +11,9 @@ import {
   Edit2,
   Check,
   MoreVertical,
+   ChevronDown, ChevronUp
 } from "lucide-react";
+
 
 /**
  * Sidebar Component
@@ -26,11 +28,13 @@ interface ChatItemProps {
   onRename: (id: string, title: string) => Promise<void>;
 }
 
-const SidebarChatItem = memo(({ chat, currentChatId, isActive, onSelect, onDelete, onRename }: ChatItemProps) => {
+const SidebarChatItem = memo(({ chat, isActive, onSelect, onDelete, onRename }: ChatItemProps) => {
    const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(chat.title || "");
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -164,6 +168,7 @@ const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useChatStore();
   const { chats, currentChatId, createChat, deleteChat, renameChat, selectChat } =
     useChatList();
+      const [showRecent, setShowRecent] = useState(true);
 
   return (
     <>
@@ -177,7 +182,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-[280px] flex-col gap-6 border-slate-800/60 bg-slate-950 p-2 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:border-r md:max-h-screen md:overflow-y-auto
+        fixed inset-y-0 left-0 z-50 flex h-full w-70 flex-col gap-6 border-slate-800/60 bg-slate-950 p-5 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:border-r md:max-h-screen md:overflow-y-auto
         ${
           sidebarOpen
             ? "translate-x-0"
@@ -218,35 +223,48 @@ const Sidebar = () => {
         </button>
 
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
-          <div className="flex items-center gap-2 px-2 pb-2">
-            <LayoutDashboard size={14} className="text-slate-500" />
-            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
-              Recent Threads
-            </span>
-          </div>
+          {chats.length > 0 && (
+  <div
+    onClick={() => setShowRecent((prev) => !prev)}
+    className="flex items-center justify-between px-2 pb-2 cursor-pointer group"
+  >
+    <div className="flex items-center gap-2">
+      <LayoutDashboard size={14} className="text-slate-500" />
+      <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500">
+        Recent
+      </span>
+    </div>
 
-          {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
-              <MessageSquare size={24} className="text-slate-700" />
-              <p className="text-xs font-medium text-slate-500">
-                No conversations yet.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              {chats.map((chat) => (
-                <SidebarChatItem
-                  key={chat._id}
-                  chat={chat}
-                  currentChatId={currentChatId}
-                  isActive={currentChatId === chat._id}
-                  onSelect={selectChat}
-                  onDelete={deleteChat}
-                  onRename={renameChat}
-                />
-              ))}
-            </div>
-          )}
+    <span className="text-slate-500 text-xs group-hover:text-white transition">
+      {showRecent ?  <ChevronUp size={14} /> :<ChevronDown size={14} /> }
+    </span>
+  </div>
+)}
+
+         {chats.length === 0 ? (
+  <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
+    <MessageSquare size={24} className="text-slate-700" />
+    <p className="text-xs font-medium text-slate-500">
+      No conversations yet.
+    </p>
+  </div>
+) : (
+  showRecent && (
+    <div className="flex flex-col gap-1.5">
+      {chats.map((chat) => (
+        <SidebarChatItem
+          key={chat._id}
+          chat={chat}
+          currentChatId={currentChatId}
+          isActive={currentChatId === chat._id}
+          onSelect={selectChat}
+          onDelete={deleteChat}
+          onRename={renameChat}
+        />
+      ))}
+    </div>
+  )
+)}
         </div>
 
         
