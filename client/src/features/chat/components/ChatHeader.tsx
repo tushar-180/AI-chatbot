@@ -34,10 +34,8 @@ const ChatHeader = ({ currentChatId, onMenuClick }: ChatHeaderProps) => {
                 </span>
               </h1>
               <p className="text-[10px] md:text-xs font-medium text-slate-400 truncate">
-                {user?.firstName ? `Hello, ${user.firstName}` : "Welcome"} •{" "}
-                {currentChatId
-                  ? "Active Session"
-                  : "New Session"}
+                {user?.firstName ? `Hello, ${user.firstName}` : "Welcome"} 
+               
               </p>
             </div>
 
