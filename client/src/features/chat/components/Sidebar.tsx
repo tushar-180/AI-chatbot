@@ -182,7 +182,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-70 flex-col gap-6 border-slate-800/60 bg-slate-950 p-5 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:border-r md:max-h-screen md:overflow-y-auto
+        fixed inset-y-0 left-0 z-50 flex h-full w-70 shrink-0 flex-col gap-6 overflow-hidden border-slate-800/60 bg-slate-950 p-5 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:border-r
         ${
           sidebarOpen
             ? "translate-x-0"
@@ -222,11 +222,11 @@ const Sidebar = () => {
           <span>New Chat</span>
         </button>
 
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           {chats.length > 0 && (
   <div
     onClick={() => setShowRecent((prev) => !prev)}
-    className="flex items-center justify-between px-2 pb-2 cursor-pointer group"
+    className="sticky top-0 z-10 flex items-center justify-between px-2 pb-2 cursor-pointer group bg-slate-950"
   >
     <div className="flex items-center gap-2">
       <LayoutDashboard size={14} className="text-slate-500" />
@@ -250,7 +250,8 @@ const Sidebar = () => {
   </div>
 ) : (
   showRecent && (
-    <div className="flex flex-col gap-1.5">
+    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1.5">
       {chats.map((chat) => (
         <SidebarChatItem
           key={chat._id}
@@ -262,6 +263,7 @@ const Sidebar = () => {
           onRename={renameChat}
         />
       ))}
+      </div>
     </div>
   )
 )}

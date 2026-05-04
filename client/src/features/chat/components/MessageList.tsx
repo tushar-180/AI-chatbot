@@ -1,4 +1,4 @@
-import { useRef, useEffect, memo } from "react";
+import { useRef, useEffect, useLayoutEffect, memo } from "react";
 import { Bot, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
@@ -59,22 +59,70 @@ const MessageList = ({
   isNewChat,
   onSuggestionClick,
 }: MessageListProps) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const previousMessageCountRef = useRef(messages.length);
+  const previousChatIdRef = useRef<string | null>(currentChatId);
+  const previousIsNewChatRef = useRef(isNewChat);
+
+  const isAtBottom = () => {
+    if (!scrollContainerRef.current) return true;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    // Consider "at bottom" if within 50px of the bottom
+    return scrollHeight - (scrollTop + clientHeight) < 50;
+  };
 
   const scrollToBottom = (instant = false) => {
-    messagesEndRef.current?.scrollIntoView({
+    scrollContainerRef.current?.scrollTo({
+      top: scrollContainerRef.current.scrollHeight,
       behavior: instant ? "auto" : "smooth",
-      block: "end",
     });
   };
 
+  // Handle user scroll - detect if scrolling up or if reached bottom
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    const atBottom = isAtBottom();
+    shouldAutoScrollRef.current = atBottom;
+
+    if (atBottom) {
+      scrollToBottom();
+    }
+  };
+
+  useLayoutEffect(() => {
+    const previousMessageCount = previousMessageCountRef.current;
+    const previousChatId = previousChatIdRef.current;
+    const previousIsNewChat = previousIsNewChatRef.current;
+
+    const hasNewMessageStarted = messages.length > previousMessageCount;
+    const chatChanged = currentChatId !== previousChatId;
+    const newChatStarted = isNewChat && !previousIsNewChat;
+
+    if (
+      chatChanged ||
+      newChatStarted ||
+      hasNewMessageStarted ||
+      shouldAutoScrollRef.current
+    ) {
+      scrollToBottom(chatChanged || newChatStarted || hasNewMessageStarted);
+    }
+
+    previousMessageCountRef.current = messages.length;
+    previousChatIdRef.current = currentChatId;
+    previousIsNewChatRef.current = isNewChat;
+  }, [messages, currentChatId, isNewChat]);
+
   useEffect(() => {
-    // Use instant scroll during streaming to prevent jitter/shaking
-    scrollToBottom(isStreaming);
-  }, [messages, isStreaming]);
+    shouldAutoScrollRef.current = true;
+  }, [currentChatId, isNewChat]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]">
+    <div 
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]"
+    >
       <div className="mx-auto flex max-w-5xl flex-col gap-7">
         {!currentChatId && messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 md:py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
@@ -157,7 +205,6 @@ const MessageList = ({
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
     </div>
   );
