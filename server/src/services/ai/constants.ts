@@ -15,6 +15,7 @@ export const AI_PROVIDERS = {
       "openai/gpt-oss-120b"
     ],
   },
+  
   // CLAUDE: {
   //   id: "claude",
   //   models: [

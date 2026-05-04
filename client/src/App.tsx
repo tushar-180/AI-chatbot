@@ -11,6 +11,7 @@ function App() {
   if (!isLoaded)
     return (
       <Loading />
+      
     );
 
   return (
