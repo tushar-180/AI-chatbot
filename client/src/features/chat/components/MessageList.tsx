@@ -215,7 +215,7 @@ const MessageList = ({
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-slate-700">
                 <Bot size={18} className="animate-pulse" />
               </div>
-              <div className="flex items-center gap-1.5 py-2">
+              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
@@ -243,7 +243,7 @@ const MessageList = ({
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 border border-slate-700">
                 <Bot size={18} className="animate-pulse" />
               </div>
-              <div className="flex items-center gap-1.5 py-2">
+              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
