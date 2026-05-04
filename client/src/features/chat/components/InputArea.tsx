@@ -5,7 +5,7 @@ import {
   useEffect,
   memo,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown } from "lucide-react";
+import { Send, Loader2, ChevronDown } from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -82,7 +82,7 @@ const ModelSelector = ({
           align="start"
           className="w-56 bg-slate-900/95 border-slate-800 backdrop-blur-xl rounded-2xl shadow-2xl overflow-hidden p-1"
         >
-          <div className="px-2 py-2 text-[10px] font-display font-bold uppercase tracking-[0.2em] text-slate-500">
+          <div className="px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Select Model
           </div>
           {availableProviders.map((p) => (
@@ -153,7 +153,7 @@ const InputArea = ({
   };
 
   return (
-    <div className="bg-linear-to-t from-slate-950 via-slate-950/90 to-transparent pb-1 md:pb-2 pt-2 md:pt-4 px-3 md:px-6 relative z-10">
+    <div className="bg-linear-to-t from-slate-950 via-slate-950/90 to-transparent pb-4 md:pb-8 pt-2 md:pt-4 px-3 md:px-6 relative z-10">
       <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative">
         <div className="group relative flex flex-col gap-0 rounded-4xl md:rounded-4xl border border-slate-800/60 bg-slate-900/60 p-1.5 md:p-2 shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-2xl transition-all duration-300 focus-within:border-indigo-500/40 focus-within:bg-slate-900/80 focus-within:shadow-[0_20px_50px_rgba(79,70,229,0.1)] focus-within:ring-1 focus-within:ring-indigo-500/20">
           <ModelSelector
@@ -178,23 +178,28 @@ const InputArea = ({
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
+              className={`flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-2xl md:rounded-[1.25rem] mb-1.5 md:mb-2 transition-all duration-300 ${
                 loading || !input.trim()
                   ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                  : "bg-white text-slate-900 hover:bg-slate-200"
+                  : "bg-linear-to-br from-indigo-500 to-indigo-700 text-white shadow-lg shadow-indigo-900/20 hover:scale-105 active:scale-95 hover:shadow-indigo-500/30"
               }`}
             >
               {loading ? (
-                <Loader2 size={18} className="animate-spin" />
+                <Loader2 size={20} className="animate-spin" />
               ) : (
-                <ArrowUp size={18} strokeWidth={2.5} />
+                <Send
+                  size={20}
+                  className={
+                    input.trim() ? "translate-x-0.5 -translate-y-0.5" : ""
+                  }
+                />
               )}
             </button>
           </div>
         </div>
 
-        <div className="mt-1 flex justify-center px-4">
-          <p className="text-center text-[10px] font-display text-slate-600/80 uppercase tracking-[0.2em] font-bold">
+        <div className="mt-3 flex justify-center px-4">
+          <p className="text-center text-[10px] text-slate-600/80 uppercase tracking-widest font-medium">
             Personalized with <span className="text-slate-400">Code-Bot</span>{" "}
             &bull; Powered by me
           </p>

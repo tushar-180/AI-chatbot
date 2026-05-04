@@ -67,8 +67,8 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
   };
 
   return (
-    <div className="group my-5 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/30">
-      <div className="flex items-center justify-between border-b border-slate-800/50 bg-slate-800/30 px-4 py-2">
+    <div className="group my-5 overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/95 shadow-[0_18px_45px_rgba(15,23,42,0.35)]">
+      <div className="flex items-center justify-between border-b border-slate-800/90 bg-slate-900/90 px-4 py-2.5">
         <div className="flex items-center gap-4">
           <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
             {language || "text"}
