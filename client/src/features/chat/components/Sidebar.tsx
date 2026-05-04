@@ -241,33 +241,34 @@ const Sidebar = () => {
   </div>
 )}
 
-         {chats.length === 0 ? (
-  <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
-    <MessageSquare size={24} className="text-slate-700" />
-    <p className="text-xs font-medium text-slate-500">
-      No conversations yet.
-    </p>
-  </div>
-) : (
-  showRecent && (
-    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-      <div className="flex flex-col gap-1.5">
-      {chats.map((chat) => (
-        <SidebarChatItem
-          key={chat._id}
-          chat={chat}
-          currentChatId={currentChatId}
-          isActive={currentChatId === chat._id}
-          onSelect={selectChat}
-          onDelete={deleteChat}
-          onRename={renameChat}
-        />
-      ))}
-      </div>
-    </div>
-  )
-)}
-        </div>
+
+          {chats.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-8 text-center">
+              <MessageSquare size={24} className="text-slate-700" />
+              <p className="text-xs font-medium text-slate-500">
+                No conversations yet.
+              </p>
+            </div>
+          ) : (
+            showRecent && (
+              <div className="flex flex-col gap-1.5">
+                {chats.map((chat) => (
+                  <SidebarChatItem
+                    key={chat._id}
+                    chat={chat}
+                    currentChatId={currentChatId}
+                    isActive={currentChatId === chat._id}
+                    onSelect={selectChat}
+                    onDelete={(id) => setDeleteId(id)}
+                  
+                    onRename={renameChat}
+                  />
+                ))}
+              </div>
+            )
+          )}
+         </div>
+      </aside>
 
         
       </aside>
