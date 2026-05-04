@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Copy, Check, Eye, Code as CodeIcon } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { atomDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import { toast } from "sonner";
 
 interface CodeBlockProps {
@@ -67,20 +67,20 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
   };
 
   return (
-    <div className="group my-5 overflow-hidden rounded-xl border border-slate-800/50 bg-slate-900/30">
-      <div className="flex items-center justify-between border-b border-slate-800/50 bg-slate-800/30 px-4 py-2">
+    <div className="group my-5 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117] shadow-2xl">
+      <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-2">
         <div className="flex items-center gap-4">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
             {language || "text"}
           </span>
 
           {isPreviewable && (
-            <div className="flex items-center gap-1 rounded-lg bg-slate-950/50 p-1">
+            <div className="flex items-center gap-1 rounded-lg bg-black/40 p-1 border border-white/5">
               <button
                 onClick={() => setActiveTab("code")}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-medium transition-all ${
                   activeTab === "code"
-                    ? "bg-slate-800 text-white shadow-sm"
+                    ? "bg-white/10 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-300"
                 }`}
               >
@@ -91,7 +91,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
                 onClick={() => setActiveTab("preview")}
                 className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[10px] font-medium transition-all ${
                   activeTab === "preview"
-                    ? "bg-slate-800 text-white shadow-sm"
+                    ? "bg-white/10 text-white shadow-sm"
                     : "text-slate-500 hover:text-slate-300"
                 }`}
               >
@@ -104,7 +104,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
 
         <button
           onClick={copyToClipboard}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/80 px-2.5 py-1.5 text-slate-300 transition-all duration-200 hover:border-slate-600 hover:bg-slate-800 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-300 transition-all duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white"
           title="Copy code"
         >
           {copied ? (
@@ -123,24 +123,28 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
         </button>
       </div>
 
-      {activeTab === "preview" && isPreviewable ? (
-        renderPreview()
-      ) : (
-        <SyntaxHighlighter
-          showLineNumbers
-          customStyle={{
-            borderRadius: "0",
-            padding: "20px",
-            margin: 0,
-            background: "transparent",
-          }}
-          style={vscDarkPlus}
-          language={language}
-          PreTag="div"
-        >
-          {code}
-        </SyntaxHighlighter>
-      )}
+      <div className="relative">
+        {activeTab === "preview" && isPreviewable ? (
+          renderPreview()
+        ) : (
+          <SyntaxHighlighter
+            showLineNumbers
+            customStyle={{
+              borderRadius: "0",
+              padding: "24px",
+              margin: 0,
+              background: "transparent",
+              fontSize: "13px",
+              lineHeight: "1.6",
+            }}
+            style={atomDark}
+            language={language}
+            PreTag="div"
+          >
+            {code}
+          </SyntaxHighlighter>
+        )}
+      </div>
     </div>
   );
 };
