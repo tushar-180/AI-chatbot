@@ -7,6 +7,8 @@ import {
 } from "@/features/chat/services/chat.service";
 import { toast } from "sonner";
 
+const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
+
 export const useChatStream = () => {
   console.log("Initializing useChatStream hook");
   const { user } = useUser();
@@ -15,6 +17,7 @@ export const useChatStream = () => {
     messages,
     loading,
     isStreaming,
+    streamingChatId,
     setCurrentChat,
     setChats,
     setIsNewChat,
@@ -22,18 +25,37 @@ export const useChatStream = () => {
     setIsStreaming,
   } = useChatStore();
 
-  const [optimisticMessages, setOptimisticMessages] = useState<
-    Message[] | null
-  >(null);
+  const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] = useState<
+    Record<string, Message[] | null>
+  >({});
 
-  // Sync optimistic messages with store when stream ends or chat changes
+  const setOptimisticMessagesForChat = (
+    chatId: string,
+    next: Message[] | null,
+  ) => {
+    setOptimisticMessagesByChatId((current) => ({
+      ...current,
+      [chatId]: next,
+    }));
+  };
+
+  const getActiveChatKey = (chatId: string | null) =>
+    chatId ?? NEW_CHAT_STREAM_KEY;
+
+  const isStreamingCurrentChat =
+    isStreaming &&
+    streamingChatId === getActiveChatKey(currentChatId) &&
+    !!streamingChatId;
+
+  // Sync optimistic messages with store when the selected chat is not streaming
   useEffect(() => {
-    if (!currentChatId || isStreaming) return;
+    if (!currentChatId) return;
+    if (isStreaming && streamingChatId === currentChatId) return;
 
     queueMicrotask(() => {
-      setOptimisticMessages(null);
+      setOptimisticMessagesForChat(currentChatId, null);
     });
-  }, [currentChatId, isStreaming]);
+  }, [currentChatId, isStreaming, streamingChatId]);
 
   const refreshChats = async (userId: string, nextChatId?: string) => {
     const chats = await chatService.fetchChats(userId);
@@ -51,6 +73,7 @@ export const useChatStream = () => {
     let fullContent = "";
     let buffer = "";
     let resolvedChatId = initialChatId;
+    const initialKey = getActiveChatKey(initialChatId);
 
     if (!reader) throw new Error("Stream reader unavailable");
 
@@ -59,35 +82,53 @@ export const useChatStream = () => {
       if (!data) return;
 
       if (data.chatId) {
-        resolvedChatId = data.chatId;
+        const nextChatId: string = data.chatId;
+        resolvedChatId = nextChatId;
         if (isCreatingChat) {
-          setCurrentChat(data.chatId);
+          setCurrentChat(nextChatId);
           setIsNewChat(false);
         }
+        // If the server resolves a new chat id during a "new chat" stream, move optimistic messages over.
+        if (initialKey === NEW_CHAT_STREAM_KEY) {
+          setOptimisticMessagesByChatId((current) => {
+            const pending = current[NEW_CHAT_STREAM_KEY];
+            if (!pending) return current;
+            return {
+              ...current,
+              [nextChatId]: pending,
+              [NEW_CHAT_STREAM_KEY]: null,
+            };
+          });
+        }
+        setIsStreaming(true, nextChatId);
       }
 
       if (data.model) {
-        setOptimisticMessages((current) => {
-          if (!current?.length) return current;
-          const next = [...current];
+        const key = resolvedChatId ?? initialKey;
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
             model: data.model,
           };
-          return next;
+          return { ...current, [key]: next };
         });
       }
 
       if (data.chunk) {
         fullContent += data.chunk;
-        setOptimisticMessages((current) => {
-          if (!current?.length) return current;
-          const next = [...current];
+        const key = resolvedChatId ?? initialKey;
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
             content: fullContent,
           };
-          return next;
+          return { ...current, [key]: next };
         });
       }
 
@@ -145,8 +186,8 @@ export const useChatStream = () => {
       };
 
       setLoading(true);
-      setIsStreaming(true);
-      setOptimisticMessages([...messages, assistantPlaceholder]);
+      setIsStreaming(true, chatId);
+      setOptimisticMessagesForChat(chatId, [...messages, assistantPlaceholder]);
 
       await processStream(response, false, chatId);
       return true;
@@ -154,14 +195,14 @@ export const useChatStream = () => {
       console.error("Error resuming stream", err);
       setLoading(false);
       setIsStreaming(false);
-      setOptimisticMessages(null);
+      setOptimisticMessagesForChat(chatId, null);
       return false;
     }
   };
 
   // Attempt to resume stream when chat changes or component mounts
   useEffect(() => {
-    if (currentChatId && !isStreaming) {
+    if (currentChatId && !(isStreaming && streamingChatId === currentChatId)) {
       // Small timeout to ensure messages are loaded first before attempting recovery
       // This prevents visual glitches where the AI placeholder appears before user messages
       const timer = setTimeout(() => {
@@ -169,7 +210,7 @@ export const useChatStream = () => {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [currentChatId]);
+  }, [currentChatId, isStreaming, streamingChatId]);
 
 
   const streamMessage = async (input: string, provider: string) => {
@@ -186,12 +227,17 @@ export const useChatStream = () => {
       model: provider,
     };
     const isCreatingChat = !currentChatId;
+    const activeKey = getActiveChatKey(currentChatId);
 
     // Set optimistic UI
-    setOptimisticMessages([...messages, userMessage, assistantPlaceholder]);
+    setOptimisticMessagesForChat(activeKey, [
+      ...messages,
+      userMessage,
+      assistantPlaceholder,
+    ]);
 
     setLoading(true);
-    setIsStreaming(true);
+    setIsStreaming(true, activeKey);
 
     try {
       const url = chatService.getStreamUrl(currentChatId || undefined);
@@ -214,7 +260,7 @@ export const useChatStream = () => {
       await processStream(response, isCreatingChat, currentChatId);
     } catch (err) {
       console.error("Error streaming message", err);
-      setOptimisticMessages(null);
+      setOptimisticMessagesForChat(activeKey, null);
       toast.error(chatService.getChatErrorMessage(err));
     } finally {
       setLoading(false);
@@ -224,7 +270,8 @@ export const useChatStream = () => {
 
   return {
     streamMessage,
-    optimisticMessages,
-    isStreaming,
+    optimisticMessages:
+      optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ?? null,
+    isStreaming: isStreamingCurrentChat,
   };
 };
