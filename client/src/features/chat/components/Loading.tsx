@@ -1,14 +1,16 @@
-export default function oading() {
+export default function Loading() {
   return (
-    <div className="relative flex flex-col items-center justify-center h-screen bg-gradient-to-br from-slate-900 via-black to-slate-950 text-white overflow-hidden">
-      
-      {/* Glow Background */}
-      <div className="absolute w-64 h-64 bg-cyan-400/20 rounded-full blur-3xl"></div>
+    <div className="relative flex flex-col items-center justify-center h-screen 
+                    bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b] 
+                    text-white overflow-hidden">
+
+      {/* Violet Glow Background */}
+      <div className="absolute w-72 h-72 bg-purple-500/20 rounded-full blur-3xl"></div>
 
       {/* Spinner */}
       <div className="w-16 h-16 rounded-full border-4 border-transparent 
-                      border-t-cyan-400 border-r-purple-500
-                      animate-spin3d shadow-[0_0_20px_#00f0ff,0_0_40px_#8b5cf6,inset_0_0_10px_#00f0ff]">
+                      border-t-blue-500 border-r-purple-500
+                      animate-spin shadow-[0_0_20px_rgba(59,130,246,0.7),0_0_40px_rgba(168,85,247,0.6)]">
       </div>
 
       {/* Text */}
