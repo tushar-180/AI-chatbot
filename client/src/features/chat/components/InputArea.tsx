@@ -5,7 +5,7 @@ import {
   useEffect,
   memo,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown } from "lucide-react";
+import { ArrowUp, Loader2, ChevronDown, Square } from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -23,6 +23,8 @@ interface InputAreaProps {
   onInputChange: (value: string) => void;
   onSubmit: (e: SyntheticEvent<HTMLFormElement>) => void;
   loading: boolean;
+  isStreaming: boolean;
+  onStop: () => void;
   currentChatId: string | null;
   selectedProvider: string;
   onProviderChange: (value: string) => void;
@@ -116,6 +118,8 @@ const InputArea = ({
   onInputChange,
   onSubmit,
   loading,
+  isStreaming,
+  onStop,
   currentChatId,
   selectedProvider,
   onProviderChange,
@@ -175,21 +179,32 @@ const InputArea = ({
               className="max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent px-4 md:px-5 py-3 md:py-4 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-500/80 outline-none overflow-y-auto scrollbar-none selection:bg-indigo-500/30"
             />
 
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                loading || !input.trim()
-                  ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                  : "bg-white text-slate-900 hover:bg-slate-200"
-              }`}
-            >
-              {loading ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : (
-                <ArrowUp size={18} strokeWidth={2.5} />
-              )}
-            </button>
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={onStop}
+                className="mb-1.5 md:mb-2 flex h-9 min-w-[76px] shrink-0 items-center justify-center gap-2 rounded-full bg-rose-500 px-3 text-xs font-semibold text-white transition-all duration-300 hover:bg-rose-400 md:h-10"
+              >
+                <Square size={12} fill="currentColor" />
+                <span>Stop</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
+                  loading || !input.trim()
+                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                    : "bg-white text-slate-900 hover:bg-slate-200"
+                }`}
+              >
+                {loading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <ArrowUp size={18} strokeWidth={2.5} />
+                )}
+              </button>
+            )}
           </div>
         </div>
 

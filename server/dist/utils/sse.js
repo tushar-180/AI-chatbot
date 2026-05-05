@@ -26,17 +26,17 @@ const writeSse = (res, payload) => {
     (_b = (_a = res).flush) === null || _b === void 0 ? void 0 : _b.call(_a);
 };
 exports.writeSse = writeSse;
-const splitAndWriteChunk = (res, chunk) => __awaiter(void 0, void 0, void 0, function* () {
+const splitAndWriteChunk = (res_1, chunk_1, ...args_1) => __awaiter(void 0, [res_1, chunk_1, ...args_1], void 0, function* (res, chunk, meta = {}) {
     if (chunk.length > 25) {
         const parts = chunk.split(/(\s+)/);
         for (const part of parts) {
             if (part) {
-                (0, exports.writeSse)(res, { chunk: part });
+                (0, exports.writeSse)(res, Object.assign(Object.assign({}, meta), { chunk: part }));
                 yield new Promise((resolve) => setTimeout(resolve, 15));
             }
         }
         return;
     }
-    (0, exports.writeSse)(res, { chunk });
+    (0, exports.writeSse)(res, Object.assign(Object.assign({}, meta), { chunk }));
 });
 exports.splitAndWriteChunk = splitAndWriteChunk;

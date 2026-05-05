@@ -77,7 +77,7 @@ class NvidiaAdapter {
             }
         });
     }
-    generateStreamResponse(messages) {
+    generateStreamResponse(messages, signal) {
         return __asyncGenerator(this, arguments, function* generateStreamResponse_1() {
             var _a, e_1, _b, _c;
             var _d, _e;
@@ -92,12 +92,17 @@ class NvidiaAdapter {
                     top_p: 0.7,
                     max_tokens: 4096,
                     stream: true,
+                }, {
+                    signal,
                 }));
                 try {
                     for (var _f = true, stream_1 = __asyncValues(stream), stream_1_1; stream_1_1 = yield __await(stream_1.next()), _a = stream_1_1.done, !_a; _f = true) {
                         _c = stream_1_1.value;
                         _f = false;
                         const chunk = _c;
+                        if (signal === null || signal === void 0 ? void 0 : signal.aborted) {
+                            return yield __await(void 0);
+                        }
                         const content = ((_e = (_d = chunk.choices[0]) === null || _d === void 0 ? void 0 : _d.delta) === null || _e === void 0 ? void 0 : _e.content) || "";
                         if (content) {
                             yield yield __await(content);
