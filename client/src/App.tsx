@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Chat from "./pages/Chat";
 import Auth from "./pages/Auth";
+import Landing from "./pages/Landing";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Loading from "./features/chat/components/Loading";
@@ -14,27 +15,36 @@ function App() {
     );
 
   return (
-      <BrowserRouter>
-        <div className="min-h-screen transition-colors duration-300">
-          <Routes>
-            {/* Protected route */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Chat />
-                </ProtectedRoute>
-              }
-            />
+    <BrowserRouter>
+      <div className="min-h-screen transition-colors duration-300">
+        <Routes>
+          {/* Public Landing Page */}
+          <Route
+            path="/"
+            element={!isSignedIn ? <Landing /> : <Navigate to="/chat" replace />}
+          />
 
-            {/* Public route */}
-            <Route
-              path="/auth"
-              element={!isSignedIn ? <Auth /> : <Navigate to="/" replace />}
-            />
-          </Routes>
-        </div>
-      </BrowserRouter>
+          {/* Protected Chat Route */}
+          <Route
+            path="/chat"
+            element={
+              <ProtectedRoute>
+                <Chat />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Public Auth Route */}
+          <Route
+            path="/auth"
+            element={!isSignedIn ? <Auth /> : <Navigate to="/chat" replace />}
+          />
+
+          {/* Catch all - redirect to landing */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   );
 }
 

@@ -28,18 +28,18 @@ const MessageAvatar = ({
   isUser: boolean;
   imageUrl?: string;
 }) => (
-  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden border border-slate-700 shadow-sm">
+  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-white/10 shadow-sm transition-all duration-300">
     {isUser ? (
       imageUrl ? (
         <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-slate-800 text-slate-400">
-          <User size={18} />
+        <div className="flex h-full w-full items-center justify-center bg-white/5 text-slate-500">
+          <User size={16} />
         </div>
       )
     ) : (
-      <div className="flex h-full w-full items-center justify-center bg-indigo-600/20 text-indigo-400">
-        <Bot size={18} />
+      <div className="flex h-full w-full items-center justify-center bg-white text-black">
+        <Bot size={16} />
       </div>
     )}
   </div>
@@ -61,14 +61,14 @@ const MessageMetadata = ({
     }`}
   >
     <span
-      className={`text-[10px] uppercase tracking-[0.22em] ${
-        isUser ? "text-indigo-400/80" : "text-slate-500"
+      className={`text-[9px] font-bold uppercase tracking-[0.3em] ${
+        isUser ? "text-slate-300" : "text-slate-600"
       } ${isUser ? "mr-1" : "ml-1"}`}
     >
-      {isUser ? "You" : "Assistant"}
+      {isUser ? "You" : "Velora"}
     </span>
     {!isUser && model && (
-      <span className="flex items-center rounded-full border border-slate-700/70 bg-slate-900/85 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">
+      <span className="flex items-center rounded-lg border border-white/5 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-500">
         {model}
       </span>
     )}
@@ -92,9 +92,9 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
       } ${isUser ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`flex w-full gap-2.5 md:gap-4 ${
+        className={`flex w-full gap-4 md:gap-6 ${
           isUser
-            ? "max-w-full md:max-w-3xl flex-row-reverse"
+            ? "max-w-full md:max-w-4xl flex-row-reverse"
             : "max-w-full md:max-w-5xl flex-row items-start"
         }`}
       >
@@ -103,23 +103,25 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
         </div>
 
         <div
-          className={`flex flex-col gap-1.5 md:gap-2 ${
+          className={`flex flex-col gap-2 ${
             isUser ? "items-end flex-1" : "min-w-0 flex-1"
           }`}
         >
-          {!isUser && <MessageMetadata isUser={isUser} model={msg.model} />}
+          <MessageMetadata isUser={isUser} model={msg.model} />
 
           <div
             className={`transition-all duration-300 ${
               isUser
-                ? "max-w-[92%] md:max-w-[85%] rounded-[2rem] bg-indigo-600 px-5 py-2.5 text-[0.95rem] md:text-base leading-relaxed text-white shadow-lg shadow-indigo-500/20"
-                : `w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200 ${
-                    isStreaming ? "streaming-message" : ""
-                  }`
+                ? "max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
+                : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
             }`}
           >
             {isStreaming && !msg.content ? (
-              <p>&nbsp;</p>
+              <div className="flex gap-2 py-3">
+                <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+              </div>
             ) : (
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -131,8 +133,6 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
               </ReactMarkdown>
             )}
           </div>
-
-          {isUser && <MessageMetadata isUser={isUser} model={msg.model} />}
         </div>
       </div>
     </div>

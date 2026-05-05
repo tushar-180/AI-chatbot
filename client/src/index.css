@@ -4,6 +4,36 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@theme {
+  --animate-spotlight: spotlight 2s ease .75s 1 forwards;
+}
+
+@keyframes spotlight {
+  0% {
+    opacity: 0;
+    transform: translate(-72%, -62%) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -40%) scale(1);
+  }
+}
+
+@layer utilities {
+  .animate-spotlight {
+    animation: spotlight 2s ease .75s 1 forwards;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
 :root {
   color-scheme: light;
   --font-sans: "Outfit", "Inter Variable", sans-serif;
@@ -106,14 +136,14 @@
   }
 
   ::selection {
-    background: rgba(99, 102, 241, 0.28);
+    background: rgba(255, 255, 255, 0.1);
     color: #fff;
   }
 
   /* Custom Scrollbar Styles */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
   }
 
   /* Chrome, Edge, and Safari */
@@ -127,7 +157,7 @@
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(99, 102, 241, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
     border-radius: 20px;
     border: 1px solid transparent;
     background-clip: content-box;
@@ -135,43 +165,15 @@
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(99, 102, 241, 0.5);
+    background-color: rgba(255, 255, 255, 0.2);
   }
 
   @keyframes caret-blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0;
-    }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
   }
 
   .animate-caret-blink {
-    animation: caret-blink 0.8s steps(1) infinite;
-  }
-
-  .streaming-message p:last-child::after,
-  .streaming-message li:last-child::after,
-  .streaming-message h1:last-child::after,
-  .streaming-message h2:last-child::after,
-  .streaming-message h3:last-child::after,
-  .streaming-message span:last-child::after {
-    content: "";
-    display: inline-block;
-    width: 2.5px;
-    height: 1.1em;
-    background: #818cf8;
-    margin-left: 4px;
-    vertical-align: middle;
-    box-shadow: 0 0 10px rgba(129, 140, 248, 0.9);
-    border-radius: 1px;
-    animation: caret-blink 0.8s steps(1) infinite;
-  }
-
-  /* Prevent multiple cursors by removing it from any element that has a child which is also a last-child */
-  .streaming-message *:has(*:last-child)::after {
-    content: none !important;
+    animation: caret-blink 1s steps(2) infinite;
   }
 }

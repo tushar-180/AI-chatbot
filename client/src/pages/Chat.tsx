@@ -6,6 +6,7 @@ import InputArea from "@/features/chat/components/InputArea";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
+import { Spotlight } from "@/components/ui/spotlight";
 
 /**
  * Chat Page Component
@@ -41,27 +42,35 @@ const Chat = () => {
   const displayMessages = optimisticMessages ?? messages;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
+    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans selection:bg-white/10 antialiased">
       <Sidebar />
 
-      <main className="flex flex-1 flex-col bg-linear-to-br overflow-hidden from-slate-950 via-slate-900/50 to-slate-950">
+      <main className="relative flex flex-1 flex-col overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
+        {/* Spotlight Component - Positioned correctly */}
+        <Spotlight
+          className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
+          fill="rgba(255, 255, 255, 0.05)"
+        />
+        
         <ChatHeader
           currentChatId={currentChatId}
           onMenuClick={() => setSidebarOpen(true)}
         />
 
-        <MessageList
-          messages={displayMessages}
-          loading={isCurrentChatLoading}
-          messagesLoading={messagesLoading}
-          hasLoadedCurrentChat={
-            !currentChatId || loadedChatId === currentChatId
-          }
-          isStreaming={isStreaming}
-          currentChatId={currentChatId}
-          isNewChat={isNewChat}
-          onSuggestionClick={setInput}
-        />
+        <div className="flex-1 relative flex flex-col overflow-hidden">
+          <MessageList
+            messages={displayMessages}
+            loading={isCurrentChatLoading}
+            messagesLoading={messagesLoading}
+            hasLoadedCurrentChat={
+              !currentChatId || loadedChatId === currentChatId
+            }
+            isStreaming={isStreaming}
+            currentChatId={currentChatId}
+            isNewChat={isNewChat}
+            onSuggestionClick={setInput}
+          />
+        </div>
 
         <InputArea
           input={input}
@@ -74,6 +83,9 @@ const Chat = () => {
           selectedProvider={selectedProvider}
           onProviderChange={setSelectedProvider}
         />
+
+        {/* Minimal Noise Overlay for Texture */}
+        <div className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] z-50" />
       </main>
     </div>
   );
