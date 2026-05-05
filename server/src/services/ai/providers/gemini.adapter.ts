@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { IAIService } from "../ai.interface";
 import { AIMessage, AIServiceError } from "../types";
-import { AI_PROVIDERS, getDisplayProviderName } from "../constants";
+import { AI_PROVIDERS, getDisplayProviderName, supportsVision } from "../constants";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -27,13 +27,57 @@ export class GeminiAdapter implements IAIService {
     this.model = model;
   }
 
+  private async formatContents(messages: AIMessage[]) {
+    const isVision = supportsVision(this.model);
+
+    return Promise.all(
+      messages
+        .filter((msg) => msg.role !== "system")
+        .map(async (msg) => {
+          const parts: any[] = [{ text: msg.content }];
+
+          if (msg.attachments && msg.attachments.length > 0) {
+            if (isVision) {
+              // Fetch and convert images to base64 for native vision support
+              for (const att of msg.attachments) {
+                try {
+                  const response = await fetch(att.url);
+                  if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+                  
+                  const arrayBuffer = await response.arrayBuffer();
+                  const base64Data = Buffer.from(arrayBuffer).toString('base64');
+                  const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
+                  
+                  parts.push({
+                    inlineData: {
+                      mimeType,
+                      data: base64Data,
+                    },
+                  });
+                } catch (err) {
+                  console.error(`Failed to process image for Gemini: ${att.url}`, err);
+                  parts.push({ text: `\n[Image Link: ${att.url}]` });
+                }
+              }
+            } else {
+              // Fallback for text-only models
+              const attachmentText = msg.attachments
+                .map((a) => `\n[Image: ${a.url}]`)
+                .join("");
+              parts[0].text += attachmentText;
+            }
+          }
+
+          return {
+            role: msg.role === "assistant" ? "model" : "user",
+            parts,
+          };
+        })
+    );
+  }
+
   async generateResponse(messages: AIMessage[]): Promise<string> {
-    const contents = messages
-      .filter((msg) => msg.role !== "system")
-      .map((msg) => ({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: msg.content }],
-      }));
+    const contents = await this.formatContents(messages);
 
     const systemMessage = messages.find((msg) => msg.role === "system");
 
@@ -95,12 +139,7 @@ OUTPUT RULES (VERY IMPORTANT):
     messages: AIMessage[],
     signal?: AbortSignal,
   ): AsyncIterable<string> {
-    const contents = messages
-      .filter((msg) => msg.role !== "system")
-      .map((msg) => ({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: msg.content }],
-      }));
+    const contents = await this.formatContents(messages);
 
     const systemMessage = messages.find((msg) => msg.role === "system");
 
@@ -113,7 +152,7 @@ OUTPUT RULES (VERY IMPORTANT):
             ? {
                 parts: [{ text: systemMessage.content }],
               }
-            : undefined, // Default system instruction is already in the class logic, but here we can keep it simple or repeat it
+            : undefined, 
         },
       } as any);
 

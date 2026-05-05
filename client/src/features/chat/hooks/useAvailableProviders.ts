@@ -8,7 +8,7 @@ export interface Provider {
 
 export const useAvailableProviders = (
   selectedProvider: string,
-  onProviderChange: (value: string) => void
+  onProviderChange: (value: string) => void,
 ) => {
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
 
@@ -26,8 +26,13 @@ export const useAvailableProviders = (
 
   // Default selection logic
   useEffect(() => {
-    if (availableProviders.length > 0 && !availableProviders.find(p => p.id === selectedProvider)) {
-      const defaultGemini = availableProviders.find(p => p.id.startsWith("gemini"));
+    if (
+      availableProviders.length > 0 &&
+      !availableProviders.find((p) => p.id === selectedProvider)
+    ) {
+      const defaultGemini = availableProviders.find((p) =>
+        p.id.startsWith("gemini"),
+      );
       if (defaultGemini) {
         onProviderChange(defaultGemini.id);
       } else if (availableProviders[0]) {
@@ -36,7 +41,9 @@ export const useAvailableProviders = (
     }
   }, [availableProviders, selectedProvider, onProviderChange]);
 
-  const currentProvider = availableProviders.find(p => p.id === selectedProvider);
+  const currentProvider = availableProviders.find(
+    (p) => p.id === selectedProvider,
+  );
 
   return {
     availableProviders,

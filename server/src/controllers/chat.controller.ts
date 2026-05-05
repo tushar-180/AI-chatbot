@@ -3,6 +3,7 @@ import { chatService } from "../services/chat.service";
 import { chatStreamRegistry } from "../services/chatStreamRegistry.service";
 import { asyncHandler } from "../utils/asyncHandler";
 import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
+import type { StreamPayload } from "../types/chat.types";
 
 const getHttpStatus = (error: unknown) => {
   if (!(error instanceof Error)) return 500;
@@ -27,15 +28,7 @@ const sendControllerError = (
 const pipeStreamResponse = async (
   req: Request,
   res: Response,
-  stream: AsyncGenerator<{
-    chatId?: string;
-    requestId?: string;
-    model?: string;
-    chunk?: string;
-    done?: boolean;
-    status?: "streaming" | "stopped" | "completed";
-    error?: string;
-  }>,
+  stream: AsyncGenerator<StreamPayload>,
 ) => {
   const firstPayload = await stream.next();
   if (firstPayload.done) return;
@@ -171,6 +164,15 @@ export const updateChatTitle = asyncHandler(async (req: Request, res: Response) 
     return res.json(chat);
   } catch (error) {
     return sendControllerError(res, error, "Failed to update chat title");
+  }
+});
+
+export const getGallery = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const gallery = await chatService.getGallery(String(req.params.id || req.params.userId));
+    return res.json(gallery);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to fetch gallery");
   }
 });
 

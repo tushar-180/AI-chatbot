@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { IAIService } from "../ai.interface";
 import { AIMessage, AIServiceError } from "../types";
-import { AI_PROVIDERS, getDisplayProviderName } from "../constants";
+import { AI_PROVIDERS, getDisplayProviderName, supportsVision } from "../constants";
 
 export class NvidiaAdapter implements IAIService {
   private openai: OpenAI;
@@ -30,14 +30,43 @@ export class NvidiaAdapter implements IAIService {
     this.model = model;
   }
 
+  private formatMessages(messages: AIMessage[]) {
+    const isVision = supportsVision(this.model);
+
+    return messages.map((m) => {
+      let content: any = m.content;
+
+      // If there are attachments and the model doesn't support vision, append them as text
+      if (m.attachments && m.attachments.length > 0) {
+        if (!isVision) {
+          const attachmentText = m.attachments
+            .map((a) => `\n[Image: ${a.url}]`)
+            .join("");
+          content += attachmentText;
+        } else {
+          // Format for multimodal models (OpenAI style)
+          content = [
+            { type: "text", text: m.content },
+            ...m.attachments.map((a) => ({
+              type: "image_url",
+              image_url: { url: a.url },
+            })),
+          ];
+        }
+      }
+
+      return {
+        role: m.role as any,
+        content,
+      };
+    });
+  }
+
   async generateResponse(messages: AIMessage[]): Promise<string> {
     try {
       const completion = await this.openai.chat.completions.create({
         model: this.model,
-        messages: messages.map((m) => ({
-          role: m.role as any,
-          content: m.content,
-        })),
+        messages: this.formatMessages(messages),
         temperature: 0.6,
         top_p: 0.7,
         max_tokens: 4096,
@@ -58,19 +87,19 @@ export class NvidiaAdapter implements IAIService {
     signal?: AbortSignal,
   ): AsyncIterable<string> {
     try {
-      const stream = await this.openai.chat.completions.create({
-        model: this.model,
-        messages: messages.map((m) => ({
-          role: m.role as any,
-          content: m.content,
-        })),
-        temperature: 0.6,
-        top_p: 0.7,
-        max_tokens: 4096,
-        stream: true,
-      }, {
-        signal,
-      });
+      const stream = await this.openai.chat.completions.create(
+        {
+          model: this.model,
+          messages: this.formatMessages(messages),
+          temperature: 0.6,
+          top_p: 0.7,
+          max_tokens: 4096,
+          stream: true,
+        },
+        {
+          signal,
+        },
+      );
 
       for await (const chunk of stream) {
         if (signal?.aborted) {

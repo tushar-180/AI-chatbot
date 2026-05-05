@@ -16,6 +16,9 @@ router.get("/:id/stream-updates", ChatController.getStreamUpdates);
 // Get All Chats
 router.get("/", ChatController.getAllChats);
 
+// Get User Gallery
+router.get("/gallery/:userId", ChatController.getGallery);
+
 // Get single chat
 router.get("/:id", ChatController.getChatById);
 

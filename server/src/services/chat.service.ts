@@ -5,32 +5,43 @@ import {
 } from "../constants/chat.constants";
 import { chatRepository } from "../repositories/chat.repository";
 import type {
+  Attachment,
   ChatMessage,
   CreateChatInput,
   SendMessageInput,
   StopStreamInput,
   StreamPayload,
 } from "../types/chat.types";
-import { getLimitedMessages } from "../utils/chatHistory";
+import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
-const createUserMessage = (content: string, provider?: string): ChatMessage => ({
+const createUserMessage = (
+  content: string,
+  userId: string,
+  provider?: string,
+  attachments?: Attachment[],
+): ChatMessage => ({
   role: "user",
+  userId,
   content,
   model: provider || DEFAULT_AI_PROVIDER,
   status: "completed",
+  attachments: attachments || [],
+  type: attachments && attachments.length > 0 ? "image" : "text",
 });
 
 const createAssistantMessage = (
   content: string,
+  userId: string,
   model: string,
   requestId?: string,
   status: ChatMessage["status"] = "completed",
 ): ChatMessage => ({
   role: "assistant",
+  userId,
   content,
   model,
   requestId,
@@ -51,7 +62,10 @@ const requireUserId = (userId?: string) => {
   return userId;
 };
 
-const requireMessage = (message?: string, messageText = "message is required") => {
+const requireMessage = (
+  message?: string,
+  messageText = "message is required",
+) => {
   const trimmedMessage = message?.trim();
 
   if (!trimmedMessage) {
@@ -89,7 +103,7 @@ const getAssistantMessageByRequestId = (
   chat: Awaited<ReturnType<typeof requireChat>>,
   requestId: string,
 ) =>
-  (chat.messages as any[]).find(
+  (chat.messages as ChatMessage[]).find(
     (message) =>
       message.role === "assistant" && message.requestId === requestId,
   );
@@ -104,22 +118,21 @@ async function* streamAssistantResponse(
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
   const promptMessages = getLimitedMessages(chat.messages as ChatMessage[]);
-  const assistantMessage = createAssistantMessage(
-    "",
-    providerName,
+  
+  // Create assistant message in its own collection
+  const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
+    role: "assistant",
+    userId: chat.userId,
+    content: "",
+    model: providerName,
     requestId,
-    "streaming",
-  );
-
-  chat.messages.push(assistantMessage as any);
-  await chat.save();
-
-  const persistedAssistantMessage = getAssistantMessageByRequestId(chat, requestId);
+    status: "streaming",
+  });
 
   const activeStream = chatStreamRegistry.create({
     requestId,
     chatId,
-    messageId: persistedAssistantMessage?.id || "",
+    messageId: (assistantMessageDoc as any)._id?.toString() || "",
     model: providerName,
   });
 
@@ -141,22 +154,25 @@ async function* streamAssistantResponse(
       }
 
       fullResponse += chunk;
-      if (persistedAssistantMessage) {
-        persistedAssistantMessage.content = fullResponse;
-        persistedAssistantMessage.status = "streaming";
-      }
       chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
       yield { chunk, requestId, status: "streaming" };
     }
 
-    if (persistedAssistantMessage) {
-      persistedAssistantMessage.content = fullResponse;
-      persistedAssistantMessage.status = activeStream.abortController.signal.aborted
-        ? "stopped"
-        : "completed";
-      persistedAssistantMessage.model = providerName;
-    }
-    await chat.save();
+    const finalStatus = activeStream.abortController.signal.aborted
+      ? "stopped"
+      : "completed";
+
+    // Parse multimedia from the final response
+    const { attachments, type } = parseMultimedia(fullResponse);
+
+    // Update message doc in collection
+    await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+      content: fullResponse,
+      status: finalStatus,
+      model: providerName,
+      attachments,
+      type: type as any,
+    });
 
     if (activeStream.abortController.signal.aborted) {
       yield { done: true, chatId, requestId, status: "stopped" };
@@ -167,45 +183,64 @@ async function* streamAssistantResponse(
     yield { done: true, chatId, requestId, status: "completed" };
   } catch (aiError) {
     if (activeStream.abortController.signal.aborted) {
-      if (persistedAssistantMessage) {
-        persistedAssistantMessage.content = activeStream.fullResponse;
-        persistedAssistantMessage.status = "stopped";
-      }
-      await chat.save();
+      await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+        content: activeStream.fullResponse,
+        status: "stopped",
+      });
       yield { done: true, chatId, requestId, status: "stopped" };
       return;
     }
 
     console.error("AI Error in chat stream:", aiError);
+    await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+      status: "failed",
+    });
     chatStreamRegistry.fail(requestId, "AI failed to respond");
     yield { error: "AI failed to respond, but your message was saved." };
   }
 }
 
+
 export const chatService = {
-  async createChat({ userId, message, provider }: CreateChatInput) {
+  async createChat({ userId, message, provider, attachments }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim();
-    const messages: ChatMessage[] = [];
-
-    if (trimmedMessage) {
-      messages.push(createUserMessage(trimmedMessage, provider));
-
-      const aiProvider = aiService.getProvider(provider);
-      const providerName = aiProvider.getProviderName();
-      const reply = await aiProvider.generateResponse(getLimitedMessages(messages));
-
-      messages.push(createAssistantMessage(reply, providerName));
-    }
 
     const chat = chatRepository.create({
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
-      messages,
     });
 
     await chat.save();
-    return chat;
+    const chatId = chat._id.toString();
+
+    if (trimmedMessage || (attachments && attachments.length > 0)) {
+      // Save User Message
+      const userMessage = createUserMessage(trimmedMessage || "", String(resolvedUserId), provider, attachments);
+      await chatRepository.saveMessage(chatId, userMessage);
+
+      const aiProvider = aiService.getProvider(provider);
+      const providerName = aiProvider.getProviderName();
+      
+      // Get history for context
+      const messages = [userMessage];
+      const reply = await aiProvider.generateResponse(
+        getLimitedMessages(messages),
+      );
+
+      // Parse multimedia from reply
+      const { attachments: aiAttachments, type } = parseMultimedia(reply);
+
+      // Save Assistant Message
+      await chatRepository.saveMessage(chatId, {
+        ...createAssistantMessage(reply, String(resolvedUserId), providerName),
+        attachments: aiAttachments,
+        type: type as any,
+      });
+    }
+
+    // Fetch the full chat with messages to return
+    return await chatRepository.findById(chatId);
   },
 
   async *createChatStream(input: CreateChatInput) {
@@ -219,34 +254,57 @@ export const chatService = {
     const chat = chatRepository.create({
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
-      messages: [createUserMessage(trimmedMessage, input.provider)],
     });
 
     await chat.save();
+    const chatId = chat._id.toString();
 
-    yield* streamAssistantResponse(chat as any, requestId, input.provider, true);
+    // Save User Message
+    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(resolvedUserId), input.provider, input.attachments));
+
+    // Refetch to get messages for prompt
+    const fullChat = await chatRepository.findById(chatId);
+
+    yield* streamAssistantResponse(
+      fullChat as any,
+      requestId,
+      input.provider,
+      true,
+    );
   },
 
-  async sendMessage({ chatId, message, provider }: SendMessageInput) {
-    const trimmedMessage = requireMessage(message);
+  async sendMessage({ chatId, message, provider, attachments }: SendMessageInput) {
+    const trimmedMessage = message?.trim() || "";
     const chat = await requireChat(chatId);
 
-    chat.messages.push(createUserMessage(trimmedMessage, provider) as any);
+    // Save User Message
+    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments));
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       chat.title = createTitle(trimmedMessage);
+      await (chat as any).save();
     }
 
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
+    
+    // Fetch updated history
+    const updatedChat = await chatRepository.findById(chatId);
     const reply = await aiProvider.generateResponse(
-      getLimitedMessages(chat.messages as ChatMessage[]),
+      getLimitedMessages(updatedChat?.messages as ChatMessage[]),
     );
 
-    chat.messages.push(createAssistantMessage(reply, providerName) as any);
-    await chat.save();
+    // Parse multimedia from reply
+    const { attachments: aiAttachments, type } = parseMultimedia(reply);
 
-    return chat;
+    // Save Assistant Message
+    await chatRepository.saveMessage(chatId, {
+      ...createAssistantMessage(reply, String(chat.userId), providerName),
+      attachments: aiAttachments,
+      type: type as any,
+    });
+    
+    return await chatRepository.findById(chatId);
   },
 
   async *streamMessage({
@@ -254,36 +312,41 @@ export const chatService = {
     message,
     provider,
     requestId,
+    attachments,
   }: SendMessageInput) {
-    const trimmedMessage = requireMessage(message);
+    const trimmedMessage = message?.trim() || "";
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
 
-    chat.messages.push(createUserMessage(trimmedMessage, provider) as any);
+    // Save User Message
+    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments));
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       chat.title = createTitle(trimmedMessage);
+      await (chat as any).save();
     }
 
-    await chat.save();
+    // Refresh chat to include new user message
+    const updatedChat = await chatRepository.findById(chatId);
 
-    yield* streamAssistantResponse(chat, resolvedRequestId, provider);
+    yield* streamAssistantResponse(updatedChat as any, resolvedRequestId, provider);
   },
+
 
   async stopStream({ requestId, chatId }: StopStreamInput) {
     const resolvedRequestId = requireRequestId(requestId);
     const activeStream = chatStreamRegistry.get(resolvedRequestId);
 
     if (activeStream) {
-      const chat = await requireChat(activeStream.chatId);
-      const assistantMessage =
-        getAssistantMessageByRequestId(chat, resolvedRequestId);
-
-      if (assistantMessage) {
-        assistantMessage.content = activeStream.fullResponse;
-        assistantMessage.status = "stopped";
-        await chat.save();
-      }
+      // Update message doc in collection
+      await chatRepository.updateMessageByRequestId(
+        activeStream.chatId,
+        resolvedRequestId,
+        {
+          content: activeStream.fullResponse,
+          status: "stopped",
+        },
+      );
 
       chatStreamRegistry.stop(resolvedRequestId);
       return {
@@ -294,15 +357,11 @@ export const chatService = {
     }
 
     if (chatId) {
-      const chat = await requireChat(chatId);
-      const assistantMessage =
-        getAssistantMessageByRequestId(chat, resolvedRequestId);
-
-      if (assistantMessage && assistantMessage.status === "streaming") {
-        assistantMessage.status = "stopped";
-        await chat.save();
-      }
+      await chatRepository.updateMessageByRequestId(chatId, resolvedRequestId, {
+        status: "stopped",
+      });
     }
+
 
     return {
       stopped: false,
@@ -337,4 +396,28 @@ export const chatService = {
     await chat.save();
     return chat;
   },
+
+  async getGallery(userId: string) {
+    const resolvedUserId = requireUserId(userId);
+    const messages = await chatRepository.findUserAttachments(resolvedUserId);
+    
+    const gallery = [];
+    for (const msg of messages) {
+      if (!msg.attachments) continue;
+      
+      for (const att of msg.attachments) {
+        gallery.push({
+          url: att.url,
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size,
+          messageId: String((msg as any)._id),
+          chatId: String((msg as any).chatId),
+          createdAt: (msg as any).createdAt
+        });
+      }
+    }
+    
+    return gallery;
+  }
 };

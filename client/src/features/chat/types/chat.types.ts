@@ -4,12 +4,20 @@ export type Message = {
   content: string;
   model?: string;
   requestId?: string;
-  status?: "streaming" | "stopped" | "completed";
+  status?: "streaming" | "stopped" | "completed" | "failed";
+  type?: "text" | "image" | "file" | "action";
+  attachments?: {
+    url: string;
+    name?: string;
+    mimeType?: string;
+    size?: number;
+  }[];
 };
 
 export type Chat = {
   _id: string;
   title: string;
+  updatedAt?: string;
 };
 
 export type StreamEventPayload = {
@@ -18,6 +26,6 @@ export type StreamEventPayload = {
   model?: string;
   chunk?: string;
   done?: boolean;
-  status?: "streaming" | "stopped" | "completed";
+  status?: "streaming" | "stopped" | "completed" | "failed";
   error?: string;
 };

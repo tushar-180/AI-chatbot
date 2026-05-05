@@ -5,9 +5,13 @@ import Landing from "./pages/Landing";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Loading from "./features/chat/components/Loading";
+import { useUserSync } from "./features/auth/hooks/useUserSync";
 
 function App() {
   const { isSignedIn, isLoaded } = useUser();
+  
+  // Sync user with DB whenever authenticated
+  useUserSync();
 
   if (!isLoaded)
     return (
