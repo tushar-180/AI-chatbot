@@ -6,6 +6,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Chat = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const messageSchema = new mongoose_1.default.Schema({
+    id: {
+        type: String,
+        default: () => new mongoose_1.default.Types.ObjectId().toString(),
+    },
     role: {
         type: String,
         enum: ["user", "assistant"],
@@ -17,6 +21,15 @@ const messageSchema = new mongoose_1.default.Schema({
     },
     model: {
         type: String,
+    },
+    requestId: {
+        type: String,
+    },
+    status: {
+        type: String,
+        enum: ["streaming", "stopped", "completed"],
+        default: "completed",
+        required: true,
     },
 });
 const chatSchema = new mongoose_1.default.Schema({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
@@ -33,6 +33,10 @@ export const useChatStream = () => {
   const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] = useState<
     Record<string, Message[] | null>
   >({});
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
+  const activeResolvedChatIdRef = useRef<string | null>(null);
+  const stopRequestedRef = useRef(false);
 
   const setOptimisticMessagesForChat = (
     chatId: string,
@@ -75,6 +79,7 @@ export const useChatStream = () => {
     response: Response,
     isCreatingChat: boolean,
     initialChatId: string | null,
+    requestId: string,
     optimisticTitle?: string,
   ) => {
     const reader = response.body?.getReader();
@@ -82,6 +87,7 @@ export const useChatStream = () => {
     let fullContent = "";
     let buffer = "";
     let resolvedChatId = initialChatId;
+    let activeRequestId = requestId;
     const initialKey = getActiveChatKey(initialChatId);
 
     if (!reader) throw new Error("Stream reader unavailable");
@@ -90,9 +96,15 @@ export const useChatStream = () => {
       const data = chatService.parseStreamEvent(rawEvent);
       if (!data) return;
 
+      if (data.requestId) {
+        activeRequestId = data.requestId;
+        activeRequestIdRef.current = data.requestId;
+      }
+
       if (data.chatId) {
         const nextChatId: string = data.chatId;
         resolvedChatId = nextChatId;
+        activeResolvedChatIdRef.current = nextChatId;
         if (isCreatingChat) {
           upsertChat({
             _id: nextChatId,
@@ -129,6 +141,7 @@ export const useChatStream = () => {
           next[next.length - 1] = {
             ...next[next.length - 1],
             model: data.model,
+            requestId: activeRequestId,
           };
           return { ...current, [key]: next };
         });
@@ -144,6 +157,8 @@ export const useChatStream = () => {
           next[next.length - 1] = {
             ...next[next.length - 1],
             content: fullContent,
+            requestId: activeRequestId,
+            status: data.status ?? "streaming",
           };
           return { ...current, [key]: next };
         });
@@ -155,6 +170,23 @@ export const useChatStream = () => {
         if (user?.id) {
           await refreshChats(user.id);
         }
+        const key = resolvedChatId ?? initialKey;
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            content: fullContent || next[next.length - 1].content,
+            requestId: activeRequestId,
+            status: data.status ?? "completed",
+          };
+          return { ...current, [key]: next };
+        });
+        activeAbortControllerRef.current = null;
+        activeRequestIdRef.current = null;
+        activeResolvedChatIdRef.current = null;
+        stopRequestedRef.current = false;
         setIsStreaming(false);
         setLoading(false);
       }
@@ -181,11 +213,15 @@ export const useChatStream = () => {
   const resumeStream = async (chatId: string) => {
     try {
       const url = chatService.getStreamUpdatesUrl(chatId);
+      const abortController = new AbortController();
+      activeAbortControllerRef.current = abortController;
+      activeResolvedChatIdRef.current = chatId;
       const response = await fetch(url, {
         headers: {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
         },
+        signal: abortController.signal,
       });
 
       if (!response.ok) return false;
@@ -197,22 +233,31 @@ export const useChatStream = () => {
 
       // Add a placeholder message for the incoming stream
       const assistantPlaceholder: Message = {
+        id: crypto.randomUUID(),
         role: "assistant",
         content: "",
         model: "gemini", // Will be updated by stream
+        status: "streaming",
       };
 
       setLoading(true);
       setIsStreaming(true, chatId);
       setOptimisticMessagesForChat(chatId, [...messages, assistantPlaceholder]);
 
-      await processStream(response, false, chatId);
+      await processStream(response, false, chatId, crypto.randomUUID());
       return true;
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        return false;
+      }
+
       console.error("Error resuming stream", err);
       setLoading(false);
       setIsStreaming(false);
       setOptimisticMessagesForChat(chatId, null);
+      activeAbortControllerRef.current = null;
+      activeRequestIdRef.current = null;
+      activeResolvedChatIdRef.current = null;
       return false;
     }
   };
@@ -234,18 +279,29 @@ export const useChatStream = () => {
     if (!input.trim() || loading || !user?.id) return;
 
     const userMessage: Message = {
+      id: crypto.randomUUID(),
       role: "user",
       content: input,
       model: provider,
+      status: "completed",
     };
+    const requestId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
+      id: crypto.randomUUID(),
       role: "assistant",
       content: "",
       model: provider,
+      requestId,
+      status: "streaming",
     };
     const isCreatingChat = !currentChatId;
     const activeKey = getActiveChatKey(currentChatId);
     const optimisticTitle = createOptimisticTitle(input);
+    const abortController = new AbortController();
+
+    activeAbortControllerRef.current = abortController;
+    activeRequestIdRef.current = requestId;
+    activeResolvedChatIdRef.current = currentChatId;
 
     // Set optimistic UI
     setOptimisticMessagesForChat(activeKey, [
@@ -266,33 +322,134 @@ export const useChatStream = () => {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
         },
+        signal: abortController.signal,
         body: JSON.stringify({
           userId: user.id,
           message: input,
           provider,
+          requestId,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to connect to stream");
+      if (!response.ok) {
+        if (stopRequestedRef.current && activeRequestIdRef.current === requestId) {
+          const key = getActiveChatKey(
+            activeResolvedChatIdRef.current ?? currentChatId,
+          );
+
+          setOptimisticMessagesByChatId((current) => {
+            const messagesForChat = current[key];
+            if (!messagesForChat?.length) return current;
+            const next = [...messagesForChat];
+            next[next.length - 1] = {
+              ...next[next.length - 1],
+              status: "stopped",
+            };
+            return { ...current, [key]: next };
+          });
+
+          setLoading(false);
+          setIsStreaming(false);
+          return;
+        }
+
+        throw new Error("Failed to connect to stream");
+      }
 
       await processStream(
         response,
         isCreatingChat,
         currentChatId,
+        requestId,
         optimisticTitle,
       );
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        const key = getActiveChatKey(
+          activeResolvedChatIdRef.current ?? currentChatId,
+        );
+
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            status: "stopped",
+          };
+          return { ...current, [key]: next };
+        });
+
+        setLoading(false);
+        setIsStreaming(false);
+        return;
+      }
+
+      if (stopRequestedRef.current && activeRequestIdRef.current === requestId) {
+        const key = getActiveChatKey(
+          activeResolvedChatIdRef.current ?? currentChatId,
+        );
+
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            status: "stopped",
+          };
+          return { ...current, [key]: next };
+        });
+
+        setLoading(false);
+        setIsStreaming(false);
+        return;
+      }
+
       console.error("Error streaming message", err);
       setOptimisticMessagesForChat(activeKey, null);
       toast.error(chatService.getChatErrorMessage(err));
     } finally {
+      if (activeRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      activeAbortControllerRef.current = null;
+      activeRequestIdRef.current = null;
+      activeResolvedChatIdRef.current = null;
+      stopRequestedRef.current = false;
       setLoading(false);
       setIsStreaming(false);
     }
   };
 
+  const stopGeneration = async () => {
+    const requestId = activeRequestIdRef.current;
+    const chatId = activeResolvedChatIdRef.current ?? currentChatId;
+
+    if (!requestId) return;
+
+    stopRequestedRef.current = true;
+    activeAbortControllerRef.current?.abort();
+
+    try {
+      await chatService.stopStream(requestId, chatId);
+      if (user?.id) {
+        await refreshChats(user.id);
+      }
+    } catch (err) {
+      console.error("Error stopping stream", err);
+      toast.error("Could not stop generation cleanly on the server.");
+    } finally {
+      activeAbortControllerRef.current = null;
+      activeRequestIdRef.current = null;
+      activeResolvedChatIdRef.current = null;
+    }
+  };
+
   return {
     streamMessage,
+    stopGeneration,
     optimisticMessages:
       optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ?? null,
     isStreaming: isStreamingCurrentChat,

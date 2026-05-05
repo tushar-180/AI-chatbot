@@ -29,9 +29,11 @@ const pipeStreamResponse = async (
   res: Response,
   stream: AsyncGenerator<{
     chatId?: string;
+    requestId?: string;
     model?: string;
     chunk?: string;
     done?: boolean;
+    status?: "streaming" | "stopped" | "completed";
     error?: string;
   }>,
 ) => {
@@ -49,7 +51,10 @@ const pipeStreamResponse = async (
     if (clientDisconnected) return;
 
     if (payload.chunk) {
-      await splitAndWriteChunk(res, payload.chunk);
+      await splitAndWriteChunk(res, payload.chunk, {
+        requestId: payload.requestId,
+        status: payload.status,
+      });
     } else {
       writeSse(res, payload);
     }
@@ -139,6 +144,15 @@ export const streamMessage = async (req: Request, res: Response) => {
   }
 };
 
+export const stopStream = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const result = await chatService.stopStream(req.body);
+    return res.json(result);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to stop stream");
+  }
+});
+
 export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   try {
     await chatService.deleteChat(String(req.params.id));
@@ -162,7 +176,7 @@ export const updateChatTitle = asyncHandler(async (req: Request, res: Response) 
 
 export const getStreamUpdates = async (req: Request, res: Response) => {
   const chatId = req.params.id as string;
-  const activeStream = chatStreamRegistry.get(chatId);
+  const activeStream = chatStreamRegistry.getByChatId(chatId);
 
   if (!activeStream) {
     return res
@@ -172,17 +186,33 @@ export const getStreamUpdates = async (req: Request, res: Response) => {
 
   setSseHeaders(res);
 
-  writeSse(res, { model: activeStream.model });
+  writeSse(res, {
+    model: activeStream.model,
+    requestId: activeStream.requestId,
+    status: activeStream.status,
+  });
   if (activeStream.fullResponse) {
-    writeSse(res, { chunk: activeStream.fullResponse });
+    writeSse(res, {
+      chunk: activeStream.fullResponse,
+      requestId: activeStream.requestId,
+      status: activeStream.status,
+    });
   }
 
   const onChunk = async (chunk: string) => {
-    await splitAndWriteChunk(res, chunk);
+    await splitAndWriteChunk(res, chunk, {
+      requestId: activeStream.requestId,
+      status: activeStream.status,
+    });
   };
 
   const onDone = () => {
-    writeSse(res, { done: true, chatId });
+    writeSse(res, {
+      done: true,
+      chatId,
+      requestId: activeStream.requestId,
+      status: activeStream.status,
+    });
     res.end();
   };
 

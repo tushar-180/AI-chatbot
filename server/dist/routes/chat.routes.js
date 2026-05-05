@@ -39,6 +39,7 @@ const router = (0, express_1.Router)();
 // Create new chat
 router.post("/", ChatController.createChat);
 router.post("/stream", ChatController.createChatStream);
+router.post("/stop", ChatController.stopStream);
 // Add message to existing chat
 router.post("/:id", ChatController.sendMessage);
 router.post("/:id/stream", ChatController.streamMessage);
@@ -49,4 +50,6 @@ router.get("/", ChatController.getAllChats);
 router.get("/:id", ChatController.getChatById);
 // Delete chat
 router.delete("/:id", ChatController.deleteChat);
+// Update chat title
+router.patch("/:id", ChatController.updateChatTitle);
 exports.default = router;

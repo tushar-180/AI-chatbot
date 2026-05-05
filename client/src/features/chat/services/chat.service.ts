@@ -42,6 +42,13 @@ export const chatService = {
     return `${API_ORIGIN}/api/chat/${chatId}/stream-updates`;
   },
 
+  async stopStream(requestId: string, chatId?: string | null) {
+    return api.post("/chat/stop", {
+      requestId,
+      chatId,
+    });
+  },
+
   /**
    * Parses a raw SSE event string.
    */

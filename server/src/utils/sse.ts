@@ -14,13 +14,17 @@ export const writeSse = (res: Response, payload: unknown) => {
   (res as Response & { flush?: () => void }).flush?.();
 };
 
-export const splitAndWriteChunk = async (res: Response, chunk: string) => {
+export const splitAndWriteChunk = async (
+  res: Response,
+  chunk: string,
+  meta: Record<string, unknown> = {},
+) => {
   if (chunk.length > 25) {
     const parts = chunk.split(/(\s+)/);
 
     for (const part of parts) {
       if (part) {
-        writeSse(res, { chunk: part });
+        writeSse(res, { ...meta, chunk: part });
         await new Promise((resolve) => setTimeout(resolve, 15));
       }
     }
@@ -28,5 +32,5 @@ export const splitAndWriteChunk = async (res: Response, chunk: string) => {
     return;
   }
 
-  writeSse(res, { chunk });
+  writeSse(res, { ...meta, chunk });
 };
