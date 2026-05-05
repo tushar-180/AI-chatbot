@@ -274,9 +274,9 @@ export const useChatStream = () => {
     }
   }, [currentChatId, isStreaming, streamingChatId]);
 
-
-  const streamMessage = async (input: string, provider: string) => {
-    if (!input.trim() || loading || !user?.id) return;
+  const streamMessage = async (input: string, provider: string, attachments: any[] = []) => {
+    if (!input.trim() && attachments.length === 0) return;
+    if (loading || !user?.id) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -284,6 +284,7 @@ export const useChatStream = () => {
       content: input,
       model: provider,
       status: "completed",
+      attachments: attachments,
     };
     const requestId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
@@ -328,11 +329,15 @@ export const useChatStream = () => {
           message: input,
           provider,
           requestId,
+          attachments,
         }),
       });
 
       if (!response.ok) {
-        if (stopRequestedRef.current && activeRequestIdRef.current === requestId) {
+        if (
+          stopRequestedRef.current &&
+          activeRequestIdRef.current === requestId
+        ) {
           const key = getActiveChatKey(
             activeResolvedChatIdRef.current ?? currentChatId,
           );
@@ -385,7 +390,10 @@ export const useChatStream = () => {
         return;
       }
 
-      if (stopRequestedRef.current && activeRequestIdRef.current === requestId) {
+      if (
+        stopRequestedRef.current &&
+        activeRequestIdRef.current === requestId
+      ) {
         const key = getActiveChatKey(
           activeResolvedChatIdRef.current ?? currentChatId,
         );
@@ -444,6 +452,8 @@ export const useChatStream = () => {
       activeAbortControllerRef.current = null;
       activeRequestIdRef.current = null;
       activeResolvedChatIdRef.current = null;
+      setIsStreaming(false);
+      setLoading(false);
     }
   };
 

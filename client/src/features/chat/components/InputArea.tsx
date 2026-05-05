@@ -4,8 +4,9 @@ import {
   useRef,
   useEffect,
   memo,
+  useState,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown, Square } from "lucide-react";
+import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X, Image as ImageIcon } from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -17,6 +18,10 @@ import {
   useAvailableProviders,
   type Provider,
 } from "@/features/chat/hooks/useAvailableProviders";
+import { supportsVision } from "@/features/chat/constants/chat.constants";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
+import type { Attachment } from "@/features/chat/hooks/useChatInput";
 
 interface InputAreaProps {
   input: string;
@@ -28,6 +33,8 @@ interface InputAreaProps {
   currentChatId: string | null;
   selectedProvider: string;
   onProviderChange: (value: string) => void;
+  attachments?: Attachment[];
+  onAttachmentsChange?: (attachments: Attachment[]) => void;
 }
 
 /**
@@ -77,7 +84,10 @@ const ModelSelector = ({
           >
             {getProviderIcon(selectedProvider, 12)}
             <span>{getModelOnlyName(currentProviderName)}</span>
-            <ChevronDown size={10} className="ml-0.5 text-slate-600 transition-colors" />
+            <ChevronDown
+              size={10}
+              className="ml-0.5 text-slate-600 transition-colors"
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -118,12 +128,19 @@ const InputArea = ({
   currentChatId,
   selectedProvider,
   onProviderChange,
+  attachments = [],
+  onAttachmentsChange,
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
   const { availableProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
   );
+
+  const canUpload = supportsVision(selectedProvider);
 
   // Auto-resize logic
   useEffect(() => {
@@ -139,13 +156,61 @@ const InputArea = ({
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (input.trim() && !loading) {
+      if ((input.trim() || attachments.length > 0) && !loading && !isUploading) {
         const event = {
           preventDefault: () => {},
         } as SyntheticEvent<HTMLFormElement>;
         onSubmit(event);
       }
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Basic validation
+    if (!file.type.startsWith('image/')) {
+      toast.error("Only image uploads are supported currently");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await api.post("/upload/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      
+      const newAttachment: Attachment = {
+        url: res.data.url,
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+      };
+
+      onAttachmentsChange?.([...attachments, newAttachment]);
+      toast.success("Image uploaded");
+    } catch (err) {
+      console.error("Upload failed", err);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    const next = [...attachments];
+    next.splice(index, 1);
+    onAttachmentsChange?.(next);
   };
 
   return (
@@ -158,7 +223,49 @@ const InputArea = ({
             onProviderChange={onProviderChange}
           />
 
+          {/* Attachment Previews */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-4 py-2">
+              {attachments.map((att, i) => (
+                <div key={att.url} className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5">
+                  <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-end gap-2 pr-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/*"
+            />
+            
+            {canUpload && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50"
+                aria-label="Upload image"
+              >
+                {isUploading ? (
+                  <Loader2 size={18} className="animate-spin text-white" />
+                ) : (
+                  <Paperclip size={18} />
+                )}
+              </button>
+            )}
+
             <textarea
               ref={textareaRef}
               value={input}
@@ -168,24 +275,28 @@ const InputArea = ({
               placeholder={
                 currentChatId ? "Ask anything..." : "Start a conversation..."
               }
-              className="max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-none selection:bg-white/10"
+              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide selection:bg-white/10`}
             />
 
             {isStreaming ? (
               <button
                 type="button"
                 onClick={onStop}
-                className="mb-1.5 md:mb-2 flex h-9 min-w-[76px] shrink-0 items-center justify-center gap-2 rounded-full bg-rose-500 px-3 text-xs font-semibold text-white transition-all duration-300 hover:bg-rose-400 md:h-10"
+                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
+                aria-label="Stop generation"
               >
-                <Square size={12} fill="currentColor" />
-                <span>Stop</span>
+                <Square
+                  size={14}
+                  fill="currentColor"
+                  className="transition-colors group-hover:text-rose-600"
+                />
               </button>
             ) : (
               <button
                 type="submit"
-                disabled={loading || !input.trim()}
+                disabled={loading || isUploading || (!input.trim() && attachments.length === 0)}
                 className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  loading || !input.trim()
+                  loading || isUploading || (!input.trim() && attachments.length === 0)
                     ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                     : "bg-white text-slate-900 hover:bg-slate-200"
                 }`}

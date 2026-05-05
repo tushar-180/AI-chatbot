@@ -12,8 +12,10 @@ import {
   MoreVertical,
   ChevronDown,
   ChevronUp,
+  Image as ImageIcon,
 } from "lucide-react";
 import DeleteConfirmModal from "./DeleteConfirmModal";
+import GalleryModal from "./GalleryModal";
 
 /**
  * Sidebar Component
@@ -162,6 +164,7 @@ const Sidebar = () => {
   } = useChatList();
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   return (
     <>
@@ -195,13 +198,23 @@ const Sidebar = () => {
           </button>
         </div>
 
-        <button
-          onClick={createChat}
-          className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
-        >
-          <Plus size={16} strokeWidth={3} />
-          <span>New Session</span>
-        </button>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={createChat}
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
+          >
+            <Plus size={16} strokeWidth={3} />
+            <span>New Session</span>
+          </button>
+
+          <button
+            onClick={() => setGalleryOpen(true)}
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/[0.08]"
+          >
+            <ImageIcon size={16} />
+            <span>Gallery</span>
+          </button>
+        </div>
 
         <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
           <div
@@ -254,6 +267,11 @@ const Sidebar = () => {
           if (deleteId) deleteChat(deleteId);
           setDeleteId(null);
         }}
+      />
+
+      <GalleryModal
+        isOpen={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
       />
     </>
   );

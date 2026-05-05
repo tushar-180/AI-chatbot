@@ -2,24 +2,39 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { DEFAULT_CHAT_PROVIDER } from "@/features/chat/constants/chat.constants";
 
+export interface Attachment {
+  url: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+}
+
 interface UseChatInputProps {
-  onSubmit: (input: string, provider: string) => Promise<void>;
+  onSubmit: (input: string, provider: string, attachments?: Attachment[]) => Promise<void>;
   initialProvider?: string;
 }
 
-export const useChatInput = ({ onSubmit, initialProvider }: UseChatInputProps) => {
+export const useChatInput = ({
+  onSubmit,
+  initialProvider,
+}: UseChatInputProps) => {
   const [input, setInput] = useState("");
   const [selectedProvider, setSelectedProvider] = useState(
     initialProvider || DEFAULT_CHAT_PROVIDER,
   );
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() && attachments.length === 0) return;
 
     const currentInput = input;
-    setInput(""); // Clear input early for better UX
-    await onSubmit(currentInput, selectedProvider);
+    const currentAttachments = [...attachments];
+    
+    setInput(""); 
+    setAttachments([]); // Clear both
+    
+    await onSubmit(currentInput, selectedProvider, currentAttachments);
   };
 
   return {
@@ -27,6 +42,8 @@ export const useChatInput = ({ onSubmit, initialProvider }: UseChatInputProps) =
     setInput,
     selectedProvider,
     setSelectedProvider,
+    attachments,
+    setAttachments,
     handleFormSubmit,
   };
 };

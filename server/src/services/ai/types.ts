@@ -4,6 +4,11 @@ export interface AIMessage {
   role: AIRole;
   content: string;
   model?: string;
+  attachments?: {
+    url: string;
+    name?: string;
+    mimeType?: string;
+  }[];
 }
 
 export interface AIProviderConfig {

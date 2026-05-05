@@ -33,6 +33,8 @@ const Chat = () => {
     setInput,
     selectedProvider,
     setSelectedProvider,
+    attachments,
+    setAttachments,
     handleFormSubmit,
   } = useChatInput({
     onSubmit: streamMessage,
@@ -51,7 +53,7 @@ const Chat = () => {
           className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
           fill="rgba(255, 255, 255, 0.05)"
         />
-        
+
         <ChatHeader
           currentChatId={currentChatId}
           onMenuClick={() => setSidebarOpen(true)}
@@ -82,6 +84,8 @@ const Chat = () => {
           currentChatId={currentChatId}
           selectedProvider={selectedProvider}
           onProviderChange={setSelectedProvider}
+          attachments={attachments}
+          onAttachmentsChange={setAttachments}
         />
 
         {/* Minimal Noise Overlay for Texture */}

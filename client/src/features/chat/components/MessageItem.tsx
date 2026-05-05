@@ -7,16 +7,58 @@ import {
   userMarkdownComponents,
 } from "./MarkdownConfig";
 
+interface Attachment {
+  url: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
+  type?: "text" | "image" | "file" | "action";
+  attachments?: Attachment[];
 }
 
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
 }
+
+/**
+ * Renders a list of attachments (e.g. images)
+ */
+const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
+  if (!attachments || attachments.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-3">
+      {attachments.map((attachment, index) => (
+        <div key={index} className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20">
+          {attachment.mimeType?.startsWith('image/') || attachment.url.startsWith('data:image') ? (
+            <img 
+              src={attachment.url} 
+              alt={attachment.name || 'Attachment'} 
+              className="h-auto w-full object-contain max-h-[400px]"
+            />
+          ) : (
+            <div className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
+                <span className="text-xs font-bold uppercase tracking-tighter">File</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-white truncate max-w-[200px]">{attachment.name || 'File'}</span>
+                {attachment.size && <span className="text-[10px] text-slate-400">{(attachment.size / 1024).toFixed(1)} KB</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /**
  * Avatar component for the message
@@ -123,14 +165,19 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
               </div>
             ) : (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={
-                  isUser ? userMarkdownComponents : assistantMarkdownComponents
-                }
-              >
-                {msg.content}
-              </ReactMarkdown>
+              <>
+                {msg.content && (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={
+                      isUser ? userMarkdownComponents : assistantMarkdownComponents
+                    }
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                )}
+                <AttachmentList attachments={msg.attachments || []} />
+              </>
             )}
           </div>
         </div>
@@ -138,5 +185,6 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
     </div>
   );
 };
+
 
 export default MessageItem;
