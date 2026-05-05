@@ -1,22 +1,24 @@
 export default function Loading() {
   return (
-    <div className="relative flex flex-col items-center justify-center h-screen 
-                    bg-gradient-to-br from-[#020617] via-[#0f172a] to-[#1e1b4b] 
-                    text-white overflow-hidden">
+    <div className="flex flex-col items-center justify-center h-screen w-full bg-black">
+      <div className="relative flex flex-col items-center gap-6">
+        {/* Minimal structural line */}
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-px h-12 bg-linear-to-b from-transparent to-indigo-500/50" />
+        
+        {/* Minimal dot animation */}
+        <div className="flex gap-2.5">
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s]" />
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s] [animation-delay:0.2s]" />
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s] [animation-delay:0.4s]" />
+        </div>
+        
+        <p className="text-[9px] font-bold tracking-[0.5em] text-slate-700 uppercase animate-in fade-in duration-1000">
+          Starting AI
+        </p>
 
-      {/* Violet Glow Background */}
-      <div className="absolute w-72 h-72 bg-purple-500/20 rounded-full blur-3xl"></div>
-
-      {/* Spinner */}
-      <div className="w-16 h-16 rounded-full border-4 border-transparent 
-                      border-t-blue-500 border-r-purple-500
-                      animate-spin shadow-[0_0_20px_rgba(59,130,246,0.7),0_0_40px_rgba(168,85,247,0.6)]">
+        {/* Minimal structural line */}
+        <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-px h-12 bg-linear-to-t from-transparent to-indigo-500/50" />
       </div>
-
-      {/* Text */}
-      <p className="mt-6 text-sm tracking-wide opacity-70">
-        Starting AI...
-      </p>
     </div>
   );
 }
