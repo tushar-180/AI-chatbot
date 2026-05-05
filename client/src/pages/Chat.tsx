@@ -12,14 +12,18 @@ import { useChatInput } from "@/features/chat/hooks/useChatInput";
  * Handles the main layout and orchestrates chat logic via custom hooks.
  */
 const Chat = () => {
-  const { currentChatId, messages, loading, isNewChat, setSidebarOpen } =
-    useChatStore();
+  const { currentChatId, messages, isNewChat, setSidebarOpen } = useChatStore();
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId } = useChatMessages();
 
   // 2. Manage Streaming Logic & Optimistic UI
-  const { streamMessage, optimisticMessages, isStreaming } = useChatStream();
+  const {
+    streamMessage,
+    optimisticMessages,
+    isStreaming,
+    loading: isCurrentChatLoading,
+  } = useChatStream();
 
   // 3. Manage Input & Form Submission
   const {
@@ -47,7 +51,7 @@ const Chat = () => {
 
         <MessageList
           messages={displayMessages}
-          loading={loading}
+          loading={isCurrentChatLoading}
           messagesLoading={messagesLoading}
           hasLoadedCurrentChat={
             !currentChatId || loadedChatId === currentChatId
@@ -62,7 +66,7 @@ const Chat = () => {
           input={input}
           onInputChange={setInput}
           onSubmit={handleFormSubmit}
-          loading={loading}
+          loading={isCurrentChatLoading}
           currentChatId={currentChatId}
           selectedProvider={selectedProvider}
           onProviderChange={setSelectedProvider}

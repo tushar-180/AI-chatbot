@@ -5,9 +5,13 @@ import {
   chatService,
   type Message,
 } from "@/features/chat/services/chat.service";
+import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
+
+const createOptimisticTitle = (input: string) =>
+  input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
 
 export const useChatStream = () => {
   console.log("Initializing useChatStream hook");
@@ -21,6 +25,7 @@ export const useChatStream = () => {
     setCurrentChat,
     setChats,
     setIsNewChat,
+    upsertChat,
     setLoading,
     setIsStreaming,
   } = useChatStore();
@@ -46,6 +51,10 @@ export const useChatStream = () => {
     isStreaming &&
     streamingChatId === getActiveChatKey(currentChatId) &&
     !!streamingChatId;
+  const isLoadingCurrentChat =
+    loading &&
+    streamingChatId === getActiveChatKey(currentChatId) &&
+    !!streamingChatId;
 
   // Sync optimistic messages with store when the selected chat is not streaming
   useEffect(() => {
@@ -57,17 +66,17 @@ export const useChatStream = () => {
     });
   }, [currentChatId, isStreaming, streamingChatId]);
 
-  const refreshChats = async (userId: string, nextChatId?: string) => {
+  const refreshChats = async (userId: string) => {
     const chats = await chatService.fetchChats(userId);
     setChats(chats);
-
-    if (nextChatId) {
-      setCurrentChat(nextChatId);
-      setIsNewChat(false);
-    }
   };
 
-  const processStream = async (response: Response, isCreatingChat: boolean, initialChatId: string | null) => {
+  const processStream = async (
+    response: Response,
+    isCreatingChat: boolean,
+    initialChatId: string | null,
+    optimisticTitle?: string,
+  ) => {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let fullContent = "";
@@ -85,7 +94,15 @@ export const useChatStream = () => {
         const nextChatId: string = data.chatId;
         resolvedChatId = nextChatId;
         if (isCreatingChat) {
-          setCurrentChat(nextChatId);
+          upsertChat({
+            _id: nextChatId,
+            title: optimisticTitle || "New Chat",
+          });
+          const shouldSelectResolvedChat =
+            useChatStore.getState().currentChatId === initialChatId;
+          if (shouldSelectResolvedChat) {
+            setCurrentChat(nextChatId);
+          }
           setIsNewChat(false);
         }
         // If the server resolves a new chat id during a "new chat" stream, move optimistic messages over.
@@ -136,7 +153,7 @@ export const useChatStream = () => {
 
       if (data.done) {
         if (user?.id) {
-          await refreshChats(user.id, resolvedChatId || undefined);
+          await refreshChats(user.id);
         }
         setIsStreaming(false);
         setLoading(false);
@@ -228,6 +245,7 @@ export const useChatStream = () => {
     };
     const isCreatingChat = !currentChatId;
     const activeKey = getActiveChatKey(currentChatId);
+    const optimisticTitle = createOptimisticTitle(input);
 
     // Set optimistic UI
     setOptimisticMessagesForChat(activeKey, [
@@ -257,7 +275,12 @@ export const useChatStream = () => {
 
       if (!response.ok) throw new Error("Failed to connect to stream");
 
-      await processStream(response, isCreatingChat, currentChatId);
+      await processStream(
+        response,
+        isCreatingChat,
+        currentChatId,
+        optimisticTitle,
+      );
     } catch (err) {
       console.error("Error streaming message", err);
       setOptimisticMessagesForChat(activeKey, null);
@@ -273,5 +296,6 @@ export const useChatStream = () => {
     optimisticMessages:
       optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ?? null,
     isStreaming: isStreamingCurrentChat,
+    loading: isLoadingCurrentChat,
   };
 };

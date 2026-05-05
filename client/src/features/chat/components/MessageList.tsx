@@ -59,7 +59,21 @@ const MessageList = ({
   isNewChat,
   onSuggestionClick,
 }: MessageListProps) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
+  const previousChatIdRef = useRef<string | null>(currentChatId);
+  const previousMessageCountRef = useRef(messages.length);
+
+  const isNearBottom = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+
+    return distanceFromBottom < 96;
+  };
 
   const scrollToBottom = (instant = false) => {
     messagesEndRef.current?.scrollIntoView({
@@ -68,13 +82,34 @@ const MessageList = ({
     });
   };
 
+  const handleScroll = () => {
+    shouldStickToBottomRef.current = isNearBottom();
+  };
+
   useEffect(() => {
+    const chatChanged = previousChatIdRef.current !== currentChatId;
+    const messageCountChanged =
+      previousMessageCountRef.current !== messages.length;
+
+    if (chatChanged || messageCountChanged) {
+      shouldStickToBottomRef.current = true;
+    }
+
+    previousChatIdRef.current = currentChatId;
+    previousMessageCountRef.current = messages.length;
+
+    if (isStreaming && !shouldStickToBottomRef.current) return;
+
     // Use instant scroll during streaming to prevent jitter/shaking
     scrollToBottom(isStreaming);
-  }, [messages, isStreaming]);
+  }, [currentChatId, messages, isStreaming]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]">
+    <div
+      ref={scrollContainerRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]"
+    >
       <div className="mx-auto flex max-w-5xl flex-col gap-7">
         {!currentChatId && messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 md:py-20 animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
