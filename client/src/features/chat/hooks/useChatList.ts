@@ -50,7 +50,12 @@ export const useChatList = () => {
       throw err; // Propagate error to handle UI state in component
     }
   };
-   const selectChat = (chatId: string) => {
+  const selectChat = (chatId: string) => {
+    if (chatId === currentChatId) {
+      setSidebarOpen(false);
+      return;
+    }
+
     setIsNewChat(false);
     setCurrentChat(chatId);
     setMessages([]); // Clear messages immediately for smoother transition

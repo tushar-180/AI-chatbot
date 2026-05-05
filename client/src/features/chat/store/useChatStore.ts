@@ -21,6 +21,7 @@ type ChatState = {
   setLoading: (loading: boolean) => void;
   setIsStreaming: (isStreaming: boolean, chatId?: string | null) => void;
   setIsNewChat: (isNew: boolean) => void;
+  upsertChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
   updateChatTitle: (id: string, title: string) => void;
   clearMessages: () => void;
@@ -87,6 +88,21 @@ export const useChatStore = create<ChatState>()(
         })),
 
       setIsNewChat: (isNew) => set({ isNewChat: isNew }),
+
+      upsertChat: (chat) =>
+        set((state) => {
+          const existingIndex = state.chats.findIndex(
+            (item) => item._id === chat._id,
+          );
+
+          if (existingIndex === -1) {
+            return { chats: [chat, ...state.chats] };
+          }
+
+          const chats = [...state.chats];
+          chats[existingIndex] = { ...chats[existingIndex], ...chat };
+          return { chats };
+        }),
 
       removeChat: (id) =>
         set((state) => ({
