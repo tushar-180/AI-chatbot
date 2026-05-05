@@ -16,7 +16,7 @@ var __asyncValues = (this && this.__asyncValues) || function (o) {
     function settle(resolve, reject, d, v) { Promise.resolve(v).then(function(v) { resolve({ value: v, done: d }); }, reject); }
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStreamUpdates = exports.deleteChat = exports.streamMessage = exports.getChatById = exports.getAllChats = exports.sendMessage = exports.createChatStream = exports.createChat = void 0;
+exports.getStreamUpdates = exports.updateChatTitle = exports.deleteChat = exports.stopStream = exports.streamMessage = exports.getChatById = exports.getAllChats = exports.sendMessage = exports.createChatStream = exports.createChat = void 0;
 const chat_service_1 = require("../services/chat.service");
 const chatStreamRegistry_service_1 = require("../services/chatStreamRegistry.service");
 const asyncHandler_1 = require("../utils/asyncHandler");
@@ -52,7 +52,10 @@ const pipeStreamResponse = (req, res, stream) => __awaiter(void 0, void 0, void 
         if (clientDisconnected)
             return;
         if (payload.chunk) {
-            yield (0, sse_1.splitAndWriteChunk)(res, payload.chunk);
+            yield (0, sse_1.splitAndWriteChunk)(res, payload.chunk, {
+                requestId: payload.requestId,
+                status: payload.status,
+            });
         }
         else {
             (0, sse_1.writeSse)(res, payload);
@@ -144,6 +147,15 @@ const streamMessage = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 });
 exports.streamMessage = streamMessage;
+exports.stopStream = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const result = yield chat_service_1.chatService.stopStream(req.body);
+        return res.json(result);
+    }
+    catch (error) {
+        return sendControllerError(res, error, "Failed to stop stream");
+    }
+}));
 exports.deleteChat = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         yield chat_service_1.chatService.deleteChat(String(req.params.id));
@@ -153,24 +165,49 @@ exports.deleteChat = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(vo
         return sendControllerError(res, error, "Failed to delete chat");
     }
 }));
+exports.updateChatTitle = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const chat = yield chat_service_1.chatService.updateChatTitle(String(req.params.id), req.body.title);
+        return res.json(chat);
+    }
+    catch (error) {
+        return sendControllerError(res, error, "Failed to update chat title");
+    }
+}));
 const getStreamUpdates = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     const chatId = req.params.id;
-    const activeStream = chatStreamRegistry_service_1.chatStreamRegistry.get(chatId);
+    const activeStream = chatStreamRegistry_service_1.chatStreamRegistry.getByChatId(chatId);
     if (!activeStream) {
         return res
             .status(200)
             .json({ active: false, message: "No active stream found for this chat" });
     }
     (0, sse_1.setSseHeaders)(res);
-    (0, sse_1.writeSse)(res, { model: activeStream.model });
+    (0, sse_1.writeSse)(res, {
+        model: activeStream.model,
+        requestId: activeStream.requestId,
+        status: activeStream.status,
+    });
     if (activeStream.fullResponse) {
-        (0, sse_1.writeSse)(res, { chunk: activeStream.fullResponse });
+        (0, sse_1.writeSse)(res, {
+            chunk: activeStream.fullResponse,
+            requestId: activeStream.requestId,
+            status: activeStream.status,
+        });
     }
     const onChunk = (chunk) => __awaiter(void 0, void 0, void 0, function* () {
-        yield (0, sse_1.splitAndWriteChunk)(res, chunk);
+        yield (0, sse_1.splitAndWriteChunk)(res, chunk, {
+            requestId: activeStream.requestId,
+            status: activeStream.status,
+        });
     });
     const onDone = () => {
-        (0, sse_1.writeSse)(res, { done: true, chatId });
+        (0, sse_1.writeSse)(res, {
+            done: true,
+            chatId,
+            requestId: activeStream.requestId,
+            status: activeStream.status,
+        });
         res.end();
     };
     const onError = (errorMsg) => {

@@ -91,7 +91,10 @@ OUTPUT RULES (VERY IMPORTANT):
     }
   }
 
-  async *generateStreamResponse(messages: AIMessage[]): AsyncIterable<string> {
+  async *generateStreamResponse(
+    messages: AIMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
     const contents = messages
       .filter((msg) => msg.role !== "system")
       .map((msg) => ({
@@ -112,9 +115,12 @@ OUTPUT RULES (VERY IMPORTANT):
               }
             : undefined, // Default system instruction is already in the class logic, but here we can keep it simple or repeat it
         },
-      });
+      } as any);
 
       for await (const chunk of res) {
+        if (signal?.aborted) {
+          return;
+        }
         const text = chunk.text;
         if (text) {
           yield text;

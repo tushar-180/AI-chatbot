@@ -11,7 +11,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const error_middleware_1 = require("./middleware/error.middleware");
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({
-    origin: ["http://localhost:5173", "https://code-bot-1-z2qi.onrender.com", "http://localhost:4173"]
+    origin: ["http://localhost:5173", "https://code-bot-1-z2qi.onrender.com", "http://localhost:4173", "https://nhqwqwv2-5173.inc1.devtunnels.ms"]
 }));
 app.use(express_1.default.json());
 app.use((0, morgan_1.default)("dev"));

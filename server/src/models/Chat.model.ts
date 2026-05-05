@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 const messageSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    default: () => new mongoose.Types.ObjectId().toString(),
+  },
   role: {
     type: String,
     enum: ["user", "assistant"],
@@ -8,10 +12,19 @@ const messageSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true,
+    default: "",
   },
   model: {
     type: String,
+  },
+  requestId: {
+    type: String,
+  },
+  status: {
+    type: String,
+    enum: ["streaming", "stopped", "completed"],
+    default: "completed",
+    required: true,
   },
 });
 
@@ -32,9 +45,12 @@ const chatSchema = new mongoose.Schema(
 );
 
 export type ChatMessage = {
+  id?: string;
   role: "user" | "assistant";
   content: string;
   model?: string;
+  requestId?: string;
+  status: "streaming" | "stopped" | "completed";
 };
 
 export const Chat = mongoose.model("Chat", chatSchema);

@@ -3,39 +3,64 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.chatStreamRegistry = void 0;
 const events_1 = require("events");
 const activeStreams = new Map();
+const activeChatRequests = new Map();
 exports.chatStreamRegistry = {
-    create(chatId, model) {
+    create({ requestId, chatId, messageId, model, }) {
         const activeStream = {
+            requestId,
             chatId,
+            messageId,
             fullResponse: "",
             emitter: new events_1.EventEmitter(),
             model,
+            status: "streaming",
+            abortController: new AbortController(),
         };
-        activeStreams.set(chatId, activeStream);
+        activeStreams.set(requestId, activeStream);
+        activeChatRequests.set(chatId, requestId);
         return activeStream;
     },
-    get(chatId) {
-        return activeStreams.get(chatId);
+    get(requestId) {
+        return activeStreams.get(requestId);
     },
-    updateResponse(chatId, fullResponse, chunk) {
-        const activeStream = activeStreams.get(chatId);
+    getByChatId(chatId) {
+        const requestId = activeChatRequests.get(chatId);
+        return requestId ? activeStreams.get(requestId) : undefined;
+    },
+    updateResponse(requestId, fullResponse, chunk) {
+        const activeStream = activeStreams.get(requestId);
         if (!activeStream)
             return;
         activeStream.fullResponse = fullResponse;
+        activeStream.status = "streaming";
         activeStream.emitter.emit("chunk", chunk);
     },
-    complete(chatId) {
-        const activeStream = activeStreams.get(chatId);
+    complete(requestId) {
+        const activeStream = activeStreams.get(requestId);
         if (!activeStream)
             return;
+        activeStream.status = "completed";
         activeStream.emitter.emit("done");
-        activeStreams.delete(chatId);
+        activeStreams.delete(requestId);
+        activeChatRequests.delete(activeStream.chatId);
     },
-    fail(chatId, message) {
-        const activeStream = activeStreams.get(chatId);
+    stop(requestId) {
+        const activeStream = activeStreams.get(requestId);
+        if (!activeStream)
+            return null;
+        activeStream.status = "stopped";
+        activeStream.abortController.abort();
+        activeStream.emitter.emit("done");
+        activeStreams.delete(requestId);
+        activeChatRequests.delete(activeStream.chatId);
+        return activeStream;
+    },
+    fail(requestId, message) {
+        const activeStream = activeStreams.get(requestId);
         if (!activeStream)
             return;
         activeStream.emitter.emit("error", message);
-        activeStreams.delete(chatId);
+        activeStreams.delete(requestId);
+        activeChatRequests.delete(activeStream.chatId);
     },
 };

@@ -2,8 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AIServiceFactory = void 0;
 const gemini_adapter_1 = require("./providers/gemini.adapter");
-const openai_adapter_1 = require("./providers/openai.adapter");
-const claude_adapter_1 = require("./providers/claude.adapter");
+// import { OpenAIAdapter } from "./providers/openai.adapter";
+// import { ClaudeAdapter } from "./providers/claude.adapter";
 const nvidia_adapter_1 = require("./providers/nvidia.adapter");
 const constants_1 = require("./constants");
 class AIServiceFactory {
@@ -53,7 +53,7 @@ class AIServiceFactory {
 exports.AIServiceFactory = AIServiceFactory;
 AIServiceFactory.providers = {
     gemini: new gemini_adapter_1.GeminiAdapter(),
-    openai: new openai_adapter_1.OpenAIAdapter(),
-    claude: new claude_adapter_1.ClaudeAdapter(),
+    // openai: new OpenAIAdapter(),
+    // claude: new ClaudeAdapter(),
     nvidia: new nvidia_adapter_1.NvidiaAdapter(),
 };

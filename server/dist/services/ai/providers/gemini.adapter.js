@@ -115,7 +115,7 @@ OUTPUT RULES (VERY IMPORTANT):
             }
         });
     }
-    generateStreamResponse(messages) {
+    generateStreamResponse(messages, signal) {
         return __asyncGenerator(this, arguments, function* generateStreamResponse_1() {
             var _a, e_1, _b, _c;
             const contents = messages
@@ -142,6 +142,9 @@ OUTPUT RULES (VERY IMPORTANT):
                         _c = res_1_1.value;
                         _d = false;
                         const chunk = _c;
+                        if (signal === null || signal === void 0 ? void 0 : signal.aborted) {
+                            return yield __await(void 0);
+                        }
                         const text = chunk.text;
                         if (text) {
                             yield yield __await(text);

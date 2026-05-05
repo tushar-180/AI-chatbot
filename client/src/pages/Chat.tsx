@@ -21,6 +21,7 @@ const Chat = () => {
   // 2. Manage Streaming Logic & Optimistic UI
   const {
     streamMessage,
+    stopGeneration,
     optimisticMessages,
     isStreaming,
     loading: isCurrentChatLoading,
@@ -76,6 +77,8 @@ const Chat = () => {
           onInputChange={setInput}
           onSubmit={handleFormSubmit}
           loading={isCurrentChatLoading}
+          isStreaming={isStreaming}
+          onStop={stopGeneration}
           currentChatId={currentChatId}
           selectedProvider={selectedProvider}
           onProviderChange={setSelectedProvider}

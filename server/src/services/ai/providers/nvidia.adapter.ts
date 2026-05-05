@@ -53,7 +53,10 @@ export class NvidiaAdapter implements IAIService {
     }
   }
 
-  async *generateStreamResponse(messages: AIMessage[]): AsyncIterable<string> {
+  async *generateStreamResponse(
+    messages: AIMessage[],
+    signal?: AbortSignal,
+  ): AsyncIterable<string> {
     try {
       const stream = await this.openai.chat.completions.create({
         model: this.model,
@@ -65,9 +68,14 @@ export class NvidiaAdapter implements IAIService {
         top_p: 0.7,
         max_tokens: 4096,
         stream: true,
+      }, {
+        signal,
       });
 
       for await (const chunk of stream) {
+        if (signal?.aborted) {
+          return;
+        }
         const content = chunk.choices[0]?.delta?.content || "";
         if (content) {
           yield content;
