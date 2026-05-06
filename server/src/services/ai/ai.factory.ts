@@ -14,6 +14,7 @@ export class AIServiceFactory {
   };
 
   /**
+   * 
    * Returns available provider details (id and display name).
    * Now returns all combinations of provider and model.
    */

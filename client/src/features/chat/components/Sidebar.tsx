@@ -1,14 +1,13 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
+import type { Chat } from "@/features/chat/types/chat.types";
 import {
   Plus,
   MessageSquare,
-  LayoutDashboard,
   X,
   Trash2,
   Edit2,
-  Check,
   MoreVertical,
   ChevronDown,
   ChevronUp,
@@ -22,7 +21,7 @@ import GalleryModal from "./GalleryModal";
  * Manages the list of chat threads and navigation.
  */
 interface ChatItemProps {
-  chat: any;
+  chat: Chat;
   currentChatId: string | null;
   isActive: boolean;
   onSelect: (id: string) => void;
@@ -178,7 +177,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/[0.05] bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-y-auto
+        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/[0.05] bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
@@ -216,7 +215,7 @@ const Sidebar = () => {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div
             onClick={() => setShowRecent((prev) => !prev)}
             className="flex items-center justify-between px-2 pb-4 cursor-pointer group"
@@ -242,22 +241,24 @@ const Sidebar = () => {
             </div>
           ) : (
             showRecent && (
-              <div className="flex flex-col gap-3">
-                {chats.map((chat) => (
-                  <SidebarChatItem
-                    key={chat._id}
-                    chat={chat}
-                    currentChatId={currentChatId}
-                    isActive={currentChatId === chat._id}
-                    onSelect={selectChat}
-                    onDelete={(id) => setDeleteId(id)}
-                    onRename={renameChat}
-                  />
-                ))}
+              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+                <div className="flex flex-col gap-3">
+                  {chats.map((chat) => (
+                    <SidebarChatItem
+                      key={chat._id}
+                      chat={chat}
+                      currentChatId={currentChatId}
+                      isActive={currentChatId === chat._id}
+                      onSelect={selectChat}
+                      onDelete={(id) => setDeleteId(id)}
+                      onRename={renameChat}
+                    />
+                  ))}
+                </div>
               </div>
             )
           )}
-         </div>
+        </div>
       </aside>
 
       <DeleteConfirmModal
