@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/react";
-import { User, Bot } from "lucide-react";
+import { User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -70,7 +70,7 @@ const MessageAvatar = ({
   isUser: boolean;
   imageUrl?: string;
 }) => (
-  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden border border-white/10 shadow-sm transition-all duration-300">
+  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 ${isUser ? 'border border-white/10 shadow-sm' : ''}`}>
     {isUser ? (
       imageUrl ? (
         <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
@@ -80,8 +80,8 @@ const MessageAvatar = ({
         </div>
       )
     ) : (
-      <div className="flex h-full w-full items-center justify-center bg-white text-black">
-        <Bot size={16} />
+      <div className="flex h-full w-full items-center justify-center">
+        <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
       </div>
     )}
   </div>

@@ -12,9 +12,11 @@ import {
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
+  Brain,
 } from "lucide-react";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import GalleryModal from "./GalleryModal";
+import MemoryModal from "./MemoryModal";
 
 /**
  * Sidebar Component
@@ -188,6 +190,7 @@ const Sidebar = () => {
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
 
   return (
     <>
@@ -236,6 +239,14 @@ const Sidebar = () => {
           >
             <ImageIcon size={16} />
             <span>Gallery</span>
+          </button>
+
+          <button
+            onClick={() => setMemoryOpen(true)}
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
+          >
+            <Brain size={16} />
+            <span>Memory</span>
           </button>
         </div>
 
@@ -297,6 +308,11 @@ const Sidebar = () => {
       <GalleryModal
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
+      />
+
+      <MemoryModal
+        isOpen={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
       />
     </>
   );

@@ -3,6 +3,7 @@ export type AIRole = "user" | "assistant" | "system";
 export interface AIMessage {
   role: AIRole;
   content: string;
+  userId?: string;
   model?: string;
   attachments?: {
     url: string;

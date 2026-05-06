@@ -9,6 +9,7 @@ dotenv.config();
 export class GeminiAdapter implements IAIService {
   private ai: GoogleGenAI;
   private model: string;
+  private static imageCache = new Map<string, { data: string; mimeType: string }>();
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -38,27 +39,34 @@ export class GeminiAdapter implements IAIService {
 
           if (msg.attachments && msg.attachments.length > 0) {
             if (isVision) {
-              // Fetch and convert images to base64 for native vision support
-              for (const att of msg.attachments) {
-                try {
-                  const response = await fetch(att.url);
-                  if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-                  
-                  const arrayBuffer = await response.arrayBuffer();
-                  const base64Data = Buffer.from(arrayBuffer).toString('base64');
-                  const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
-                  
-                  parts.push({
-                    inlineData: {
-                      mimeType,
-                      data: base64Data,
-                    },
-                  });
-                } catch (err) {
-                  console.error(`Failed to process image for Gemini: ${att.url}`, err);
-                  parts.push({ text: `\n[Image Link: ${att.url}]` });
-                }
-              }
+              // Parallel fetch and convert images to base64
+              const imageParts = await Promise.all(
+                msg.attachments.map(async (att) => {
+                  try {
+                    // Check Cache First
+                    if (GeminiAdapter.imageCache.has(att.url)) {
+                      const cached = GeminiAdapter.imageCache.get(att.url)!;
+                      return { inlineData: cached };
+                    }
+
+                    const response = await fetch(att.url);
+                    if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+                    
+                    const arrayBuffer = await response.arrayBuffer();
+                    const base64Data = Buffer.from(arrayBuffer).toString('base64');
+                    const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
+                    
+                    const data = { mimeType, data: base64Data };
+                    GeminiAdapter.imageCache.set(att.url, data);
+                    
+                    return { inlineData: data };
+                  } catch (err) {
+                    console.error(`Failed to process image: ${att.url}`, err);
+                    return { text: `\n[Image unavailable: ${att.url}]` };
+                  }
+                })
+              );
+              parts.push(...imageParts);
             } else {
               // Fallback for text-only models
               const attachmentText = msg.attachments
@@ -152,7 +160,13 @@ OUTPUT RULES (VERY IMPORTANT):
             ? {
                 parts: [{ text: systemMessage.content }],
               }
-            : undefined, 
+            : {
+                parts: [
+                  {
+                    text: "You are a professional AI developer assistant. Always format responses using clean Markdown and appropriate code blocks.",
+                  },
+                ],
+              },
         },
       } as any);
 
@@ -168,6 +182,25 @@ OUTPUT RULES (VERY IMPORTANT):
     } catch (error: any) {
       console.error("Gemini Adapter Stream Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
+    }
+  }
+
+  async generateEmbedding(text: string, retries = 2): Promise<number[]> {
+    try {
+      const response = await (this.ai as any).models.embedContent({
+        model: "gemini-embedding-001",
+        contents: text,
+        config: { outputDimensionality: 768 },
+      });
+
+      return response.embeddings?.[0]?.values || response.embeddings || [];
+    } catch (error: any) {
+      console.error(`Gemini Embedding Error (Retries left: ${retries}):`, error);
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+        return this.generateEmbedding(text, retries - 1);
+      }
+      return [];
     }
   }
 }
