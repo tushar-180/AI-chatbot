@@ -41,7 +41,7 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
             <img 
               src={attachment.url} 
               alt={attachment.name || 'Attachment'} 
-              className="h-auto w-full object-contain max-h-[400px]"
+              className="h-auto w-full object-contain max-h-100"
             />
           ) : (
             <div className="flex items-center gap-3 p-4">
@@ -49,7 +49,7 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
                 <span className="text-xs font-bold uppercase tracking-tighter">File</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-medium text-white truncate max-w-[200px]">{attachment.name || 'File'}</span>
+                <span className="text-sm font-medium text-white truncate max-w-50">{attachment.name || 'File'}</span>
                 {attachment.size && <span className="text-[10px] text-slate-400">{(attachment.size / 1024).toFixed(1)} KB</span>}
               </div>
             </div>
