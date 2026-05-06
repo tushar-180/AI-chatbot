@@ -54,7 +54,7 @@ const Chat = () => {
             fill="rgba(255, 255, 255, 0.05)"
           />
 
-        <div className="flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] [mask-image:linear-gradient(to_bottom,black_85%,transparent_98%)]">
+        <div className="flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)]">
           <ChatHeader
             currentChatId={currentChatId}
             onMenuClick={() => setSidebarOpen(true)}

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
-import { Code, Lightbulb, PenTool, Terminal, Bot } from "lucide-react";
+import { Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -165,10 +165,10 @@ const MessageList = ({
     >
       <div className="mx-auto max-w-5xl flex flex-col gap-7">
         {showSuggestions ? (
-          <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
+          <div className="flex  w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
             <div className="mb-10 flex flex-col items-center text-center">
-              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-3xl border border-slate-800 bg-slate-900 text-indigo-400 shadow-2xl">
-                <Bot size={32} />
+              <div className="mb-6 flex items-center justify-center">
+                <img src="/logo.png" alt="Velora Logo" className="h-24 w-24 object-contain object-center" />
               </div>
               <h2 className="mb-3 text-2xl font-bold tracking-tight text-white md:text-3xl">
                 How can I help you today?
@@ -206,8 +206,8 @@ const MessageList = ({
           messages.length === 0 ? (
           <div className="flex w-full animate-in fade-in justify-start duration-300">
             <div className="flex max-w-[85%] flex-row gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-indigo-600/20 text-indigo-400">
-                <Bot size={18} className="animate-pulse" />
+              <div className="flex shrink-0 items-center justify-center">
+                <img src="/logo.png" alt="Velora Logo" className="h-7 w-7 object-contain animate-pulse" />
               </div>
               <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
                 <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
