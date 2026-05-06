@@ -7,9 +7,9 @@ export default function Loading() {
         
         {/* Minimal dot animation */}
         <div className="flex gap-2.5">
-          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s]" />
-          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s] [animation-delay:0.2s]" />
-          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse [animation-duration:1s] [animation-delay:0.4s]" />
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse animation-duration-[1s]" />
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse animation-duration-[1s] [animation-delay:0.2s]" />
+          <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse animation-duration-[1s] [animation-delay:0.4s]" />
         </div>
         
         <p className="text-[9px] font-bold tracking-[0.5em] text-slate-700 uppercase animate-in fade-in duration-1000">

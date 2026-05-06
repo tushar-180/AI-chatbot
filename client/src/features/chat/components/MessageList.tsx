@@ -1,5 +1,5 @@
-import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
-import { Bot, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { useRef, useEffect, memo } from "react";
+import { Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -68,23 +68,27 @@ const MessageList = ({
   const previousChatIdRef = useRef<string | null>(currentChatId);
   const previousIsNewChatRef = useRef(isNewChat);
 
-  const isAtBottom = useCallback(() => {
-    if (!scrollContainerRef.current) return true;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    return scrollHeight - (scrollTop + clientHeight) < 50;
-  }, []);
+  const isNearBottom = () => {
+    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
+    if (!container) return true;
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (!scrollContainerRef.current) return;
 
-    if (programmaticScrollTimeoutRef.current) {
-      window.clearTimeout(programmaticScrollTimeoutRef.current);
-    }
+    return distanceFromBottom < 250;
+  };
 
-    isProgrammaticScrollRef.current = true;
-    scrollContainerRef.current.scrollTo({
-      top: scrollContainerRef.current.scrollHeight,
-      behavior,
+  const scrollToBottom = (instant = false) => {
+    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
+    if (!container) return;
+
+    const scrollOptions = {
+      top: container.scrollHeight,
+      behavior: (instant ? "auto" : "smooth") as ScrollBehavior,
+    };
+
+    requestAnimationFrame(() => {
+      container.scrollTo(scrollOptions);
     });
 
     programmaticScrollTimeoutRef.current = window.setTimeout(() => {
@@ -116,28 +120,23 @@ const MessageList = ({
       return;
     }
 
-    const wasAutoScrollEnabled = shouldAutoScrollRef.current;
-    shouldAutoScrollRef.current = atBottom;
+  const lastMessageContent = messages[messages.length - 1]?.content;
 
-    if (atBottom && !wasAutoScrollEnabled) {
-      userIsInteractingRef.current = false;
-      scrollToBottom("auto");
-    }
-  };
+  useEffect(() => {
+    if (showSuggestions) return;
 
   useLayoutEffect(() => {
     const previousMessageCount = previousMessageCountRef.current;
     const previousChatId = previousChatIdRef.current;
     const previousIsNewChat = previousIsNewChatRef.current;
 
-    const hasNewMessageStarted = messages.length > previousMessageCount;
-    const chatChanged = currentChatId !== previousChatId;
-    const newChatStarted = isNewChat && !previousIsNewChat;
-    const shouldJumpToBottom =
-      chatChanged || newChatStarted || hasNewMessageStarted;
+    if (chatChanged || messageCountChanged || (isStreaming && !previousChatIdRef.current)) {
+      shouldStickToBottomRef.current = true;
+    }
 
-    if (shouldJumpToBottom || shouldAutoScrollRef.current) {
-      scrollToBottom(shouldJumpToBottom ? "smooth" : "auto");
+    // Force stick to bottom if we are streaming and currently near bottom
+    if (isStreaming && isNearBottom()) {
+      shouldStickToBottomRef.current = true;
     }
 
     previousMessageCountRef.current = messages.length;
@@ -150,22 +149,23 @@ const MessageList = ({
     userIsInteractingRef.current = false;
   }, [currentChatId, isNewChat]);
 
+    scrollToBottom(isStreaming);
+  }, [currentChatId, messages, isStreaming, showSuggestions, loading, lastMessageContent]);
+
   useEffect(() => {
-    return () => {
-      if (programmaticScrollTimeoutRef.current) {
-        window.clearTimeout(programmaticScrollTimeoutRef.current);
-      }
-    };
+    const mainContainer = scrollContainerRef.current?.closest('.overflow-y-auto');
+    if (!mainContainer) return;
+
+    mainContainer.addEventListener("scroll", handleScroll);
+    return () => mainContainer.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
     <div
       ref={scrollContainerRef}
-      onScroll={handleScroll}
-      onWheel={stopProgrammaticScroll}
-      onTouchStart={stopProgrammaticScroll}
-      onMouseDown={stopProgrammaticScroll}
-      className="flex-1 overflow-y-auto px-4 py-8 md:px-6 [overflow-anchor:none]"
+      className={`px-4 py-8 md:px-10 [overflow-anchor:none] ${
+        showSuggestions ? "scrollbar-hide" : ""
+      }`}
     >
       <div className="mx-auto   max-w-5xl flex flex-col gap-7">
         {!currentChatId && messages.length === 0 ? (
@@ -189,7 +189,7 @@ const MessageList = ({
                 <button
                   key={idx}
                   onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                  className="group flex flex-col items-start rounded-2xl border border-slate-800/60 bg-slate-900/40 p-5 text-left transition-all duration-300 hover:border-indigo-500/50 hover:bg-slate-800/40 hover:shadow-lg hover:shadow-indigo-500/5"
+                  className="group flex flex-col items-start p-6 text-left bg-white/2 border border-white/5 hover:border-white/20 hover:bg-white/4 rounded-2xl transition-all duration-300"
                 >
                   <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors group-hover:text-indigo-400">
                     <div className="rounded-xl bg-slate-800/50 p-2 transition-colors group-hover:bg-indigo-500/10">
@@ -225,28 +225,26 @@ const MessageList = ({
             <p>No messages yet. The stage is yours.</p>
           </div>
         ) : (
-          messages.map((msg, i) => (
-            <MessageItem
-              key={i}
-              message={msg}
-              isStreaming={isStreaming && i === messages.length - 1}
-            />
-          ))
-        )}
+          <>
+            {messages.map((msg, i) => (
+              <MessageItem
+                key={i}
+                message={msg}
+                isStreaming={isStreaming && i === messages.length - 1}
+              />
+            ))}
 
-        {loading && !isStreaming && (
-          <div className="flex w-full animate-in fade-in justify-start duration-300">
-            <div className="flex max-w-[85%] flex-row gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-indigo-600/20 text-indigo-400">
-                <Bot size={18} className="animate-pulse" />
+              {showAssistantThinking && (
+              <div className="flex w-full justify-start animate-in fade-in duration-300">
+                  <div className="flex items-center gap-3 py-6">
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                  </div>
               </div>
-              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
-              </div>
-            </div>
-          </div>
+              )}
+            <div ref={messagesEndRef} />
+          </>
         )}
       </div>
     </div>
