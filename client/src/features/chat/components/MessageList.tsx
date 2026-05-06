@@ -1,5 +1,5 @@
-import { useRef, useEffect, memo } from "react";
-import { Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
+import { Code, Lightbulb, PenTool, Terminal, Bot } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -60,28 +60,30 @@ const MessageList = ({
   onSuggestionClick,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const isProgrammaticScrollRef = useRef(false);
   const programmaticScrollTimeoutRef = useRef<number | null>(null);
   const userIsInteractingRef = useRef(false);
+  
   const previousMessageCountRef = useRef(messages.length);
   const previousChatIdRef = useRef<string | null>(currentChatId);
-  const previousIsNewChatRef = useRef(isNewChat);
 
-  const isNearBottom = () => {
+  const isAtBottom = useCallback(() => {
     const container = scrollContainerRef.current?.closest('.overflow-y-auto');
     if (!container) return true;
 
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    return distanceFromBottom < 50;
+  }, []);
 
-    return distanceFromBottom < 250;
-  };
-
-  const scrollToBottom = (instant = false) => {
+  const scrollToBottom = useCallback((instant = false) => {
     const container = scrollContainerRef.current?.closest('.overflow-y-auto');
     if (!container) return;
 
+    isProgrammaticScrollRef.current = true;
+    
     const scrollOptions = {
       top: container.scrollHeight,
       behavior: (instant ? "auto" : "smooth") as ScrollBehavior,
@@ -91,25 +93,19 @@ const MessageList = ({
       container.scrollTo(scrollOptions);
     });
 
+    if (programmaticScrollTimeoutRef.current) {
+      window.clearTimeout(programmaticScrollTimeoutRef.current);
+    }
+
     programmaticScrollTimeoutRef.current = window.setTimeout(() => {
       isProgrammaticScrollRef.current = false;
       programmaticScrollTimeoutRef.current = null;
       userIsInteractingRef.current = false;
       shouldAutoScrollRef.current = isAtBottom();
-    }, behavior === "smooth" ? 250 : 0);
+    }, instant ? 0 : 250);
   }, [isAtBottom]);
 
-  const stopProgrammaticScroll = useCallback(() => {
-    userIsInteractingRef.current = true;
-    isProgrammaticScrollRef.current = false;
-
-    if (programmaticScrollTimeoutRef.current) {
-      window.clearTimeout(programmaticScrollTimeoutRef.current);
-      programmaticScrollTimeoutRef.current = null;
-    }
-  }, []);
-
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
     const atBottom = isAtBottom();
 
@@ -120,37 +116,35 @@ const MessageList = ({
       return;
     }
 
-  const lastMessageContent = messages[messages.length - 1]?.content;
+    // If user scrolls up, disable auto-scroll
+    if (!atBottom && !isProgrammaticScrollRef.current) {
+      shouldAutoScrollRef.current = false;
+    } else if (atBottom) {
+      shouldAutoScrollRef.current = true;
+    }
+  }, [isAtBottom]);
 
+  // Initial scroll and chat change
   useEffect(() => {
-    if (showSuggestions) return;
+    if (currentChatId !== previousChatIdRef.current) {
+      shouldAutoScrollRef.current = true;
+      scrollToBottom(true);
+      previousChatIdRef.current = currentChatId;
+    }
+  }, [currentChatId, scrollToBottom]);
 
+  // Handle new messages and streaming
   useLayoutEffect(() => {
-    const previousMessageCount = previousMessageCountRef.current;
-    const previousChatId = previousChatIdRef.current;
-    const previousIsNewChat = previousIsNewChatRef.current;
-
-    if (chatChanged || messageCountChanged || (isStreaming && !previousChatIdRef.current)) {
-      shouldStickToBottomRef.current = true;
+    const messageCountChanged = messages.length !== previousMessageCountRef.current;
+    
+    if (messageCountChanged || isStreaming) {
+      if (shouldAutoScrollRef.current) {
+        scrollToBottom(!isStreaming);
+      }
     }
-
-    // Force stick to bottom if we are streaming and currently near bottom
-    if (isStreaming && isNearBottom()) {
-      shouldStickToBottomRef.current = true;
-    }
-
+    
     previousMessageCountRef.current = messages.length;
-    previousChatIdRef.current = currentChatId;
-    previousIsNewChatRef.current = isNewChat;
-  }, [messages, currentChatId, isNewChat, scrollToBottom]);
-
-  useEffect(() => {
-    shouldAutoScrollRef.current = true;
-    userIsInteractingRef.current = false;
-  }, [currentChatId, isNewChat]);
-
-    scrollToBottom(isStreaming);
-  }, [currentChatId, messages, isStreaming, showSuggestions, loading, lastMessageContent]);
+  }, [messages, isStreaming, scrollToBottom]);
 
   useEffect(() => {
     const mainContainer = scrollContainerRef.current?.closest('.overflow-y-auto');
@@ -158,7 +152,9 @@ const MessageList = ({
 
     mainContainer.addEventListener("scroll", handleScroll);
     return () => mainContainer.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [handleScroll]);
+
+  const showSuggestions = !currentChatId && messages.length === 0;
 
   return (
     <div
@@ -167,8 +163,8 @@ const MessageList = ({
         showSuggestions ? "scrollbar-hide" : ""
       }`}
     >
-      <div className="mx-auto   max-w-5xl flex flex-col gap-7">
-        {!currentChatId && messages.length === 0 ? (
+      <div className="mx-auto max-w-5xl flex flex-col gap-7">
+        {showSuggestions ? (
           <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
             <div className="mb-10 flex flex-col items-center text-center">
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-3xl border border-slate-800 bg-slate-900 text-indigo-400 shadow-2xl">
@@ -233,16 +229,16 @@ const MessageList = ({
                 isStreaming={isStreaming && i === messages.length - 1}
               />
             ))}
-
-              {showAssistantThinking && (
+            
+            {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
               <div className="flex w-full justify-start animate-in fade-in duration-300">
-                  <div className="flex items-center gap-3 py-6">
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
-                  </div>
+                <div className="flex items-center gap-3 py-6">
+                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                </div>
               </div>
-              )}
+            )}
             <div ref={messagesEndRef} />
           </>
         )}

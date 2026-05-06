@@ -5,6 +5,7 @@ import type { Chat } from "@/features/chat/types/chat.types";
 import {
   Plus,
   X,
+  Check,
   Trash2,
   Edit2,
   MoreVertical,
