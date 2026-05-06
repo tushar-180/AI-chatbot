@@ -8,4 +8,5 @@ export interface IAIService {
   ): AsyncIterable<string>;
   getProviderName(): string;
   setModel(model: string): void;
+  generateEmbedding(text: string): Promise<number[]>;
 }

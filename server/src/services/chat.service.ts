@@ -15,6 +15,7 @@ import type {
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
+import { memoryService } from "./memory.service";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -118,6 +119,18 @@ async function* streamAssistantResponse(
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
   const promptMessages = getLimitedMessages(chat.messages as ChatMessage[]);
+
+  // Inject long-term memory context
+  const lastUserMessage = (chat.messages as ChatMessage[]).filter(m => m.role === "user").pop();
+  const memoryContext = await memoryService.getMemoryContext(chat.userId, lastUserMessage?.content);
+  if (memoryContext) {
+    promptMessages.unshift({
+      role: "system",
+      content: memoryContext,
+      userId: chat.userId,
+      status: "completed",
+    });
+  }
   
   // Create assistant message in its own collection
   const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
@@ -181,6 +194,14 @@ async function* streamAssistantResponse(
 
     chatStreamRegistry.complete(requestId);
     yield { done: true, chatId, requestId, status: "completed" };
+
+    // Extract new memories in the background
+    const lastUserMessage = (chat.messages as ChatMessage[]).filter(m => m.role === "user").pop();
+    if (lastUserMessage) {
+      memoryService.extractMemoriesFromMessage(chat.userId, lastUserMessage.content).catch(err => {
+        console.error("Background memory extraction failed:", err);
+      });
+    }
   } catch (aiError) {
     if (activeStream.abortController.signal.aborted) {
       await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
@@ -204,7 +225,7 @@ async function* streamAssistantResponse(
 export const chatService = {
   async createChat({ userId, message, provider, attachments }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
-    const trimmedMessage = message?.trim();
+    const trimmedMessage = message?.trim() || "";
 
     const chat = chatRepository.create({
       userId: resolvedUserId,
@@ -224,9 +245,20 @@ export const chatService = {
       
       // Get history for context
       const messages = [userMessage];
-      const reply = await aiProvider.generateResponse(
-        getLimitedMessages(messages),
-      );
+      
+      // Inject long-term memory context
+      const memoryContext = await memoryService.getMemoryContext(resolvedUserId, trimmedMessage);
+      const promptMessages = getLimitedMessages(messages);
+      if (memoryContext) {
+        promptMessages.unshift({
+          role: "system",
+          content: memoryContext,
+          userId: resolvedUserId,
+          status: "completed",
+        });
+      }
+
+      const reply = await aiProvider.generateResponse(promptMessages);
 
       // Parse multimedia from reply
       const { attachments: aiAttachments, type } = parseMultimedia(reply);
@@ -237,6 +269,13 @@ export const chatService = {
         attachments: aiAttachments,
         type: type as any,
       });
+
+      // Extract new memories in the background
+      if (trimmedMessage) {
+        memoryService.extractMemoriesFromMessage(resolvedUserId, trimmedMessage).catch(err => {
+          console.error("Background memory extraction failed:", err);
+        });
+      }
     }
 
     // Fetch the full chat with messages to return
@@ -290,9 +329,20 @@ export const chatService = {
     
     // Fetch updated history
     const updatedChat = await chatRepository.findById(chatId);
-    const reply = await aiProvider.generateResponse(
-      getLimitedMessages(updatedChat?.messages as ChatMessage[]),
-    );
+    const promptMessages = getLimitedMessages(updatedChat?.messages as ChatMessage[]);
+
+    // Inject long-term memory context
+    const memoryContext = await memoryService.getMemoryContext(String(chat.userId), trimmedMessage);
+    if (memoryContext) {
+      promptMessages.unshift({
+        role: "system",
+        content: memoryContext,
+        userId: String(chat.userId),
+        status: "completed",
+      });
+    }
+
+    const reply = await aiProvider.generateResponse(promptMessages);
 
     // Parse multimedia from reply
     const { attachments: aiAttachments, type } = parseMultimedia(reply);
@@ -303,6 +353,13 @@ export const chatService = {
       attachments: aiAttachments,
       type: type as any,
     });
+
+    // Extract new memories in the background
+    if (trimmedMessage) {
+      memoryService.extractMemoriesFromMessage(String(chat.userId), trimmedMessage).catch(err => {
+        console.error("Background memory extraction failed:", err);
+      });
+    }
     
     return await chatRepository.findById(chatId);
   },

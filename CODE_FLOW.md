@@ -1,213 +1,117 @@
-# Chat Bot Code Flow and Functionality
+# Velora AI: Full-Stack System Architecture & Core Logic
 
-This document explains the structure and runtime flow of the chat bot project in a simple, easy-to-follow way.
-
----
-
-## Overview
-
-The project is built as a full-stack chat application:
-- `client/` contains a React + Vite frontend.
-- `server/` contains an Express backend with MongoDB storage.
-- The backend uses Google Gemini AI via `@google/genai` to generate assistant responses.
-
-The chat app supports:
-- user authentication via Clerk
-- creating new chat sessions
-- continuing existing conversations
-- storing messages in MongoDB
-- deleting chat sessions
+This document provides an exhaustive technical breakdown of the Velora AI project, covering its architecture, database design, and the complex logic behind its real-time features.
 
 ---
 
-## Frontend Architecture
+## 🏗️ System Architecture
 
-### Main entry
-- `client/src/App.tsx`
-- Loads the app and decides routing.
-- Uses Clerk's `useUser()` to check if the user is signed in.
-- Protects the chat route and redirects unauthenticated users to `/auth`.
+Velora AI is built as a high-performance, real-time AI workspace using a modern tech stack.
 
-### Authentication
-- `client/src/pages/Auth.tsx`
-- Displays Clerk's `SignIn` component.
-- Keeps the login flow separate from the chat UI.
+### 1. Tech Stack
+- **Frontend**: React, Vite, Tailwind CSS, Framer Motion, Zustand, Clerk (Auth).
+- **Backend**: Node.js, Express, TypeScript, Mongoose.
+- **Infrastructure**: MongoDB (Database), Cloudinary (Image Hosting).
+- **AI Engines**: Google Gemini (Text & Vision), NVIDIA Flux (Image Generation).
 
-### Chat UI
-- `client/src/pages/Chat.tsx`
-- Main chat interface.
-- Handles message input, submission, and display.
-- Uses `useChatStore` to manage client state.
-- Fetches messages for the selected chat and renders them with user/assistant styling.
+### 2. Frontend Organization (Feature-Driven)
+The client is divided into modular custom hooks that isolate complex logic:
+- `useChatStream`: Manages SSE connections, optimistic UI, and stream recovery.
+- `useChatInput`: Handles user input state, model switching, and attachment management.
+- `useChatMessages`: Orchestrates the retrieval and syncing of conversation history.
+- **State Store**: `useChatStore.ts` (Zustand) acts as the single source of truth for the UI.
 
-### Sidebar
-- `client/src/components/custom/Sidebar.tsx`
-- Displays recent chat threads.
-- Allows the user to start a new chat or select an existing one.
-- Deletes chats using the backend API.
-- Fetches the chat list automatically when the user logs in.
-
-### Client state
-- `client/src/store/useChatStore.ts`
-- Uses Zustand for global chat state.
-- State includes:
-  - `chats`: list of chat threads
-  - `currentChatId`: currently selected chat
-  - `messages`: current chat messages
-  - `loading`: whether the app is waiting for a response
-  - `isNewChat`: whether the user started a fresh chat
-  - `sidebarOpen`: mobile sidebar state
-
-### API helper
-- `client/src/lib/api.ts`
-- Creates an Axios instance with `baseURL` set to `http://localhost:5000/api`.
-- All frontend calls to the backend use this shared client.
+### 3. Backend Organization (Service-Repository)
+- **Controllers**: Handle HTTP/SSE lifecycle (e.g., setting headers, piping streams).
+- **Services**: Contain business logic (e.g., `chat.service.ts` for workflow, `ai.service.ts` for model abstraction).
+- **Repositories**: Abstract database operations using Mongoose models.
+- **Stream Registry**: `chatStreamRegistry.service.ts` tracks active server-side AI processes.
 
 ---
 
-## Backend Architecture
+## 🗄️ Database Design (MongoDB)
 
-### Server startup
-- `server/src/server.ts`
-- Loads environment variables using `dotenv`.
-- Connects to MongoDB via `connectDB()`.
-- Starts Express on `process.env.PORT` or `6000`.
+To ensure scalability and performance, the database uses a two-collection schema rather than embedding all messages inside a single chat document.
 
-### Express app
-- `server/src/app.ts`
-- Configures middleware:
-  - `cors()`
-  - `express.json()`
-  - `morgan("dev")` for request logging
-- Adds a health route at `/`.
-- Mounts chat routes at `/api/chat`.
+### 1. `Chat` Collection
+Stores metadata about the conversation.
+- `userId`: Clerk ID of the owner.
+- `title`: Dynamic or user-defined title.
+- `timestamps`: Track creation and last update for sorting in the sidebar.
 
-### Data model
-- `server/src/models/Chat.model.ts`
-- Defines a `Chat` document with:
-  - `userId`: the authenticated user
-  - `title`: chat title
-  - `messages`: array of `ChatMessage`
-- Each `ChatMessage` includes:
-  - `role`: either `user` or `assistant`
-  - `content`: text message content
-
-### Routes
-- `server/src/routes/chat.routes.ts`
-- Exposes REST endpoints:
-  - `POST /api/chat` — create a new chat
-  - `POST /api/chat/:id` — add a message to an existing chat
-  - `GET /api/chat` — list chats for a user
-  - `GET /api/chat/:id` — retrieve a specific chat
-  - `DELETE /api/chat/:id` — delete a chat
-
-### Chat controller
-- `server/src/controllers/chat.controller.ts`
-- Implements backend logic for each route.
-- Key controller behaviors:
-  - `createChat`: creates a new chat, sends the first user message to Gemini, stores the assistant reply.
-  - `sendMessage`: appends a user message to an existing chat, sends full history to Gemini, stores the assistant reply.
-  - `getAllChats`: fetches chat list for the user.
-  - `getChatById`: fetches a single chat by ID.
-  - `deleteChat`: removes a chat from MongoDB.
-
-### Gemini service
-- `server/src/services/gemini.service.ts`
-- Wraps Gemini AI calls and error handling.
-- Uses `GEMINI_API_KEY` and optionally `GEMINI_MODEL`.
-- Converts chat history into plain text prompt lines.
-- Calls `ai.models.generateContent()`.
-- Returns the AI-generated assistant response.
-- Throws `GeminiServiceError` for rate limits or service failures.
+### 2. `Message` Collection
+Stores individual interactions, linked by `chatId`.
+- `role`: `user`, `assistant`, or `system`.
+- `content`: The message text.
+- `status`: `streaming`, `completed`, `stopped`, or `failed`.
+- `attachments`: Array of URLs and metadata for uploaded/generated images.
+- `requestId`: A unique UUID used to sync frontend and backend during streaming.
 
 ---
 
-## Runtime Flow
+## 🌊 Core Logic: Real-time Streaming (SSE)
 
-### 1. User login and navigation
-1. User opens the app.
-2. `App.tsx` checks auth state.
-3. If signed in, user sees the `Chat` page.
-4. If not signed in, user is redirected to `/auth`.
+The "typing" effect is achieved through **Server-Sent Events (SSE)**.
 
-### 2. Loading chat sessions
-1. `Sidebar` fetches all chats via `GET /api/chat?userId=<user.id>`.
-2. The backend returns chats sorted by `updatedAt` descending.
-3. Sidebar displays chat titles and allows selection.
-
-### 3. Starting a new chat
-1. User clicks `New Chat`.
-2. `Sidebar` sets `isNewChat = true` and clears current messages.
-3. Chat page shows the message composer.
-4. On submit, if there is no current chat ID, frontend sends `POST /api/chat`.
-5. Backend creates a new chat and generates a first assistant reply.
-6. The full chat is returned and stored in frontend state.
-
-### 4. Continuing an existing chat
-1. User selects a chat from the sidebar.
-2. Frontend loads chat messages with `GET /api/chat/:id`.
-3. User types a message and submits the form.
-4. Frontend sends `POST /api/chat/:id` to append the message.
-5. Backend sends the full chat history to Gemini.
-6. Gemini returns a response, which is stored and returned.
-7. Frontend updates the message list and chat title if needed.
-
-### 5. Deleting a chat
-1. User clicks delete on a chat entry in `Sidebar`.
-2. Frontend calls `DELETE /api/chat/:id`.
-3. Backend removes the chat document.
-4. Frontend removes it from state and closes it if it was active.
+1. **Initiation**: The frontend sends a `fetch` request with `Accept: text/event-stream`.
+2. **SSE Setup**: The server sets headers (`Connection: keep-alive`, `Cache-Control: no-cache`) to keep the pipe open.
+3. **Async Generation**: The backend uses an `AsyncGenerator` to `yield` text chunks as they arrive from the AI provider.
+4. **Piping**: The controller writes these chunks into the response stream in the format `data: {...}\n\n`.
+5. **Consumption**: The frontend reads the `ReadableStream`, decodes the binary data, and updates the Zustand store in real-time.
 
 ---
 
-## Important Environment Variables
+## 🧠 Core Logic: AI Memory (Vector Search / RAG)
 
-The backend requires:
-- `MONGO_URI` — MongoDB connection string
-- `GEMINI_API_KEY` — Google Gemini API key
-- `GEMINI_MODEL` — optional model name, defaults to `gemini-2.5-flash`
-- `PORT` — optional server port
+Velora AI features a sophisticated long-term memory system that allows it to remember user facts across sessions.
 
-> Note: the frontend Axios base URL is set to `http://localhost:5000/api` in `client/src/lib/api.ts`.
-> If the backend is running on a different port, update `client/src/lib/api.ts` or set `PORT=5000` for the server.
+### 1. Memory Extraction (Learning)
+After every user message, a background service uses Gemini to analyze the text. If new facts (personal, preferences, technical) are found, they are extracted and categorized.
 
----
+### 2. Semantic Embedding
+Each extracted fact is converted into a **768-dimensional vector** using the `text-embedding-004` model. This "embedding" represents the mathematical meaning of the text.
 
-## Key behavior details
-
-- The frontend keeps local chat state in `useChatStore` so the UI updates instantly.
-- The backend stores every message in MongoDB, preserving full conversation history.
-- Each assistant response is generated from the entire chat history.
-- Chat titles are created from the first user message if no title already exists.
+### 3. Vector Retrieval (RAG)
+When a user sends a message, the system:
+1.  Generates a vector for the **current message**.
+2.  Performs a **Vector Search** in MongoDB Atlas to find conceptually similar memories.
+3.  Injects the most relevant memories into the AI's system prompt.
+4.  **Identity Persistence**: Always includes "personal" category facts (like name) to ensure the AI never forgets who it is talking to.
 
 ---
 
-## Running the project
+## 🛑 Core Logic: Stopping Generation
 
-From the project root:
-```bash
-npm run dev
-```
+Stopping a response mid-way requires synchronization across three layers:
 
-This starts both:
-- `client` on Vite
-- `server` with `ts-node-dev`
-
-If the server is not using port `5000`, adjust the frontend's Axios base URL.
+1. **Frontend**: Calls `abort()` on a local `AbortController` (stopping the `fetch`) and sends a `/stop` request to the backend.
+2. **Backend Registry**: The server finds the active AI process in the `chatStreamRegistry` using the `requestId`.
+3. **AI Adapter**: The backend triggers an `AbortSignal` inside the AI provider loop (e.g., Gemini), causing it to exit the stream immediately.
+4. **Persistence**: The server saves the partial response received so far to MongoDB with `status: "stopped"`.
 
 ---
 
-## Summary
+## 🖼️ Core Logic: Image Handling
 
-This project is a standard chat app with:
-- protected frontend routes via Clerk
-- a React chat interface plus sidebar navigation
-- a backend API that stores messages and calls Gemini
-- a chat message model that keeps both user and assistant content
+### 1. Uploading (User Images)
+- **Path**: `InputArea` → `/api/upload/image` → `CloudinaryService` → **Cloudinary**.
+- **Result**: The frontend receives a public URL and stores it in the `attachments` state.
 
-The flow is:
-1. user signs in
-2. frontend loads chat list
-3. user sends a message
-4. backend stores it and asks Gemini for the reply
-5. frontend displays the full conversation
+### 2. AI Vision Processing
+- When a message with images is sent, the **AI Adapter** fetches the image from the Cloudinary URL.
+- It converts the image to **Base64** and sends it as `inlineData` to the Gemini API.
+
+### 3. AI Image Generation
+- If the AI generates an image (e.g., via NVIDIA Flux), the backend parses the response for image URLs.
+- These are saved as `attachments` in the `Message` document and displayed in the frontend `MessageList` and `GalleryModal`.
+
+---
+
+## 🚀 Runtime Execution Flow (Step-by-Step)
+
+1. **Input**: User types "What is this?" and attaches an image.
+2. **Upload**: Image is uploaded to Cloudinary; URL is returned to the client.
+3. **Submit**: Client sends text + image URL + a unique `requestId` to the server.
+4. **Optimistic UI**: Client instantly displays the user message and a loading spinner.
+5. **Stream**: Server starts the AI stream; client updates the UI character-by-character.
+6. **Completion**: Server saves the final text to the database; client "commits" the message.
