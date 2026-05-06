@@ -136,8 +136,8 @@
   }
 
   ::selection {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
 
   /* Custom Scrollbar Styles */

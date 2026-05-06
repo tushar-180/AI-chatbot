@@ -44,7 +44,7 @@ const Chat = () => {
   const displayMessages = optimisticMessages ?? messages;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans selection:bg-white/10 antialiased">
+    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
       <Sidebar />
 
       <main className="relative flex flex-1 flex-col overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">

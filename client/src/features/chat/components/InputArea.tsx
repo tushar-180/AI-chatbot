@@ -275,7 +275,7 @@ const InputArea = ({
               placeholder={
                 currentChatId ? "Ask anything..." : "Start a conversation..."
               }
-              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide selection:bg-white/10`}
+              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
             />
 
             {isStreaming ? (

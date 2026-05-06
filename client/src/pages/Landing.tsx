@@ -7,7 +7,7 @@ const Landing = () => {
   const { isSignedIn } = useUser();
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-black font-sans selection:bg-white/10 text-white antialiased">
+    <div className="relative min-h-screen w-full overflow-hidden bg-black font-sans text-white antialiased">
       {/* 1. Subtle Structural Lines (For a "designed" feel) */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">
         <div className="w-px h-full bg-white/[0.03]" />

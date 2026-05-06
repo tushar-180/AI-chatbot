@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 const Auth = () => {
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans selection:bg-white/10 antialiased overflow-hidden">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans antialiased overflow-hidden">
       {/* 1. Structural Lines (Matching Landing) */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">
         <div className="w-px h-full bg-white/[0.03]" />

@@ -35,24 +35,23 @@ const SidebarChatItem = memo(
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
+    const itemRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (
-          menuRef.current &&
-          !menuRef.current.contains(event.target as Node)
-        ) {
-          setShowMenu(false);
+        if (itemRef.current && !itemRef.current.contains(event.target as Node)) {
+          if (showMenu) setShowMenu(false);
+          if (isEditing) handleCancel();
         }
       };
-      if (showMenu) {
+      
+      if (showMenu || isEditing) {
         document.addEventListener("mousedown", handleClickOutside);
       }
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
-    }, [showMenu]);
+    }, [showMenu, isEditing]);
 
     const handleStartEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -79,12 +78,13 @@ const SidebarChatItem = memo(
 
     return (
       <div
+        ref={itemRef}
         onClick={() => !isEditing && onSelect(chat._id)}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
             ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
             : "text-slate-400 border-white/[0.03] hover:bg-white/[0.05] hover:text-white"
-        }`}
+        } ${isEditing ? "cursor-default" : "cursor-pointer"}`}
       >
         <div className="flex flex-1 items-center gap-3 truncate">
           <MessageSquare size={16} className={isActive ? "text-black" : "text-slate-600"} />
@@ -108,8 +108,33 @@ const SidebarChatItem = memo(
         </div>
 
         <div className="flex items-center gap-1">
-          {!isEditing && (
-            <div className="relative" ref={menuRef}>
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSave();
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  isActive ? "text-emerald-600 hover:bg-emerald-50" : "text-emerald-500 hover:bg-emerald-500/10"
+                }`}
+              >
+                <Check size={14} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancel();
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  isActive ? "text-rose-600 hover:bg-rose-50" : "text-rose-500 hover:bg-rose-500/10"
+                }`}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
               <div
                 onClick={(e) => {
                   e.stopPropagation();
