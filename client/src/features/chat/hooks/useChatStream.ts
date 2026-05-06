@@ -26,6 +26,7 @@ export const useChatStream = () => {
     setChats,
     setIsNewChat,
     upsertChat,
+    setMessages,
     setLoading,
     setIsStreaming,
   } = useChatStore();
@@ -73,6 +74,13 @@ export const useChatStream = () => {
   const refreshChats = async (userId: string) => {
     const chats = await chatService.fetchChats(userId);
     setChats(chats);
+  };
+
+  const commitMessagesForChat = (chatId: string, nextMessages: Message[]) => {
+    if (useChatStore.getState().currentChatId === chatId) {
+      setMessages(nextMessages);
+    }
+    setOptimisticMessagesForChat(chatId, nextMessages);
   };
 
   const processStream = async (
@@ -167,9 +175,9 @@ export const useChatStream = () => {
       if (data.error) toast.error(data.error);
 
       if (data.done) {
-        if (user?.id) {
-          await refreshChats(user.id);
-        }
+        // if (user?.id) {
+        //   await refreshChats(user.id);
+        // }
         const key = resolvedChatId ?? initialKey;
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -181,6 +189,12 @@ export const useChatStream = () => {
             requestId: activeRequestId,
             status: data.status ?? "completed",
           };
+          if (resolvedChatId) {
+            const finalChatId = resolvedChatId;
+            queueMicrotask(() => {
+              commitMessagesForChat(finalChatId, next);
+            });
+          }
           return { ...current, [key]: next };
         });
         activeAbortControllerRef.current = null;
@@ -191,6 +205,8 @@ export const useChatStream = () => {
         setLoading(false);
       }
     };
+
+
 
     while (true) {
       const { done, value } = await reader.read();
@@ -210,6 +226,9 @@ export const useChatStream = () => {
     }
   };
 
+
+
+  
   const resumeStream = async (chatId: string) => {
     try {
       const url = chatService.getStreamUpdatesUrl(chatId);
@@ -338,9 +357,8 @@ export const useChatStream = () => {
           stopRequestedRef.current &&
           activeRequestIdRef.current === requestId
         ) {
-          const key = getActiveChatKey(
-            activeResolvedChatIdRef.current ?? currentChatId,
-          );
+          const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+          const key = getActiveChatKey(resolvedChatId);
 
           setOptimisticMessagesByChatId((current) => {
             const messagesForChat = current[key];
@@ -350,6 +368,11 @@ export const useChatStream = () => {
               ...next[next.length - 1],
               status: "stopped",
             };
+            if (resolvedChatId) {
+              queueMicrotask(() => {
+                commitMessagesForChat(resolvedChatId, next);
+              });
+            }
             return { ...current, [key]: next };
           });
 
@@ -370,9 +393,8 @@ export const useChatStream = () => {
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        const key = getActiveChatKey(
-          activeResolvedChatIdRef.current ?? currentChatId,
-        );
+        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -382,6 +404,11 @@ export const useChatStream = () => {
             ...next[next.length - 1],
             status: "stopped",
           };
+          if (resolvedChatId) {
+            queueMicrotask(() => {
+              commitMessagesForChat(resolvedChatId, next);
+            });
+          }
           return { ...current, [key]: next };
         });
 
@@ -394,9 +421,8 @@ export const useChatStream = () => {
         stopRequestedRef.current &&
         activeRequestIdRef.current === requestId
       ) {
-        const key = getActiveChatKey(
-          activeResolvedChatIdRef.current ?? currentChatId,
-        );
+        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -406,6 +432,11 @@ export const useChatStream = () => {
             ...next[next.length - 1],
             status: "stopped",
           };
+          if (resolvedChatId) {
+            queueMicrotask(() => {
+              commitMessagesForChat(resolvedChatId, next);
+            });
+          }
           return { ...current, [key]: next };
         });
 

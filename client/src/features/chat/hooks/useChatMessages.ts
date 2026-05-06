@@ -4,7 +4,7 @@ import { chatService } from "@/features/chat/services/chat.service";
 import { toast } from "sonner";
 
 export const useChatMessages = () => {
-  const { currentChatId, isStreaming, streamingChatId, setMessages } =
+  const { currentChatId, messages, isStreaming, streamingChatId, setMessages } =
     useChatStore();
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
@@ -19,15 +19,24 @@ export const useChatMessages = () => {
       return;
     }
 
-    // 2. If the currently selected chat is streaming, reset loadedChatId to force refetch when stream ends
+    // 2. Let the active stream drive the visible messages without forcing a refetch later.
     if (isStreaming && streamingChatId === currentChatId) {
       queueMicrotask(() => {
-        setLoadedChatId(null);
+        setMessagesLoading(false);
       });
       return;
     }
 
-    // 3. If the chat is already loaded, don't fetch
+    // 3. Reuse messages already committed to the store, such as a finished stream.
+    if (messages.length > 0 && loadedChatId !== currentChatId) {
+      queueMicrotask(() => {
+        setLoadedChatId(currentChatId);
+        setMessagesLoading(false);
+      });
+      return;
+    }
+
+    // 4. If the chat is already loaded, don't fetch
     if (loadedChatId === currentChatId) {
       queueMicrotask(() => {
         setMessagesLoading(false);
@@ -64,7 +73,14 @@ export const useChatMessages = () => {
     return () => {
       cancelled = true;
     };
-  }, [currentChatId, isStreaming, streamingChatId, loadedChatId, setMessages]);
+  }, [
+    currentChatId,
+    messages.length,
+    isStreaming,
+    streamingChatId,
+    loadedChatId,
+    setMessages,
+  ]);
 
   return {
     messagesLoading,

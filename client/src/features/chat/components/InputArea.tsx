@@ -6,7 +6,7 @@ import {
   memo,
   useState,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X, Image as ImageIcon } from "lucide-react";
+import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X } from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -216,7 +216,7 @@ const InputArea = ({
   return (
     <div className="pb-8 pt-4 px-4 md:px-10 relative z-10">
       <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative">
-        <div className="group relative flex flex-col gap-0 rounded-2xl border border-white/5 bg-white/[0.02] p-1 shadow-2xl transition-all duration-300 focus-within:border-white/10 backdrop-blur-sm">
+        <div className="group relative flex flex-col gap-0 rounded-2xl border border-white/5 bg-white/2 p-1 shadow-2xl transition-all duration-300 focus-within:border-white/10 backdrop-blur-sm">
           <ModelSelector
             availableProviders={availableProviders}
             selectedProvider={selectedProvider}
@@ -275,7 +275,7 @@ const InputArea = ({
               placeholder={
                 currentChatId ? "Ask anything..." : "Start a conversation..."
               }
-              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide selection:bg-white/10`}
+              className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide selection:bg-white/10`}
             />
 
             {isStreaming ? (
