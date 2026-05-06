@@ -1,5 +1,5 @@
-import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
-import { Code, Lightbulb, PenTool, Terminal, Bot } from "lucide-react";
+import { useRef, useEffect, useLayoutEffect, useCallback, useState, memo } from "react";
+import { Code, Lightbulb, PenTool, Terminal, Bot, ChevronDown } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -64,33 +64,32 @@ const MessageList = ({
   const shouldAutoScrollRef = useRef(true);
   const isProgrammaticScrollRef = useRef(false);
   const programmaticScrollTimeoutRef = useRef<number | null>(null);
-  const userIsInteractingRef = useRef(false);
-  
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
   const previousMessageCountRef = useRef(messages.length);
   const previousChatIdRef = useRef<string | null>(currentChatId);
 
   const isAtBottom = useCallback(() => {
-    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
+    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
     if (!container) return true;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    return distanceFromBottom < 50;
+    return scrollHeight - scrollTop - clientHeight < 10;
   }, []);
 
   const scrollToBottom = useCallback((instant = false) => {
-    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
+    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
     if (!container) return;
 
     isProgrammaticScrollRef.current = true;
-    
-    const scrollOptions = {
-      top: container.scrollHeight,
-      behavior: (instant ? "auto" : "smooth") as ScrollBehavior,
-    };
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
 
     requestAnimationFrame(() => {
-      container.scrollTo(scrollOptions);
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: instant ? "auto" : "smooth",
+      });
     });
 
     if (programmaticScrollTimeoutRef.current) {
@@ -98,30 +97,22 @@ const MessageList = ({
     }
 
     programmaticScrollTimeoutRef.current = window.setTimeout(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "auto",
+      });
       isProgrammaticScrollRef.current = false;
+      setShowScrollToBottom(false);
       programmaticScrollTimeoutRef.current = null;
-      userIsInteractingRef.current = false;
-      shouldAutoScrollRef.current = isAtBottom();
-    }, instant ? 0 : 250);
-  }, [isAtBottom]);
+    }, instant ? 0 : 300);
+  }, []);
 
   const handleScroll = useCallback(() => {
-    if (!scrollContainerRef.current) return;
+    if (isProgrammaticScrollRef.current) return;
+
     const atBottom = isAtBottom();
-
-    if (isProgrammaticScrollRef.current && !userIsInteractingRef.current) {
-      if (atBottom) {
-        shouldAutoScrollRef.current = true;
-      }
-      return;
-    }
-
-    // If user scrolls up, disable auto-scroll
-    if (!atBottom && !isProgrammaticScrollRef.current) {
-      shouldAutoScrollRef.current = false;
-    } else if (atBottom) {
-      shouldAutoScrollRef.current = true;
-    }
+    setShowScrollToBottom(!atBottom);
+    shouldAutoScrollRef.current = atBottom;
   }, [isAtBottom]);
 
   // Initial scroll and chat change
@@ -129,30 +120,38 @@ const MessageList = ({
     if (currentChatId !== previousChatIdRef.current) {
       shouldAutoScrollRef.current = true;
       scrollToBottom(true);
+      setShowScrollToBottom(false);
       previousChatIdRef.current = currentChatId;
     }
   }, [currentChatId, scrollToBottom]);
 
   // Handle new messages and streaming
   useLayoutEffect(() => {
-    const messageCountChanged = messages.length !== previousMessageCountRef.current;
-    
+    const messageCountChanged =
+      messages.length !== previousMessageCountRef.current;
+
     if (messageCountChanged || isStreaming) {
       if (shouldAutoScrollRef.current) {
         scrollToBottom(!isStreaming);
+        setShowScrollToBottom(false);
       }
     }
-    
+
     previousMessageCountRef.current = messages.length;
   }, [messages, isStreaming, scrollToBottom]);
 
   useEffect(() => {
-    const mainContainer = scrollContainerRef.current?.closest('.overflow-y-auto');
-    if (!mainContainer) return;
+    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
+    if (!container) return;
 
-    mainContainer.addEventListener("scroll", handleScroll);
-    return () => mainContainer.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
+    if (!isProgrammaticScrollRef.current) {
+      setShowScrollToBottom(!isAtBottom());
+    }
+
+    container.addEventListener("scroll", handleScroll);
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [handleScroll, isAtBottom, currentChatId]);
+
 
   const showSuggestions = !currentChatId && messages.length === 0;
 
@@ -229,17 +228,31 @@ const MessageList = ({
                 isStreaming={isStreaming && i === messages.length - 1}
               />
             ))}
-            
-            {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-              <div className="flex w-full justify-start animate-in fade-in duration-300">
-                <div className="flex items-center gap-3 py-6">
-                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
-                  <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+
+            {isStreaming &&
+              messages.length > 0 &&
+              messages[messages.length - 1].role === "user" && (
+                <div className="flex w-full justify-start animate-in fade-in duration-300">
+                  <div className="flex items-center gap-3 py-6">
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                  </div>
                 </div>
+              )}
+            <div ref={messagesEndRef} />
+            {showScrollToBottom && messages.length > 0 && (
+              <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
+                <button
+                  type="button"
+                  onClick={() => scrollToBottom()}
+                  aria-label="Scroll to bottom"
+                  className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
+                >
+                  <ChevronDown size={20} />
+                </button>
               </div>
             )}
-            <div ref={messagesEndRef} />
           </>
         )}
       </div>
