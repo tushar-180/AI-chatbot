@@ -10,7 +10,7 @@ export const memoryService = {
       .sort({ importance: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    
+
     // Trigger background repair for any empty embeddings
     this.repairMissingEmbeddings(userId).catch(console.error);
     return memories;
@@ -19,14 +19,19 @@ export const memoryService = {
   /**
    * Fetch relevant memories using Vector Search (RAG)
    */
-  async getMemoryContext(userId: string, currentMessage?: string): Promise<string> {
+  async getMemoryContext(
+    userId: string,
+    currentMessage?: string,
+  ): Promise<string> {
     const provider = aiService.getProvider();
-    
+
     // 1. Fetch "Personal" memories regardless of vector search (identity is always relevant)
-    const personalMemories = await UserMemory.find({ 
-      userId, 
-      category: "personal" 
-    }).limit(5).lean();
+    const personalMemories = await UserMemory.find({
+      userId,
+      category: "personal",
+    })
+      .limit(5)
+      .lean();
 
     let relevantMemories: any[] = [];
 
@@ -35,8 +40,9 @@ export const memoryService = {
       try {
         // Use Gemini specifically for embeddings (reliable & configured)
         const embeddingProvider = aiService.getProvider("gemini");
-        const queryVector = await embeddingProvider.generateEmbedding(currentMessage);
-        
+        const queryVector =
+          await embeddingProvider.generateEmbedding(currentMessage);
+
         if (queryVector && queryVector.length > 0) {
           // MongoDB Atlas Vector Search Aggregation with Importance Boosting
           relevantMemories = await UserMemory.aggregate([
@@ -47,23 +53,23 @@ export const memoryService = {
                 queryVector: queryVector,
                 numCandidates: 100,
                 limit: 20, // Fetch more to allow for importance re-ranking
-                filter: { userId: userId }
-              }
+                filter: { userId: userId },
+              },
             },
             {
               $addFields: {
-                vectorScore: { $meta: "vectorSearchScore" }
-              }
+                vectorScore: { $meta: "vectorSearchScore" },
+              },
             },
             {
               $addFields: {
                 // FinalScore = Similarity * Importance
                 // Importance is 1-5, so we normalize it slightly
-                finalScore: { $multiply: ["$vectorScore", "$importance"] }
-              }
+                finalScore: { $multiply: ["$vectorScore", "$importance"] },
+              },
             },
             { $sort: { finalScore: -1 } },
-            { $limit: 10 }
+            { $limit: 10 },
           ]);
         }
       } catch (error) {
@@ -82,7 +88,7 @@ export const memoryService = {
     // 4. Combine, Deduplicate and Limit by Size (Token Control)
     const combined = [...personalMemories, ...relevantMemories];
     const uniqueIds = new Set();
-    const uniqueMemories = combined.filter(m => {
+    const uniqueMemories = combined.filter((m) => {
       if (uniqueIds.has(String(m._id))) return false;
       uniqueIds.add(String(m._id));
       return true;
@@ -115,7 +121,12 @@ export const memoryService = {
   /**
    * Save a new memory snippet with embeddings
    */
-  async addMemory(userId: string, content: string, category: string = "general") {
+  async addMemory(
+    userId: string,
+    content: string,
+    category: string = "general",
+    importance: number = 1,
+  ) {
     // Deduplication
     const existing = await UserMemory.findOne({ userId, content });
     if (existing) return existing;
@@ -124,11 +135,12 @@ export const memoryService = {
     const embeddingProvider = aiService.getProvider("gemini");
     const embedding = await embeddingProvider.generateEmbedding(content);
 
-    return await UserMemory.create({ 
-      userId, 
-      content, 
+    return await UserMemory.create({
+      userId,
+      content,
       category,
-      embedding 
+      importance,
+      embedding,
     });
   },
 
@@ -138,21 +150,22 @@ export const memoryService = {
   async extractMemoriesFromMessage(userId: string, userMessage: string) {
     try {
       const provider = aiService.getProvider(); // Use default provider
-      
+
       const extractionPrompt = `
         You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
         
         RULES:
         1. Only extract facts that are likely to be useful later.
-        2. Format each fact as: [Fact] | [Category]
-        3. Categories MUST be one of: personal, preference, technical, work, general.
-        4. If no facts are found, return exactly "NONE".
-        5. Return only the facts, one per line.
+        2. Format each fact as: [Fact] | [Category] | [Importance (1-5)]
+        3. Categories: personal, preference, technical, work, general.
+        4. Importance: 1 (trivial) to 5 (critical/identity).
+        5. If no facts are found, return exactly "NONE".
+        6. Return only the facts, one per line.
         
         EXAMPLES:
-        "My name is Tushar" -> User's name is Tushar | personal
-        "I love dark mode" -> User prefers dark mode | preference
-        "I'm building a React app" -> User is building a React app | work
+        "My name is Tushar" -> User's name is Tushar | personal | 5
+        "I love dark mode" -> User prefers dark mode | preference | 2
+        "I'm building a React app" -> User is building a React app | work | 4
         
         USER MESSAGE: "${userMessage}"
         
@@ -160,23 +173,30 @@ export const memoryService = {
       `;
 
       const response = await provider.generateResponse([
-        { role: "user", content: extractionPrompt, userId }
+        { role: "user", content: extractionPrompt, userId },
       ]);
 
       const cleanedResponse = response.trim();
       if (cleanedResponse === "NONE" || !cleanedResponse) return [];
 
       const lines = cleanedResponse.split("\n").filter(Boolean);
-      
+
       // Parallel Memory Extraction/Saving for speed
       const savedMemories = await Promise.all(
         lines.map(async (line) => {
-          const [fact, category] = line.split("|").map(s => s.trim());
+          const [fact, category, importance] = line
+            .split("|")
+            .map((s) => s.trim());
           if (fact) {
-            return await this.addMemory(userId, fact, category as any || "general");
+            return await this.addMemory(
+              userId,
+              fact,
+              (category as any) || "general",
+              parseInt(importance) || 1,
+            );
           }
           return null;
-        })
+        }),
       );
 
       return savedMemories.filter(Boolean);
@@ -190,30 +210,40 @@ export const memoryService = {
    * Background task to fill in missing embeddings for a user's memories
    */
   async repairMissingEmbeddings(userId: string) {
-    const incompleteMemories = await UserMemory.find({ 
-      userId, 
+    const incompleteMemories = await UserMemory.find({
+      userId,
       $or: [
-        { embedding: { $exists: false } }, 
+        { embedding: { $exists: false } },
         { embedding: { $size: 0 } },
-        { embedding: { $size: 3072 } } // Repair old 3072-dim embeddings
-      ] 
+        { embedding: { $size: 3072 } }, // Repair old 3072-dim embeddings
+      ],
     });
 
     if (incompleteMemories.length === 0) return;
 
-    console.log(`[MemoryService] Repairing ${incompleteMemories.length} missing embeddings for user ${userId}...`);
+    console.log(
+      `[MemoryService] Repairing ${incompleteMemories.length} missing embeddings for user ${userId}...`,
+    );
     const embeddingProvider = aiService.getProvider("gemini");
 
     for (const memory of incompleteMemories) {
       try {
-        const embedding = await embeddingProvider.generateEmbedding(memory.content);
+        const embedding = await embeddingProvider.generateEmbedding(
+          memory.content,
+        );
         if (embedding && embedding.length > 0) {
-          await UserMemory.updateOne({ _id: memory._id }, { $set: { embedding } });
+          await UserMemory.updateOne(
+            { _id: memory._id },
+            { $set: { embedding } },
+          );
         }
       } catch (err) {
-        console.error(`Failed to repair embedding for memory ${memory._id}:`, err);
+        console.error(
+          `Failed to repair embedding for memory ${memory._id}:`,
+          err,
+        );
       }
     }
     console.log(`[MemoryService] Repair completed for user ${userId}.`);
-  }
+  },
 };
