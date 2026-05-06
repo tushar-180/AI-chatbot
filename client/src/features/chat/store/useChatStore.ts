@@ -2,134 +2,368 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Chat, Message } from "@/features/chat/types/chat.types";
 
-type ChatState = {
-  chats: Chat[];
-  currentChatId: string | null;
-  messages: Message[];
-  loading: boolean;
-  isStreaming: boolean;
-  streamingChatId: string | null;
-  isNewChat: boolean;
-  sidebarOpen: boolean;
+export const TEMP_CHAT_ID = "__new__";
 
-  setSidebarOpen: (open: boolean) => void;
-  setChats: (chats: Chat[]) => void;
-  setCurrentChat: (id: string | null) => void;
-  setMessages: (messages: Message[]) => void;
-  addMessage: (message: Message) => void;
-  updateLastMessage: (content: string, model?: string) => void;
-  setLoading: (loading: boolean) => void;
-  setIsStreaming: (isStreaming: boolean, chatId?: string | null) => void;
-  setIsNewChat: (isNew: boolean) => void;
-  upsertChat: (chat: Chat) => void;
-  removeChat: (id: string) => void;
-  updateChatTitle: (id: string, title: string) => void;
-  clearMessages: () => void;
+const createStableId = () => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+        return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const ensureMessage = (chatId: string, message: Partial<Message>): Message => {
+    return {
+        id: message.id ?? message.requestId ?? createStableId(),
+        chatId,
+        role: message.role!,
+        content: message.content ?? "",
+        model: message.model,
+        requestId: message.requestId,
+        status: message.status ?? "completed",
+        type: message.type,
+        attachments: message.attachments,
+    };
+};
+
+type ActiveStream = {
+    requestId: string | null;
+    chatId: string | null;
+};
+
+type ChatState = {
+    chats: Chat[];
+    currentChatId: string | null;
+
+    messagesByChatId: Record<string, Message[]>;
+
+    loading: boolean;
+    isStreaming: boolean;
+    streamingChatId: string | null;
+    streamingMessageId: string | null;
+
+    activeStream: ActiveStream;
+
+    isNewChat: boolean;
+    sidebarOpen: boolean;
+
+    // UI
+    setSidebarOpen: (open: boolean) => void;
+
+    // chat
+    setChats: (chats: Chat[]) => void;
+    setCurrentChat: (id: string | null) => void;
+    setIsNewChat: (isNew: boolean) => void;
+
+    upsertChat: (chat: Chat) => void;
+    removeChat: (id: string) => void;
+    updateChatTitle: (id: string, title: string) => void;
+
+    // messages
+    setMessages: (chatId: string, messages: Message[]) => void;
+    addMessage: (chatId: string, message: Partial<Message>) => void;
+    clearMessages: (chatId: string) => void;
+
+    resetCurrentChatMessages: () => void;
+
+    // streaming
+    beginStreamingAssistantMessage: (
+        chatId: string,
+        params: {
+            id?: string;
+            model?: string;
+            requestId?: string;
+            content?: string;
+        },
+    ) => string;
+
+    updateStreamingAssistantMessage: (
+        chatId: string,
+        params: {
+            id?: string;
+            content?: string;
+            delta?: string;
+            model?: string;
+            status?: Message["status"];
+        },
+    ) => void;
+
+    finalizeStreamingMessage: (
+        chatId: string,
+        params?: {
+            id?: string;
+            status?: Exclude<Message["status"], "streaming">;
+            content?: string;
+        },
+    ) => void;
+
+    resolveTempChat: (realChatId: string) => void;
+
+    setActiveStream: (stream: ActiveStream) => void;
+    clearActiveStream: () => void;
+
+    setIsStreaming: (isStreaming: boolean, chatId?: string | null) => void;
+    setLoading: (loading: boolean) => void;
 };
 
 export const useChatStore = create<ChatState>()(
-  persist(
-    (set) => ({
-      chats: [],
-      currentChatId: null,
-      messages: [],
-      loading: false,
-      isStreaming: false,
-      streamingChatId: null,
-      isNewChat: false,
-      sidebarOpen: false,
+    persist(
+        (set, get) => ({
+            chats: [],
+            currentChatId: null,
+            messagesByChatId: {},
 
-      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+            loading: false,
+            isStreaming: false,
+            streamingChatId: null,
+            streamingMessageId: null,
 
-      setChats: (chats) => set({ chats }),
+            activeStream: { requestId: null, chatId: null },
 
-      setCurrentChat: (id) =>
-        set((state) => ({
-          currentChatId: id,
-          isNewChat: id ? false : state.isNewChat,
-        })),
+            isNewChat: false,
+            sidebarOpen: false,
 
-      setMessages: (messages) => set({ messages }),
+            setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
-      addMessage: (message) =>
-        set((state) => ({
-          messages: [...state.messages, message],
-        })),
+            setChats: (chats) => set({ chats }),
 
-      updateLastMessage: (content, model) =>
-        set((state) => {
-          const newMessages = [...state.messages];
-          const lastMessage = newMessages[newMessages.length - 1];
+            setCurrentChat: (id) =>
+                set((state) => {
+                    const isNew = !id || id === TEMP_CHAT_ID;
+                    return {
+                        currentChatId: isNew ? null : id,
+                        isNewChat: isNew,
+                        messagesByChatId: isNew
+                            ? { ...state.messagesByChatId, [TEMP_CHAT_ID]: [] }
+                            : state.messagesByChatId,
+                    };
+                }),
 
-          if (lastMessage?.role === "assistant") {
-            newMessages[newMessages.length - 1] = {
-              ...lastMessage,
-              content,
-            };
-          } else {
-            newMessages.push({
-              role: "assistant",
-              content,
-              model,
-            });
-          }
+            setIsNewChat: (isNew) =>
+                set((state) => ({
+                    isNewChat: isNew,
+                    currentChatId: isNew ? null : state.currentChatId,
+                    messagesByChatId: isNew
+                        ? { ...state.messagesByChatId, [TEMP_CHAT_ID]: [] }
+                        : state.messagesByChatId,
+                })),
 
-          return { messages: newMessages };
+            upsertChat: (chat) =>
+                set((state) => {
+                    const index = state.chats.findIndex(
+                        (c) => c._id === chat._id,
+                    );
+
+                    if (index === -1) {
+                        return { chats: [chat, ...state.chats] };
+                    }
+
+                    const updated = [...state.chats];
+                    updated[index] = { ...updated[index], ...chat };
+
+                    return { chats: updated };
+                }),
+
+            removeChat: (id) =>
+                set((state) => {
+                    const newMessages = { ...state.messagesByChatId };
+                    delete newMessages[id];
+
+                    const isDeletingCurrent = state.currentChatId === id;
+
+                    return {
+                        chats: state.chats.filter((c) => c._id !== id),
+                        currentChatId: isDeletingCurrent
+                            ? null
+                            : state.currentChatId,
+                        isNewChat: isDeletingCurrent ? true : state.isNewChat,
+                        messagesByChatId: newMessages,
+                    };
+                }),
+
+            updateChatTitle: (id, title) =>
+                set((state) => ({
+                    chats: state.chats.map((c) =>
+                        c._id === id ? { ...c, title } : c,
+                    ),
+                })),
+
+            setMessages: (chatId, messages) =>
+                set((state) => ({
+                    messagesByChatId: {
+                        ...state.messagesByChatId,
+                        [chatId]: messages.map((m) => ensureMessage(chatId, m)),
+                    },
+                })),
+
+            addMessage: (chatId, message) =>
+                set((state) => ({
+                    messagesByChatId: {
+                        ...state.messagesByChatId,
+                        [chatId]: [
+                            ...(state.messagesByChatId[chatId] || []),
+                            ensureMessage(chatId, message),
+                        ],
+                    },
+                })),
+
+            clearMessages: (chatId) =>
+                set((state) => ({
+                    messagesByChatId: {
+                        ...state.messagesByChatId,
+                        [chatId]: [],
+                    },
+                })),
+
+            resetCurrentChatMessages: () =>
+                set((state) => {
+                    const id = state.currentChatId ?? TEMP_CHAT_ID;
+                    return {
+                        messagesByChatId: {
+                            ...state.messagesByChatId,
+                            [id]: [],
+                        },
+                    };
+                }),
+
+            beginStreamingAssistantMessage: (chatId, params) => {
+                const id = params.id ?? params.requestId ?? createStableId();
+
+                set((state) => {
+                    const messages = state.messagesByChatId[chatId] || [];
+
+                    const next = ensureMessage(chatId, {
+                        id,
+                        role: "assistant",
+                        content: params.content ?? "",
+                        model: params.model,
+                        requestId: params.requestId,
+                        status: "streaming",
+                    });
+
+                    return {
+                        messagesByChatId: {
+                            ...state.messagesByChatId,
+                            [chatId]: [...messages, next],
+                        },
+                        streamingMessageId: id,
+                        streamingChatId: chatId,
+                    };
+                });
+
+                return id;
+            },
+
+            updateStreamingAssistantMessage: (chatId, params) =>
+                set((state) => {
+                    if (state.streamingChatId && state.streamingChatId !== chatId) {
+                        return state;
+                    }
+
+                    const messages = state.messagesByChatId[chatId] || [];
+                    const id = params.id ?? state.streamingMessageId;
+
+                    if (!id) return state;
+
+                    const index = messages.findIndex((m) => m.id === id);
+                    if (index === -1) return state;
+
+                    const updated = [...messages];
+                    updated[index] = {
+                        ...messages[index],
+                        content:
+                            params.content ??
+                            (params.delta
+                                ? messages[index].content + params.delta
+                                : messages[index].content),
+                        status: params.status ?? messages[index].status,
+                        model: params.model ?? messages[index].model,
+                    };
+
+                    return {
+                        messagesByChatId: {
+                            ...state.messagesByChatId,
+                            [chatId]: updated,
+                        },
+                    };
+                }),
+
+            finalizeStreamingMessage: (chatId, params) =>
+                set((state) => {
+                    const messages = state.messagesByChatId[chatId] || [];
+                    const id = params?.id ?? state.streamingMessageId;
+
+                    if (!id) return state;
+
+                    const index = messages.findIndex((m) => m.id === id);
+                    if (index === -1) return state;
+
+                    const updated = [...messages];
+                    updated[index] = {
+                        ...messages[index],
+                        status: params?.status ?? "completed",
+                        content: params?.content ?? messages[index].content,
+                    };
+
+                    return {
+                        messagesByChatId: {
+                            ...state.messagesByChatId,
+                            [chatId]: updated,
+                        },
+                        streamingMessageId: null,
+                        streamingChatId: null,
+                    };
+                }),
+
+            resolveTempChat: (realChatId) =>
+                set((state) => {
+                    const tempMessages = state.messagesByChatId[TEMP_CHAT_ID];
+                    if (!tempMessages || tempMessages.length === 0) return state;
+
+                    return {
+                        messagesByChatId: {
+                            ...state.messagesByChatId,
+                            [realChatId]: tempMessages.map((m) => ({
+                                ...m,
+                                chatId: realChatId,
+                            })),
+                            [TEMP_CHAT_ID]: [],
+                        },
+                        currentChatId: realChatId,
+                        isNewChat: false,
+                    };
+                }),
+
+            setActiveStream: (stream) => set({ activeStream: stream }),
+
+            clearActiveStream: () =>
+                set({ activeStream: { requestId: null, chatId: null } }),
+
+            setIsStreaming: (isStreaming, chatId) =>
+                set({
+                    isStreaming,
+                    streamingChatId: isStreaming ? (chatId ?? null) : null,
+                }),
+
+            setLoading: (loading) => set({ loading }),
         }),
+        {
+            name: "chat-storage",
+            partialize: (state) => {
+                const chatIds = new Set(state.chats.map((c) => c._id));
+                const persistedMessagesByChatId: Record<string, Message[]> = {};
 
-      setLoading: (loading) => set({ loading }),
+                Object.entries(state.messagesByChatId).forEach(([id, msgs]) => {
+                    if (id !== TEMP_CHAT_ID && chatIds.has(id)) {
+                        persistedMessagesByChatId[id] = msgs;
+                    }
+                });
 
-      setIsStreaming: (isStreaming, chatId) =>
-        set((state) => ({
-          isStreaming,
-          streamingChatId: isStreaming
-            ? (chatId ?? state.currentChatId)
-            : null,
-        })),
-
-      setIsNewChat: (isNew) => set({ isNewChat: isNew }),
-
-      upsertChat: (chat) =>
-        set((state) => {
-          const existingIndex = state.chats.findIndex(
-            (item) => item._id === chat._id,
-          );
-
-          if (existingIndex === -1) {
-            return { chats: [chat, ...state.chats] };
-          }
-
-          const chats = [...state.chats];
-          chats[existingIndex] = { ...chats[existingIndex], ...chat };
-          return { chats };
-        }),
-
-      removeChat: (id) =>
-        set((state) => ({
-          chats: state.chats.filter((chat) => chat._id !== id),
-          currentChatId:
-            state.currentChatId === id ? null : state.currentChatId,
-          messages: state.currentChatId === id ? [] : state.messages,
-        })),
-
-      updateChatTitle: (id, title) =>
-        set((state) => ({
-          chats: state.chats.map((chat) =>
-            chat._id === id ? { ...chat, title } : chat
-          ),
-        })),
-
-      clearMessages: () => set({ messages: [] }),
-    }),
-    {
-      name: "chat-storage",
-      partialize: (state) =>
-        Object.fromEntries(
-          Object.entries(state).filter(
-            ([key]) =>
-              !["loading", "isStreaming", "streamingChatId"].includes(key),
-          ),
-        ) as ChatState,
-    },
-  ),
+                return {
+                    chats: state.chats,
+                    currentChatId: state.currentChatId,
+                    messagesByChatId: persistedMessagesByChatId,
+                };
+            },
+        },
+    ),
 );

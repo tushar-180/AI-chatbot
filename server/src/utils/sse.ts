@@ -11,7 +11,21 @@ export const setSseHeaders = (res: Response) => {
 
 export const writeSse = (res: Response, payload: unknown) => {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
-  (res as Response & { flush?: () => void }).flush?.();
+  if ((res as any).flush) {
+    (res as any).flush();
+  }
+};
+
+export const endSse = (res: Response, payload?: unknown) => {
+  if (payload) {
+    writeSse(res, payload);
+  }
+  // Small delay to ensure the OS/proxy flushes the last chunk before closing
+  setTimeout(() => {
+    if (!res.writableEnded) {
+      res.end();
+    }
+  }, 100);
 };
 
 export const splitAndWriteChunk = async (

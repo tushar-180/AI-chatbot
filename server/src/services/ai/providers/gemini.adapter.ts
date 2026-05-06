@@ -144,17 +144,16 @@ OUTPUT RULES (VERY IMPORTANT):
     const systemMessage = messages.find((msg) => msg.role === "system");
 
     try {
+      const config: any = {};
+      if (systemMessage) {
+        config.systemInstruction = systemMessage.content;
+      }
+
       const res = await this.ai.models.generateContentStream({
         model: this.model,
         contents,
-        config: {
-          systemInstruction: systemMessage
-            ? {
-                parts: [{ text: systemMessage.content }],
-              }
-            : undefined, 
-        },
-      } as any);
+        config: Object.keys(config).length > 0 ? config : undefined,
+      });
 
       for await (const chunk of res) {
         if (signal?.aborted) {
@@ -167,7 +166,7 @@ OUTPUT RULES (VERY IMPORTANT):
       }
     } catch (error: any) {
       console.error("Gemini Adapter Stream Error:", error);
-      throw new AIServiceError(error.message, error.status || 500);
+      throw new AIServiceError(error.message || "Unknown error", error.status || 500);
     }
   }
 }
