@@ -19,7 +19,7 @@ const ChatHeader = ({ currentChatId, onMenuClick }: ChatHeaderProps) => {
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/[0.05] bg-black/20 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-black/20 backdrop-blur-md">
       <div className="mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Left Section */}
         <div className="flex items-center gap-4 flex-1 min-w-0">

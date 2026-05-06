@@ -1,28 +1,29 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
+import type { Chat } from "@/features/chat/types/chat.types";
 import {
   Plus,
-  MessageSquare,
-  LayoutDashboard,
   X,
+  Check,
   Trash2,
   Edit2,
-  Check,
   MoreVertical,
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
+  Brain,
 } from "lucide-react";
 import DeleteConfirmModal from "./DeleteConfirmModal";
 import GalleryModal from "./GalleryModal";
+import MemoryModal from "./MemoryModal";
 
 /**
  * Sidebar Component
  * Manages the list of chat threads and navigation.
  */
 interface ChatItemProps {
-  chat: any;
+  chat: Chat;
   currentChatId: string | null;
   isActive: boolean;
   onSelect: (id: string) => void;
@@ -35,24 +36,23 @@ const SidebarChatItem = memo(
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
+    const itemRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (
-          menuRef.current &&
-          !menuRef.current.contains(event.target as Node)
-        ) {
-          setShowMenu(false);
+        if (itemRef.current && !itemRef.current.contains(event.target as Node)) {
+          if (showMenu) setShowMenu(false);
+          if (isEditing) handleCancel();
         }
       };
-      if (showMenu) {
+      
+      if (showMenu || isEditing) {
         document.addEventListener("mousedown", handleClickOutside);
       }
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
-    }, [showMenu]);
+    }, [showMenu, isEditing]);
 
     const handleStartEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -79,15 +79,15 @@ const SidebarChatItem = memo(
 
     return (
       <div
+        ref={itemRef}
         onClick={() => !isEditing && onSelect(chat._id)}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
             ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
-            : "text-slate-400 border-white/[0.03] hover:bg-white/[0.05] hover:text-white"
-        }`}
+            : "text-slate-400 border-white/3 hover:bg-white/5 hover:text-white"
+        } ${isEditing ? "cursor-default" : "cursor-pointer"}`}
       >
         <div className="flex flex-1 items-center gap-3 truncate">
-          <MessageSquare size={16} className={isActive ? "text-black" : "text-slate-600"} />
           {isEditing ? (
             <input
               autoFocus
@@ -108,8 +108,33 @@ const SidebarChatItem = memo(
         </div>
 
         <div className="flex items-center gap-1">
-          {!isEditing && (
-            <div className="relative" ref={menuRef}>
+          {isEditing ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSave();
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  isActive ? "text-emerald-600 hover:bg-emerald-50" : "text-emerald-500 hover:bg-emerald-500/10"
+                }`}
+              >
+                <Check size={14} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCancel();
+                }}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  isActive ? "text-rose-600 hover:bg-rose-50" : "text-rose-500 hover:bg-rose-500/10"
+                }`}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
               <div
                 onClick={(e) => {
                   e.stopPropagation();
@@ -165,6 +190,7 @@ const Sidebar = () => {
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
 
   return (
     <>
@@ -178,7 +204,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/[0.05] bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-y-auto
+        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-y-auto
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
@@ -204,19 +230,27 @@ const Sidebar = () => {
             className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
           >
             <Plus size={16} strokeWidth={3} />
-            <span>New Session</span>
+            <span>New Chat</span>
           </button>
 
           <button
             onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/[0.08]"
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
           >
             <ImageIcon size={16} />
             <span>Gallery</span>
           </button>
+
+          <button
+            onClick={() => setMemoryOpen(true)}
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
+          >
+            <Brain size={16} />
+            <span>Memory</span>
+          </button>
         </div>
 
-        <div className="flex-1 flex flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           <div
             onClick={() => setShowRecent((prev) => !prev)}
             className="flex items-center justify-between px-2 pb-4 cursor-pointer group"
@@ -235,29 +269,31 @@ const Sidebar = () => {
           </div>
 
           {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/[0.01] p-10 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
                 Empty
               </p>
             </div>
           ) : (
             showRecent && (
-              <div className="flex flex-col gap-3">
-                {chats.map((chat) => (
-                  <SidebarChatItem
-                    key={chat._id}
-                    chat={chat}
-                    currentChatId={currentChatId}
-                    isActive={currentChatId === chat._id}
-                    onSelect={selectChat}
-                    onDelete={(id) => setDeleteId(id)}
-                    onRename={renameChat}
-                  />
-                ))}
+              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
+                <div className="flex flex-col gap-3">
+                  {chats.map((chat) => (
+                    <SidebarChatItem
+                      key={chat._id}
+                      chat={chat}
+                      currentChatId={currentChatId}
+                      isActive={currentChatId === chat._id}
+                      onSelect={selectChat}
+                      onDelete={(id) => setDeleteId(id)}
+                      onRename={renameChat}
+                    />
+                  ))}
+                </div>
               </div>
             )
           )}
-         </div>
+        </div>
       </aside>
 
       <DeleteConfirmModal
@@ -272,6 +308,11 @@ const Sidebar = () => {
       <GalleryModal
         isOpen={galleryOpen}
         onClose={() => setGalleryOpen(false)}
+      />
+
+      <MemoryModal
+        isOpen={memoryOpen}
+        onClose={() => setMemoryOpen(false)}
       />
     </>
   );

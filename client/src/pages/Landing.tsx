@@ -7,11 +7,11 @@ const Landing = () => {
   const { isSignedIn } = useUser();
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-black font-sans selection:bg-white/10 text-white antialiased">
+    <div className="relative min-h-screen w-full overflow-hidden bg-black font-sans text-white antialiased">
       {/* 1. Subtle Structural Lines (For a "designed" feel) */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">
-        <div className="w-px h-full bg-white/[0.03]" />
-        <div className="w-[800px] h-full border-x border-white/[0.03]" />
+        <div className="w-px h-full bg-white/3" />
+        <div className="w-[800px] h-full border-x border-white/3" />
       </div>
 
       {/* 2. Minimalist Navbar */}
@@ -20,13 +20,13 @@ const Landing = () => {
           <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
           <span className="font-display text-lg font-bold tracking-tight">
             Velora
-          </span>
-        </div>
-        <Link to={isSignedIn ? "/chat" : "/auth"}>
+            </span>
+          </div>
+            <Link to={isSignedIn ? "/chat" : "/auth"}>
           <Button variant="ghost" className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-300 hover:bg-white/5 hover:text-white transition-all">
             {isSignedIn ? "Launch App" : "Sign In"}
-          </Button>
-        </Link>
+              </Button>
+            </Link>
       </nav>
 
       {/* 3. Hand-Crafted Hero Section */}
@@ -47,7 +47,7 @@ const Landing = () => {
             <Link to={isSignedIn ? "/chat" : "/auth"}>
               <Button size="lg" className="h-14 rounded-2xl bg-white px-10 text-xs font-bold uppercase tracking-[0.2em] text-black border border-slate-200 transition-all hover:bg-slate-100 hover:scale-[1.02] active:scale-[0.98] shadow-sm">
                 Get Started
-                <ArrowRight className="ml-2 h-3.5 w-3.5 stroke-[3]" />
+                <ArrowRight className="ml-2 h-3.5 w-3.5 stroke-3" />
               </Button>
             </Link>
             
@@ -55,7 +55,7 @@ const Landing = () => {
               View Changelog
             </Link>
           </div>
-        </div>
+            </div>
 
         {/* 4. Elegant Status Indicator (Fixed bottom) */}
         <div className="absolute bottom-12 left-12 flex items-center gap-4">
@@ -63,11 +63,11 @@ const Landing = () => {
            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-800">
              Velora Core v2.4
            </span>
-        </div>
-        
+            </div>
+
         <div className="absolute bottom-12 right-12 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-800">
            Ready for deployment
-        </div>
+          </div>
       </main>
 
       {/* 5. Minimal Grain Overlay (For a "premium paper" feel) */}

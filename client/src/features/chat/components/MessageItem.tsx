@@ -1,5 +1,5 @@
 import { useUser } from "@clerk/react";
-import { User, Bot } from "lucide-react";
+import { User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { memo, useState } from "react";

@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 
 const Auth = () => {
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans selection:bg-white/10 antialiased overflow-hidden">
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans antialiased overflow-hidden">
       {/* 1. Structural Lines (Matching Landing) */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">
-        <div className="w-px h-full bg-white/[0.03]" />
-        <div className="w-[800px] h-full border-x border-white/[0.03]" />
+        <div className="w-px h-full bg-white/3" />
+        <div className="w-[800px] h-full border-x border-white/3" />
       </div>
 
       {/* 2. Top Branding */}
@@ -27,7 +27,7 @@ const Auth = () => {
            <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.4em]">Encrypted Access Portal</p>
         </div>
         
-        <div className="rounded-3xl border border-white/[0.05] bg-white/[0.01] p-1 shadow-2xl backdrop-blur-sm">
+        <div className="rounded-3xl border border-white/5 bg-white/1 p-1 shadow-2xl backdrop-blur-sm">
           <SignIn 
             appearance={{
               elements: {

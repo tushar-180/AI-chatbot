@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
 import { toast } from "sonner";
 import { useChatStore, TEMP_CHAT_ID } from "@/features/chat/store/useChatStore";

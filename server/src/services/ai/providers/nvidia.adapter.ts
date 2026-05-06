@@ -126,4 +126,11 @@ export class NvidiaAdapter implements IAIService {
             );
         }
     }
+  }
+
+  async generateEmbedding(text: string): Promise<number[]> {
+    // NVIDIA NIM supports embeddings, but we'd need to use a specific embedding model
+    // For now, returning empty array as a stub
+    return [];
+  }
 }

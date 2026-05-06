@@ -17,6 +17,7 @@
 //     this.model = model;
 //   }
 
+
 //   async generateResponse(messages: AIMessage[]): Promise<string> {
 //     console.log("OpenAI Adapter: Generating response (Mock)");
 //     return "OpenAI support is currently in placeholder mode. Please implement the OpenAI SDK integration in openai.adapter.ts.";
