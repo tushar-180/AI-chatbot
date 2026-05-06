@@ -192,15 +192,15 @@ const MessageList = ({
               />
             ))}
 
-            {showAssistantThinking && (
+              {showAssistantThinking && (
               <div className="flex w-full justify-start animate-in fade-in duration-300">
-                <div className="flex items-center gap-3 py-6">
+                  <div className="flex items-center gap-3 py-6">
                     <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
                     <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
                     <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
-                </div>
+                  </div>
               </div>
-            )}
+              )}
             <div ref={messagesEndRef} />
           </>
         )}
