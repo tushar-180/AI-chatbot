@@ -24,7 +24,6 @@ type ChatState = {
   upsertChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
   updateChatTitle: (id: string, title: string) => void;
-  upsertChat: (chat: Chat) => void;
   clearMessages: () => void;
 };
 
@@ -120,30 +119,7 @@ export const useChatStore = create<ChatState>()(
           ),
         })),
 
-      upsertChat: (chat) =>
-        set((state) => {
-          const existingIndex = state.chats.findIndex(
-            (item) => item._id === chat._id,
-          );
-
-          if (existingIndex === -1) {
-            return { chats: [chat, ...state.chats] };
-          }
-
-          const chats = [...state.chats];
-          const nextTitle =
-            chat.title.trim().length > 0
-              ? chat.title
-              : chats[existingIndex].title;
-
-          chats[existingIndex] = {
-            ...chats[existingIndex],
-            ...chat,
-            title: nextTitle,
-          };
-
-          return { chats };
-        }),
+      
 
       clearMessages: () => set({ messages: [] }),
     }),
