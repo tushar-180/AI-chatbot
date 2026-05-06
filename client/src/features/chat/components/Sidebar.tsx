@@ -3,8 +3,6 @@ import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import {
   Plus,
-  MessageSquare,
-  LayoutDashboard,
   X,
   Trash2,
   Edit2,
@@ -83,11 +81,10 @@ const SidebarChatItem = memo(
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
             ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
-            : "text-slate-400 border-white/[0.03] hover:bg-white/[0.05] hover:text-white"
+            : "text-slate-400 border-white/3 hover:bg-white/5 hover:text-white"
         } ${isEditing ? "cursor-default" : "cursor-pointer"}`}
       >
         <div className="flex flex-1 items-center gap-3 truncate">
-          <MessageSquare size={16} className={isActive ? "text-black" : "text-slate-600"} />
           {isEditing ? (
             <input
               autoFocus
@@ -203,7 +200,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/[0.05] bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-y-auto
+        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-8 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-y-auto
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
@@ -229,12 +226,12 @@ const Sidebar = () => {
             className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
           >
             <Plus size={16} strokeWidth={3} />
-            <span>New Session</span>
+            <span>New Chat</span>
           </button>
 
           <button
             onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/[0.08]"
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
           >
             <ImageIcon size={16} />
             <span>Gallery</span>
@@ -260,7 +257,7 @@ const Sidebar = () => {
           </div>
 
           {chats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/[0.01] p-10 text-center">
+            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
                 Empty
               </p>

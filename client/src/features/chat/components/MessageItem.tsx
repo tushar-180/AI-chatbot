@@ -154,7 +154,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
           <div
             className={`transition-all duration-300 ${
               isUser
-                ? "max-w-full rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
+                ? "max-w-full rounded-2xl border border-white/10 bg-white/3 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
                 : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
             }`}
           >

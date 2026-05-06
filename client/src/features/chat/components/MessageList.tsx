@@ -1,5 +1,5 @@
 import { useRef, useEffect, memo } from "react";
-import { Bot, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -66,19 +66,26 @@ const MessageList = ({
   const previousMessageCountRef = useRef(messages.length);
 
   const isNearBottom = () => {
-    const container = scrollContainerRef.current;
+    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
     if (!container) return true;
 
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
 
-    return distanceFromBottom < 96;
+    return distanceFromBottom < 250;
   };
 
   const scrollToBottom = (instant = false) => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: instant ? "auto" : "smooth",
-      block: "end",
+    const container = scrollContainerRef.current?.closest('.overflow-y-auto');
+    if (!container) return;
+
+    const scrollOptions = {
+      top: container.scrollHeight,
+      behavior: (instant ? "auto" : "smooth") as ScrollBehavior,
+    };
+
+    requestAnimationFrame(() => {
+      container.scrollTo(scrollOptions);
     });
   };
 
@@ -91,6 +98,8 @@ const MessageList = ({
   const showInitialLoading = (messagesLoading || (currentChatId && !hasLoadedCurrentChat)) && messages.length === 0;
   const showAssistantThinking = loading && !isStreaming && messages.length > 0 && messages[messages.length-1].role === "user";
 
+  const lastMessageContent = messages[messages.length - 1]?.content;
+
   useEffect(() => {
     if (showSuggestions) return;
 
@@ -98,7 +107,12 @@ const MessageList = ({
     const messageCountChanged =
       previousMessageCountRef.current !== messages.length;
 
-    if (chatChanged || messageCountChanged) {
+    if (chatChanged || messageCountChanged || (isStreaming && !previousChatIdRef.current)) {
+      shouldStickToBottomRef.current = true;
+    }
+
+    // Force stick to bottom if we are streaming and currently near bottom
+    if (isStreaming && isNearBottom()) {
       shouldStickToBottomRef.current = true;
     }
 
@@ -108,13 +122,20 @@ const MessageList = ({
     if (isStreaming && !shouldStickToBottomRef.current) return;
 
     scrollToBottom(isStreaming);
-  }, [currentChatId, messages, isStreaming, showSuggestions]);
+  }, [currentChatId, messages, isStreaming, showSuggestions, loading, lastMessageContent]);
+
+  useEffect(() => {
+    const mainContainer = scrollContainerRef.current?.closest('.overflow-y-auto');
+    if (!mainContainer) return;
+
+    mainContainer.addEventListener("scroll", handleScroll);
+    return () => mainContainer.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
     <div
       ref={scrollContainerRef}
-      onScroll={handleScroll}
-      className={`flex-1 overflow-y-auto px-4 py-8 md:px-10 [overflow-anchor:none] ${
+      className={`px-4 py-8 md:px-10 [overflow-anchor:none] ${
         showSuggestions ? "scrollbar-hide" : ""
       }`}
     >
@@ -138,7 +159,7 @@ const MessageList = ({
                 <button
                   key={idx}
                   onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                  className="group flex flex-col items-start p-6 text-left bg-white/[0.02] border border-white/[0.05] hover:border-white/20 hover:bg-white/[0.04] rounded-2xl transition-all duration-300"
+                  className="group flex flex-col items-start p-6 text-left bg-white/2 border border-white/5 hover:border-white/20 hover:bg-white/4 rounded-2xl transition-all duration-300"
                 >
                   <div className="flex items-center gap-3 mb-3 text-slate-500 group-hover:text-white transition-colors">
                     <suggestion.icon size={18} />

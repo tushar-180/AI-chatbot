@@ -10,8 +10,8 @@ const Landing = () => {
     <div className="relative min-h-screen w-full overflow-hidden bg-black font-sans text-white antialiased">
       {/* 1. Subtle Structural Lines (For a "designed" feel) */}
       <div className="absolute inset-0 flex justify-center pointer-events-none">
-        <div className="w-px h-full bg-white/[0.03]" />
-        <div className="w-[800px] h-full border-x border-white/[0.03]" />
+        <div className="w-px h-full bg-white/3" />
+        <div className="w-[800px] h-full border-x border-white/3" />
       </div>
 
       {/* 2. Minimalist Navbar */}
@@ -47,7 +47,7 @@ const Landing = () => {
             <Link to={isSignedIn ? "/chat" : "/auth"}>
               <Button size="lg" className="h-14 rounded-2xl bg-white px-10 text-xs font-bold uppercase tracking-[0.2em] text-black border border-slate-200 transition-all hover:bg-slate-100 hover:scale-[1.02] active:scale-[0.98] shadow-sm">
                 Get Started
-                <ArrowRight className="ml-2 h-3.5 w-3.5 stroke-[3]" />
+                <ArrowRight className="ml-2 h-3.5 w-3.5 stroke-3" />
               </Button>
             </Link>
             

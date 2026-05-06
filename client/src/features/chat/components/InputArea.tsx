@@ -6,7 +6,7 @@ import {
   memo,
   useState,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X, Image as ImageIcon } from "lucide-react";
+import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X } from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -214,9 +214,9 @@ const InputArea = ({
   };
 
   return (
-    <div className="pb-8 pt-4 px-4 md:px-10 relative z-10">
-      <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative">
-        <div className="group relative flex flex-col gap-0 rounded-2xl border border-white/5 bg-white/[0.02] p-1 shadow-2xl transition-all duration-300 focus-within:border-white/10 backdrop-blur-sm">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
+      <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative pointer-events-auto">
+        <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
           <ModelSelector
             availableProviders={availableProviders}
             selectedProvider={selectedProvider}
