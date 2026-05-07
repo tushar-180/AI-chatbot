@@ -61,15 +61,15 @@ export const useChatStream = () => {
     streamingChatId === getActiveChatKey(currentChatId) &&
     !!streamingChatId;
 
-  // Sync optimistic messages with store when the selected chat is not streaming
+  // Sync optimistic messages with store when switching chats
   useEffect(() => {
     if (!currentChatId) return;
     if (isStreaming && streamingChatId === currentChatId) return;
 
-    queueMicrotask(() => {
-      setOptimisticMessagesForChat(currentChatId, null);
-    });
-  }, [currentChatId, isStreaming, streamingChatId]);
+    // We only clear optimistic messages when switching chats,
+    // allowing the stream handlers to manage their own cleanup.
+    setOptimisticMessagesForChat(currentChatId, null);
+  }, [currentChatId]);
 
   const refreshChats = async (userId: string) => {
     const chats = await chatService.fetchChats(userId);
@@ -172,7 +172,21 @@ export const useChatStream = () => {
         });
       }
 
-      if (data.error) toast.error(data.error);
+      if (data.error) {
+        toast.error(data.error);
+        const key = resolvedChatId ?? initialKey;
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
+          const next = [...messagesForChat];
+          next[next.length - 1] = {
+            ...next[next.length - 1],
+            status: "failed",
+            requestId: activeRequestId,
+          };
+          return { ...current, [key]: next };
+        });
+      }
 
       if (data.done) {
         // if (user?.id) {
@@ -206,29 +220,33 @@ export const useChatStream = () => {
       }
     };
 
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
 
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      buffer += decoder.decode(value, { stream: !done });
+        for (const event of events) {
+          await processEvent(event);
+        }
 
-      const events = buffer.split("\n\n");
-      buffer = events.pop() ?? "";
-
-      for (const event of events) {
-        await processEvent(event);
+        if (done) {
+          if (buffer.trim()) await processEvent(buffer);
+          break;
+        }
       }
-
-      if (done) {
-        if (buffer.trim()) await processEvent(buffer);
-        break;
-      }
+    } finally {
+      setIsStreaming(false);
+      setLoading(false);
+      activeAbortControllerRef.current = null;
+      activeRequestIdRef.current = null;
+      activeResolvedChatIdRef.current = null;
+      stopRequestedRef.current = false;
     }
   };
 
-
-
-  
   const resumeStream = async (chatId: string) => {
     try {
       const url = chatService.getStreamUpdatesUrl(chatId);
@@ -293,7 +311,11 @@ export const useChatStream = () => {
     }
   }, [currentChatId, isStreaming, streamingChatId]);
 
-  const streamMessage = async (input: string, provider: string, attachments: any[] = []) => {
+  const streamMessage = async (
+    input: string,
+    provider: string,
+    attachments: any[] = [],
+  ) => {
     if (!input.trim() && attachments.length === 0) return;
     if (loading || !user?.id) return;
 
@@ -335,6 +357,15 @@ export const useChatStream = () => {
 
     try {
       const url = chatService.getStreamUrl(currentChatId || undefined);
+      
+      // Client-side safety timeout for connection
+      const connectionTimeout = setTimeout(() => {
+        if (activeAbortControllerRef.current === abortController) {
+          abortController.abort();
+          toast.error("Connection timed out. Please try again.");
+        }
+      }, 35000); // 35s to allow server-side 30s timeout to trigger first
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -352,12 +383,15 @@ export const useChatStream = () => {
         }),
       });
 
+      clearTimeout(connectionTimeout);
+
       if (!response.ok) {
         if (
           stopRequestedRef.current &&
           activeRequestIdRef.current === requestId
         ) {
-          const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+          const resolvedChatId =
+            activeResolvedChatIdRef.current ?? currentChatId;
           const key = getActiveChatKey(resolvedChatId);
 
           setOptimisticMessagesByChatId((current) => {
@@ -366,7 +400,7 @@ export const useChatStream = () => {
             const next = [...messagesForChat];
             next[next.length - 1] = {
               ...next[next.length - 1],
-              status: "stopped",
+              status: stopRequestedRef.current ? "stopped" : "failed",
             };
             if (resolvedChatId) {
               queueMicrotask(() => {
@@ -402,7 +436,7 @@ export const useChatStream = () => {
           const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
-            status: "stopped",
+            status: stopRequestedRef.current ? "stopped" : "failed",
           };
           if (resolvedChatId) {
             queueMicrotask(() => {
@@ -446,7 +480,25 @@ export const useChatStream = () => {
       }
 
       console.error("Error streaming message", err);
-      setOptimisticMessagesForChat(activeKey, null);
+      const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+      const key = getActiveChatKey(resolvedChatId);
+
+      setOptimisticMessagesByChatId((current) => {
+        const messagesForChat = current[key];
+        if (!messagesForChat?.length) return current;
+        const next = [...messagesForChat];
+        next[next.length - 1] = {
+          ...next[next.length - 1],
+          status: "failed",
+        };
+        if (resolvedChatId) {
+          queueMicrotask(() => {
+            commitMessagesForChat(resolvedChatId, next);
+          });
+        }
+        return { ...current, [key]: next };
+      });
+
       toast.error(chatService.getChatErrorMessage(err));
     } finally {
       if (activeRequestIdRef.current !== requestId) {

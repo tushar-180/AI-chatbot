@@ -18,6 +18,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
+  status?: "streaming" | "stopped" | "completed" | "failed";
   type?: "text" | "image" | "file" | "action";
   attachments?: Attachment[];
 }
@@ -66,11 +67,13 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
 const MessageAvatar = ({
   isUser,
   imageUrl,
+  failed,
 }: {
   isUser: boolean;
   imageUrl?: string;
+  failed?: boolean;
 }) => (
-  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 ${isUser ? 'border border-white/10 shadow-sm' : ''}`}>
+  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 ${isUser ? 'border border-white/10 shadow-sm' : ''} ${failed ? 'bg-red-500/10 border-red-500/20' : ''}`}>
     {isUser ? (
       imageUrl ? (
         <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
@@ -81,7 +84,13 @@ const MessageAvatar = ({
       )
     ) : (
       <div className="flex h-full w-full items-center justify-center">
-        <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
+        {failed ? (
+          <div className="text-red-500">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+        ) : (
+          <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
+        )}
       </div>
     )}
   </div>
@@ -124,6 +133,7 @@ const MessageMetadata = ({
 const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
   const { user } = useUser();
   const isUser = msg.role === "user";
+  const isFailed = msg.status === "failed";
 
   return (
     <div
@@ -141,7 +151,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
         }`}
       >
         <div className="hidden xs:block">
-          <MessageAvatar isUser={isUser} imageUrl={user?.imageUrl} />
+          <MessageAvatar isUser={isUser} imageUrl={user?.imageUrl} failed={isFailed} />
         </div>
 
         <div
@@ -149,13 +159,15 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
             isUser ? "items-end flex-1" : "min-w-0 flex-1"
           }`}
         >
-          <MessageMetadata isUser={isUser} model={msg.model} />
+          {!isFailed && <MessageMetadata isUser={isUser} model={msg.model} />}
 
           <div
             className={`transition-all duration-300 ${
               isUser
                 ? "max-w-full rounded-2xl border border-white/10 bg-white/3 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
-                : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+                : isFailed 
+                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
+                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
             }`}
           >
             {isStreaming && !msg.content ? (
@@ -163,6 +175,11 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+              </div>
+            ) : isFailed ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-red-400/90">Server Error</span>
+                <span className="text-sm opacity-80">AI failed to respond. Please try again later.</span>
               </div>
             ) : (
               <>

@@ -121,8 +121,13 @@ async function* streamAssistantResponse(
   const promptMessages = getLimitedMessages(chat.messages as ChatMessage[]);
 
   // Inject long-term memory context
-  const lastUserMessage = (chat.messages as ChatMessage[]).filter(m => m.role === "user").pop();
-  const memoryContext = await memoryService.getMemoryContext(chat.userId, lastUserMessage?.content);
+  const lastUserMessage = (chat.messages as ChatMessage[])
+    .filter((m) => m.role === "user")
+    .pop();
+  const memoryContext = await memoryService.getMemoryContext(
+    chat.userId,
+    lastUserMessage?.content,
+  );
   if (memoryContext) {
     promptMessages.unshift({
       role: "system",
@@ -131,7 +136,7 @@ async function* streamAssistantResponse(
       status: "completed",
     });
   }
-  
+
   // Create assistant message in its own collection
   const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
     role: "assistant",
@@ -153,22 +158,40 @@ async function* streamAssistantResponse(
     ? { chatId, requestId, model: providerName, status: "streaming" }
     : { requestId, model: providerName, status: "streaming" };
 
+  let fullResponse = "";
+  let receivedFirstChunk = false;
+
   try {
     const stream = aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
     );
 
-    let fullResponse = "";
-
-    for await (const chunk of stream) {
-      if (activeStream.abortController.signal.aborted) {
-        break;
+    // 30s timeout for first token
+    const timeout = setTimeout(() => {
+      if (!receivedFirstChunk) {
+        console.error(`AI generation timed out for requestId: ${requestId}`);
+        activeStream.abortController.abort();
       }
+    }, 30000);
 
-      fullResponse += chunk;
-      chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
-      yield { chunk, requestId, status: "streaming" };
+    try {
+      for await (const chunk of stream) {
+        if (activeStream.abortController.signal.aborted) {
+          break;
+        }
+
+        if (!receivedFirstChunk) {
+          receivedFirstChunk = true;
+          clearTimeout(timeout);
+        }
+
+        fullResponse += chunk;
+        chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
+        yield { chunk, requestId, status: "streaming" };
+      }
+    } finally {
+      clearTimeout(timeout);
     }
 
     const finalStatus = activeStream.abortController.signal.aborted
@@ -196,14 +219,24 @@ async function* streamAssistantResponse(
     yield { done: true, chatId, requestId, status: "completed" };
 
     // Extract new memories in the background
-    const lastUserMessage = (chat.messages as ChatMessage[]).filter(m => m.role === "user").pop();
+    const lastUserMessage = (chat.messages as ChatMessage[])
+      .filter((m) => m.role === "user")
+      .pop();
     if (lastUserMessage) {
-      memoryService.extractMemoriesFromMessage(chat.userId, lastUserMessage.content).catch(err => {
-        console.error("Background memory extraction failed:", err);
-      });
+      memoryService
+        .extractMemoriesFromMessage(chat.userId, lastUserMessage.content)
+        .catch((err) => {
+          console.error("Background memory extraction failed:", err);
+        });
     }
   } catch (aiError) {
-    if (activeStream.abortController.signal.aborted) {
+    const isTimeout = aiError instanceof Error && aiError.message.includes("timed out") || 
+                     (activeStream.abortController.signal.aborted && !receivedFirstChunk);
+    const errorMessage = isTimeout 
+      ? "AI generation timed out. Please try again."
+      : "Server Error: AI failed to respond.";
+
+    if (activeStream.abortController.signal.aborted && !isTimeout) {
       await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
         content: activeStream.fullResponse,
         status: "stopped",
@@ -216,14 +249,19 @@ async function* streamAssistantResponse(
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       status: "failed",
     });
-    chatStreamRegistry.fail(requestId, "AI failed to respond");
-    yield { error: "AI failed to respond, but your message was saved." };
+
+    chatStreamRegistry.fail(requestId, errorMessage);
+    yield { error: errorMessage, status: "failed" };
   }
 }
 
-
 export const chatService = {
-  async createChat({ userId, message, provider, attachments }: CreateChatInput) {
+  async createChat({
+    userId,
+    message,
+    provider,
+    attachments,
+  }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim() || "";
 
@@ -237,17 +275,25 @@ export const chatService = {
 
     if (trimmedMessage || (attachments && attachments.length > 0)) {
       // Save User Message
-      const userMessage = createUserMessage(trimmedMessage || "", String(resolvedUserId), provider, attachments);
+      const userMessage = createUserMessage(
+        trimmedMessage || "",
+        String(resolvedUserId),
+        provider,
+        attachments,
+      );
       await chatRepository.saveMessage(chatId, userMessage);
 
       const aiProvider = aiService.getProvider(provider);
       const providerName = aiProvider.getProviderName();
-      
+
       // Get history for context
       const messages = [userMessage];
-      
+
       // Inject long-term memory context
-      const memoryContext = await memoryService.getMemoryContext(resolvedUserId, trimmedMessage);
+      const memoryContext = await memoryService.getMemoryContext(
+        resolvedUserId,
+        trimmedMessage,
+      );
       const promptMessages = getLimitedMessages(messages);
       if (memoryContext) {
         promptMessages.unshift({
@@ -258,7 +304,13 @@ export const chatService = {
         });
       }
 
-      const reply = await aiProvider.generateResponse(promptMessages);
+      let reply = "";
+      try {
+        reply = await aiProvider.generateResponse(promptMessages);
+      } catch (err) {
+        console.error("AI Error in createChat:", err);
+        throw new Error("Server Error: AI failed to respond.");
+      }
 
       // Parse multimedia from reply
       const { attachments: aiAttachments, type } = parseMultimedia(reply);
@@ -272,9 +324,11 @@ export const chatService = {
 
       // Extract new memories in the background
       if (trimmedMessage) {
-        memoryService.extractMemoriesFromMessage(resolvedUserId, trimmedMessage).catch(err => {
-          console.error("Background memory extraction failed:", err);
-        });
+        memoryService
+          .extractMemoriesFromMessage(resolvedUserId, trimmedMessage)
+          .catch((err) => {
+            console.error("Background memory extraction failed:", err);
+          });
       }
     }
 
@@ -299,7 +353,15 @@ export const chatService = {
     const chatId = chat._id.toString();
 
     // Save User Message
-    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(resolvedUserId), input.provider, input.attachments));
+    await chatRepository.saveMessage(
+      chatId,
+      createUserMessage(
+        trimmedMessage,
+        String(resolvedUserId),
+        input.provider,
+        input.attachments,
+      ),
+    );
 
     // Refetch to get messages for prompt
     const fullChat = await chatRepository.findById(chatId);
@@ -312,12 +374,25 @@ export const chatService = {
     );
   },
 
-  async sendMessage({ chatId, message, provider, attachments }: SendMessageInput) {
+  async sendMessage({
+    chatId,
+    message,
+    provider,
+    attachments,
+  }: SendMessageInput) {
     const trimmedMessage = message?.trim() || "";
     const chat = await requireChat(chatId);
 
     // Save User Message
-    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments));
+    await chatRepository.saveMessage(
+      chatId,
+      createUserMessage(
+        trimmedMessage,
+        String(chat.userId),
+        provider,
+        attachments,
+      ),
+    );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       chat.title = createTitle(trimmedMessage);
@@ -326,13 +401,18 @@ export const chatService = {
 
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
-    
+
     // Fetch updated history
     const updatedChat = await chatRepository.findById(chatId);
-    const promptMessages = getLimitedMessages(updatedChat?.messages as ChatMessage[]);
+    const promptMessages = getLimitedMessages(
+      updatedChat?.messages as ChatMessage[],
+    );
 
     // Inject long-term memory context
-    const memoryContext = await memoryService.getMemoryContext(String(chat.userId), trimmedMessage);
+    const memoryContext = await memoryService.getMemoryContext(
+      String(chat.userId),
+      trimmedMessage,
+    );
     if (memoryContext) {
       promptMessages.unshift({
         role: "system",
@@ -342,7 +422,13 @@ export const chatService = {
       });
     }
 
-    const reply = await aiProvider.generateResponse(promptMessages);
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in sendMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
 
     // Parse multimedia from reply
     const { attachments: aiAttachments, type } = parseMultimedia(reply);
@@ -356,11 +442,13 @@ export const chatService = {
 
     // Extract new memories in the background
     if (trimmedMessage) {
-      memoryService.extractMemoriesFromMessage(String(chat.userId), trimmedMessage).catch(err => {
-        console.error("Background memory extraction failed:", err);
-      });
+      memoryService
+        .extractMemoriesFromMessage(String(chat.userId), trimmedMessage)
+        .catch((err) => {
+          console.error("Background memory extraction failed:", err);
+        });
     }
-    
+
     return await chatRepository.findById(chatId);
   },
 
@@ -376,7 +464,15 @@ export const chatService = {
     const chat = await requireChat(chatId);
 
     // Save User Message
-    await chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments));
+    await chatRepository.saveMessage(
+      chatId,
+      createUserMessage(
+        trimmedMessage,
+        String(chat.userId),
+        provider,
+        attachments,
+      ),
+    );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       chat.title = createTitle(trimmedMessage);
@@ -386,9 +482,12 @@ export const chatService = {
     // Refresh chat to include new user message
     const updatedChat = await chatRepository.findById(chatId);
 
-    yield* streamAssistantResponse(updatedChat as any, resolvedRequestId, provider);
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+    );
   },
-
 
   async stopStream({ requestId, chatId }: StopStreamInput) {
     const resolvedRequestId = requireRequestId(requestId);
@@ -418,7 +517,6 @@ export const chatService = {
         status: "stopped",
       });
     }
-
 
     return {
       stopped: false,
@@ -457,11 +555,11 @@ export const chatService = {
   async getGallery(userId: string) {
     const resolvedUserId = requireUserId(userId);
     const messages = await chatRepository.findUserAttachments(resolvedUserId);
-    
+
     const gallery = [];
     for (const msg of messages) {
       if (!msg.attachments) continue;
-      
+
       for (const att of msg.attachments) {
         gallery.push({
           url: att.url,
@@ -470,11 +568,11 @@ export const chatService = {
           size: att.size,
           messageId: String((msg as any)._id),
           chatId: String((msg as any).chatId),
-          createdAt: (msg as any).createdAt
+          createdAt: (msg as any).createdAt,
         });
       }
     }
-    
+
     return gallery;
-  }
+  },
 };
