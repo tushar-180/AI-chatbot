@@ -146,5 +146,12 @@ class NvidiaAdapter {
             }
         });
     }
+    generateEmbedding(text) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // NVIDIA NIM supports embeddings, but we'd need to use a specific embedding model
+            // For now, returning empty array as a stub
+            return [];
+        });
+    }
 }
 exports.NvidiaAdapter = NvidiaAdapter;

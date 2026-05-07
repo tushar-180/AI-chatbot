@@ -9,6 +9,7 @@ const chat_routes_1 = __importDefault(require("./routes/chat.routes"));
 const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
 const upload_routes_1 = __importDefault(require("./routes/upload.routes"));
+const memory_routes_1 = __importDefault(require("./routes/memory.routes"));
 const morgan_1 = __importDefault(require("morgan"));
 const error_middleware_1 = require("./middleware/error.middleware");
 const app = (0, express_1.default)();
@@ -29,6 +30,7 @@ app.use("/api/chat", chat_routes_1.default);
 app.use("/api/ai", ai_routes_1.default);
 app.use("/api/user", user_routes_1.default);
 app.use("/api/upload", upload_routes_1.default);
+app.use("/api/memory", memory_routes_1.default);
 // Error Handler Middleware
 app.use(error_middleware_1.errorHandler);
 exports.default = app;

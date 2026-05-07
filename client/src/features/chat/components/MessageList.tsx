@@ -1,5 +1,5 @@
-import { useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
-import { Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { useRef, useEffect, useLayoutEffect, useCallback, memo, useState } from "react";
+import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import MessageItem from "./MessageItem";
 
 interface Message {

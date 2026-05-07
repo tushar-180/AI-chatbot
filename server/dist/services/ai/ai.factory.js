@@ -7,30 +7,8 @@ const gemini_adapter_1 = require("./providers/gemini.adapter");
 const nvidia_adapter_1 = require("./providers/nvidia.adapter");
 const constants_1 = require("./constants");
 class AIServiceFactory {
-    static parseProviderSelection(selection) {
-        const rawSelection = (selection || process.env.AI_PROVIDER || "gemini").trim();
-        if (!rawSelection) {
-            return { providerType: "gemini" };
-        }
-        const displayFormatIndex = rawSelection.indexOf(" : ");
-        if (displayFormatIndex >= 0) {
-            return {
-                providerType: rawSelection.slice(0, displayFormatIndex).trim().toLowerCase(),
-                modelId: rawSelection.slice(displayFormatIndex + 3).trim(),
-            };
-        }
-        const separatorIndex = rawSelection.indexOf(":");
-        if (separatorIndex >= 0) {
-            return {
-                providerType: rawSelection.slice(0, separatorIndex).trim().toLowerCase(),
-                modelId: rawSelection.slice(separatorIndex + 1).trim(),
-            };
-        }
-        return {
-            providerType: rawSelection.toLowerCase(),
-        };
-    }
     /**
+     *
      * Returns available provider details (id and display name).
      * Now returns all combinations of provider and model.
      */
@@ -53,13 +31,14 @@ class AIServiceFactory {
      * Supports 'provider:model' format.
      */
     static getProvider(name) {
-        const { providerType, modelId } = this.parseProviderSelection(name);
-        const createProvider = this.providerFactories[providerType];
-        if (!createProvider) {
+        console.log("name", name);
+        const fullId = (name || process.env.AI_PROVIDER || "gemini").toLowerCase();
+        const [providerType, modelId] = fullId.split(":");
+        const adapter = this.providers[providerType];
+        if (!adapter) {
             console.warn(`Provider "${providerType}" not found. Falling back to Gemini.`);
-            return this.providerFactories["gemini"]();
+            return this.providers["gemini"];
         }
-        const adapter = createProvider();
         if (modelId) {
             adapter.setModel(modelId);
         }
@@ -69,13 +48,13 @@ class AIServiceFactory {
      * Allows adding or overriding a provider implementation.
      */
     static registerProvider(name, provider) {
-        this.providerFactories[name.toLowerCase()] = () => provider;
+        this.providers[name.toLowerCase()] = provider;
     }
 }
 exports.AIServiceFactory = AIServiceFactory;
-AIServiceFactory.providerFactories = {
-    gemini: () => new gemini_adapter_1.GeminiAdapter(),
-    // openai: () => new OpenAIAdapter(),
-    // claude: () => new ClaudeAdapter(),
-    nvidia: () => new nvidia_adapter_1.NvidiaAdapter(),
+AIServiceFactory.providers = {
+    gemini: new gemini_adapter_1.GeminiAdapter(),
+    // openai: new OpenAIAdapter(),
+    // claude: new ClaudeAdapter(),
+    nvidia: new nvidia_adapter_1.NvidiaAdapter(),
 };

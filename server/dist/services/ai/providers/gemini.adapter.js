@@ -62,27 +62,30 @@ class GeminiAdapter {
                 const parts = [{ text: msg.content }];
                 if (msg.attachments && msg.attachments.length > 0) {
                     if (isVision) {
-                        // Fetch and convert images to base64 for native vision support
-                        for (const att of msg.attachments) {
+                        // Parallel fetch and convert images to base64
+                        const imageParts = yield Promise.all(msg.attachments.map((att) => __awaiter(this, void 0, void 0, function* () {
                             try {
+                                // Check Cache First
+                                if (GeminiAdapter.imageCache.has(att.url)) {
+                                    const cached = GeminiAdapter.imageCache.get(att.url);
+                                    return { inlineData: cached };
+                                }
                                 const response = yield fetch(att.url);
                                 if (!response.ok)
-                                    throw new Error(`Failed to fetch image: ${response.statusText}`);
+                                    throw new Error(`Fetch failed: ${response.statusText}`);
                                 const arrayBuffer = yield response.arrayBuffer();
                                 const base64Data = Buffer.from(arrayBuffer).toString('base64');
                                 const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
-                                parts.push({
-                                    inlineData: {
-                                        mimeType,
-                                        data: base64Data,
-                                    },
-                                });
+                                const data = { mimeType, data: base64Data };
+                                GeminiAdapter.imageCache.set(att.url, data);
+                                return { inlineData: data };
                             }
                             catch (err) {
-                                console.error(`Failed to process image for Gemini: ${att.url}`, err);
-                                parts.push({ text: `\n[Image Link: ${att.url}]` });
+                                console.error(`Failed to process image: ${att.url}`, err);
+                                return { text: `\n[Image unavailable: ${att.url}]` };
                             }
-                        }
+                        })));
+                        parts.push(...imageParts);
                     }
                     else {
                         // Fallback for text-only models
@@ -170,7 +173,13 @@ OUTPUT RULES (VERY IMPORTANT):
                             ? {
                                 parts: [{ text: systemMessage.content }],
                             }
-                            : undefined,
+                            : {
+                                parts: [
+                                    {
+                                        text: "You are a professional AI developer assistant. Always format responses using clean Markdown and appropriate code blocks.",
+                                    },
+                                ],
+                            },
                     },
                 }));
                 try {
@@ -201,5 +210,27 @@ OUTPUT RULES (VERY IMPORTANT):
             }
         });
     }
+    generateEmbedding(text_1) {
+        return __awaiter(this, arguments, void 0, function* (text, retries = 2) {
+            var _a, _b;
+            try {
+                const response = yield this.ai.models.embedContent({
+                    model: "gemini-embedding-001",
+                    contents: text,
+                    config: { outputDimensionality: 768 },
+                });
+                return ((_b = (_a = response.embeddings) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.values) || response.embeddings || [];
+            }
+            catch (error) {
+                console.error(`Gemini Embedding Error (Retries left: ${retries}):`, error);
+                if (retries > 0) {
+                    yield new Promise(r => setTimeout(r, 1000)); // Wait 1s
+                    return this.generateEmbedding(text, retries - 1);
+                }
+                return [];
+            }
+        });
+    }
 }
 exports.GeminiAdapter = GeminiAdapter;
+GeminiAdapter.imageCache = new Map();

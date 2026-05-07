@@ -40,6 +40,7 @@ const chat_repository_1 = require("../repositories/chat.repository");
 const chatHistory_1 = require("../utils/chatHistory");
 const ai_service_1 = require("./ai.service");
 const chatStreamRegistry_service_1 = require("./chatStreamRegistry.service");
+const memory_service_1 = require("./memory.service");
 const getChatId = (chat) => String(chat._id);
 const createUserMessage = (content, userId, provider, attachments) => ({
     role: "user",
@@ -104,6 +105,17 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
         const providerName = aiProvider.getProviderName();
         const chatId = getChatId(chat);
         const promptMessages = (0, chatHistory_1.getLimitedMessages)(chat.messages);
+        // Inject long-term memory context
+        const lastUserMessage = chat.messages.filter(m => m.role === "user").pop();
+        const memoryContext = yield __await(memory_service_1.memoryService.getMemoryContext(chat.userId, lastUserMessage === null || lastUserMessage === void 0 ? void 0 : lastUserMessage.content));
+        if (memoryContext) {
+            promptMessages.unshift({
+                role: "system",
+                content: memoryContext,
+                userId: chat.userId,
+                status: "completed",
+            });
+        }
         // Create assistant message in its own collection
         const assistantMessageDoc = yield __await(chat_repository_1.chatRepository.saveMessage(chatId, {
             role: "assistant",
@@ -164,6 +176,13 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
             }
             chatStreamRegistry_service_1.chatStreamRegistry.complete(requestId);
             yield yield __await({ done: true, chatId, requestId, status: "completed" });
+            // Extract new memories in the background
+            const lastUserMessage = chat.messages.filter(m => m.role === "user").pop();
+            if (lastUserMessage) {
+                memory_service_1.memoryService.extractMemoriesFromMessage(chat.userId, lastUserMessage.content).catch(err => {
+                    console.error("Background memory extraction failed:", err);
+                });
+            }
         }
         catch (aiError) {
             if (activeStream.abortController.signal.aborted) {
@@ -175,23 +194,11 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
                 return yield __await(void 0);
             }
             console.error("AI Error in chat stream:", aiError);
-            const errorMessage = aiError instanceof Error
-                ? aiError.message
-                : "AI failed to respond, but your message was saved.";
             yield __await(chat_repository_1.chatRepository.updateMessage(assistantMessageDoc._id, {
-                content: errorMessage,
                 status: "failed",
-                model: providerName,
             }));
-            chatStreamRegistry_service_1.chatStreamRegistry.fail(requestId, errorMessage);
-            yield yield __await({
-                error: errorMessage,
-                done: true,
-                chatId,
-                requestId,
-                status: "failed",
-                model: providerName,
-            });
+            chatStreamRegistry_service_1.chatStreamRegistry.fail(requestId, "AI failed to respond");
+            yield yield __await({ error: "AI failed to respond, but your message was saved." });
         }
     });
 }
@@ -199,7 +206,7 @@ exports.chatService = {
     createChat(_a) {
         return __awaiter(this, arguments, void 0, function* ({ userId, message, provider, attachments }) {
             const resolvedUserId = requireUserId(userId);
-            const trimmedMessage = message === null || message === void 0 ? void 0 : message.trim();
+            const trimmedMessage = (message === null || message === void 0 ? void 0 : message.trim()) || "";
             const chat = chat_repository_1.chatRepository.create({
                 userId: resolvedUserId,
                 title: createTitle(trimmedMessage),
@@ -214,11 +221,28 @@ exports.chatService = {
                 const providerName = aiProvider.getProviderName();
                 // Get history for context
                 const messages = [userMessage];
-                const reply = yield aiProvider.generateResponse((0, chatHistory_1.getLimitedMessages)(messages));
+                // Inject long-term memory context
+                const memoryContext = yield memory_service_1.memoryService.getMemoryContext(resolvedUserId, trimmedMessage);
+                const promptMessages = (0, chatHistory_1.getLimitedMessages)(messages);
+                if (memoryContext) {
+                    promptMessages.unshift({
+                        role: "system",
+                        content: memoryContext,
+                        userId: resolvedUserId,
+                        status: "completed",
+                    });
+                }
+                const reply = yield aiProvider.generateResponse(promptMessages);
                 // Parse multimedia from reply
                 const { attachments: aiAttachments, type } = (0, chatHistory_1.parseMultimedia)(reply);
                 // Save Assistant Message
                 yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(resolvedUserId), providerName)), { attachments: aiAttachments, type: type }));
+                // Extract new memories in the background
+                if (trimmedMessage) {
+                    memory_service_1.memoryService.extractMemoriesFromMessage(resolvedUserId, trimmedMessage).catch(err => {
+                        console.error("Background memory extraction failed:", err);
+                    });
+                }
             }
             // Fetch the full chat with messages to return
             return yield chat_repository_1.chatRepository.findById(chatId);
@@ -256,11 +280,28 @@ exports.chatService = {
             const providerName = aiProvider.getProviderName();
             // Fetch updated history
             const updatedChat = yield chat_repository_1.chatRepository.findById(chatId);
-            const reply = yield aiProvider.generateResponse((0, chatHistory_1.getLimitedMessages)(updatedChat === null || updatedChat === void 0 ? void 0 : updatedChat.messages));
+            const promptMessages = (0, chatHistory_1.getLimitedMessages)(updatedChat === null || updatedChat === void 0 ? void 0 : updatedChat.messages);
+            // Inject long-term memory context
+            const memoryContext = yield memory_service_1.memoryService.getMemoryContext(String(chat.userId), trimmedMessage);
+            if (memoryContext) {
+                promptMessages.unshift({
+                    role: "system",
+                    content: memoryContext,
+                    userId: String(chat.userId),
+                    status: "completed",
+                });
+            }
+            const reply = yield aiProvider.generateResponse(promptMessages);
             // Parse multimedia from reply
             const { attachments: aiAttachments, type } = (0, chatHistory_1.parseMultimedia)(reply);
             // Save Assistant Message
             yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(chat.userId), providerName)), { attachments: aiAttachments, type: type }));
+            // Extract new memories in the background
+            if (trimmedMessage) {
+                memory_service_1.memoryService.extractMemoriesFromMessage(String(chat.userId), trimmedMessage).catch(err => {
+                    console.error("Background memory extraction failed:", err);
+                });
+            }
             return yield chat_repository_1.chatRepository.findById(chatId);
         });
     },
