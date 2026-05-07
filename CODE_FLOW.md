@@ -61,22 +61,34 @@ The "typing" effect is achieved through **Server-Sent Events (SSE)**.
 
 ---
 
-## 🧠 Core Logic: AI Memory (Vector Search / RAG)
+## 🧠 Core Logic: AI Memory (Advanced RAG System)
 
-Velora AI features a sophisticated long-term memory system that allows it to remember user facts across sessions.
+Velora AI implements a state-of-the-art **Retrieval-Augmented Generation (RAG)** system that enables "Long-Term Memory." This allows the assistant to learn about the user and recall that information months later.
 
-### 1. Memory Extraction (Learning)
-After every user message, a background service uses Gemini to analyze the text. If new facts (personal, preferences, technical) are found, they are extracted and categorized.
+### 1. Ingestion: Parallel Memory Extraction
+Every user message undergoes background analysis to "learn" new information:
+- **Extraction**: A specialized prompt uses Gemini to identify personal facts, preferences, or technical details from the message.
+- **Categorization**: Facts are tagged as `personal`, `preference`, `technical`, `work`, or `general`.
+- **Parallel Processing**: Extracted facts are processed and saved concurrently using **`Promise.all`**, ensuring the chat flow remains uninterrupted and fast.
 
-### 2. Semantic Embedding
-Each extracted fact is converted into a **768-dimensional vector** using the `text-embedding-004` model. This "embedding" represents the mathematical meaning of the text.
+### 2. Vectorization: Standardized 768-D Embeddings
+To enable semantic search, text must be converted into math:
+- **Model**: Uses `gemini-embedding-001` (or `text-embedding-004`).
+- **Standardization**: All embeddings are forced to **768 dimensions** for consistency across different chat providers.
+- **Self-Healing Logic**: The system automatically detects and repairs memories with missing or incorrectly dimensioned vectors (e.g., from old chat providers) whenever they are accessed.
 
-### 3. Vector Retrieval (RAG)
-When a user sends a message, the system:
-1.  Generates a vector for the **current message**.
-2.  Performs a **Vector Search** in MongoDB Atlas to find conceptually similar memories.
-3.  Injects the most relevant memories into the AI's system prompt.
-4.  **Identity Persistence**: Always includes "personal" category facts (like name) to ensure the AI never forgets who it is talking to.
+### 3. Retrieval: Importance-Boosted Search
+When a user sends a message, the system performs a multi-stage retrieval:
+1. **Identity Injection**: "Personal" category memories (identity, name) are always retrieved first to maintain persona consistency.
+2. **Vector Search**: The system searches the MongoDB Atlas Vector Index for the most semantically relevant facts.
+3. **Importance Boosting**: Retrieval is not just based on similarity. It uses the algorithm:
+   `FinalScore = SemanticSimilarity * ImportanceLevel`
+   This ensures that a "Critical" fact (Importance 5) bubbles to the top even if it is only a partial match.
+
+### 4. Augmentation: Token-Aware Context Injection
+The retrieved facts are injected into the **System Prompt** before sending the request to the AI:
+- **Token Control**: To prevent "Prompt Bloat" and save costs, the context is limited by a **Character Window (~2500 chars)**.
+- **Subtle Integration**: The system instructions specifically tell the AI to use these memories **naturally and subtly**, avoiding robotic phrases like "I remember that..." or repeating facts back to the user.
 
 ---
 
