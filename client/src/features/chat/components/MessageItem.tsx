@@ -1,11 +1,14 @@
+import { memo, useMemo } from "react";
 import { useUser } from "@clerk/react";
 import { User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useMessageStore } from "@/features/chat/store/message.store";
 import {
   assistantMarkdownComponents,
   userMarkdownComponents,
 } from "./MarkdownConfig";
+import { perfMonitor } from "@/features/chat/utils/performance.utils";
 
 interface Attachment {
   url: string;
@@ -14,23 +17,10 @@ interface Attachment {
   size?: number;
 }
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  type?: "text" | "image" | "file" | "action";
-  attachments?: Attachment[];
-}
-
-interface MessageItemProps {
-  message: Message;
-  isStreaming?: boolean;
-}
-
 /**
  * Renders a list of attachments (e.g. images)
  */
-const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
+const AttachmentList = memo(({ attachments }: { attachments: Attachment[] }) => {
   if (!attachments || attachments.length === 0) return null;
 
   return (
@@ -58,12 +48,12 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
       ))}
     </div>
   );
-};
+});
 
 /**
  * Avatar component for the message
  */
-const MessageAvatar = ({
+const MessageAvatar = memo(({
   isUser,
   imageUrl,
 }: {
@@ -85,12 +75,12 @@ const MessageAvatar = ({
       </div>
     )}
   </div>
-);
+));
 
 /**
  * Metadata component (Role name and Model badge)
  */
-const MessageMetadata = ({
+const MessageMetadata = memo(({
   isUser,
   model,
 }: {
@@ -115,23 +105,55 @@ const MessageMetadata = ({
       </span>
     )}
   </div>
-);
+));
+
+interface MessageItemProps {
+  messageId: string;
+  chatId: string;
+}
+
+const MemoizedMarkdown = memo(({ content, isUser }: { content: string, isUser: boolean }) => {
+   // Optional: stabilize incomplete code blocks during streaming
+   const stableContent = useMemo(() => {
+       const codeBlockCount = (content.match(/```/g) || []).length;
+       if (codeBlockCount % 2 !== 0) {
+           return content + "\n```"; // Close unclosed code block safely
+       }
+       return content;
+   }, [content]);
+
+   return (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={
+          isUser ? userMarkdownComponents : assistantMarkdownComponents
+        }
+      >
+        {stableContent}
+      </ReactMarkdown>
+   );
+}, (prev, next) => prev.content === next.content && prev.isUser === next.isUser);
 
 /**
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
+ * Subscribes only to its own message to prevent cascading rerenders.
  */
-const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
+const MessageItem = ({ messageId, chatId }: MessageItemProps) => {
+  perfMonitor.trackRender("MessageItem");
   const { user } = useUser();
+  const msg = useMessageStore((state) => 
+     state.messagesByChatId[chatId]?.find(m => m.id === messageId)
+  );
+
+  if (!msg) return null;
+
   const isUser = msg.role === "user";
+  const isStreaming = msg.status === "streaming";
 
   return (
     <div
-      className={`flex w-full ${
-        !isStreaming
-          ? "animate-in fade-in slide-in-from-bottom-2 duration-300"
-          : ""
-      } ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex w-full ${isUser ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
     >
       <div
         className={`flex w-full gap-4 md:gap-6 ${
@@ -167,14 +189,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
             ) : (
               <>
                 {msg.content && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={
-                      isUser ? userMarkdownComponents : assistantMarkdownComponents
-                    }
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                   <MemoizedMarkdown content={msg.content} isUser={isUser} />
                 )}
                 <AttachmentList attachments={msg.attachments || []} />
               </>
@@ -186,5 +201,4 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
   );
 };
 
-
-export default MessageItem;
+export default memo(MessageItem);

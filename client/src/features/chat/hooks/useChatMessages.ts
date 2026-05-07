@@ -1,69 +1,69 @@
 import { useState, useEffect } from "react";
-import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useChatStore } from "@/features/chat/store/chat.store";
+import { useMessageStore } from "@/features/chat/store/message.store";
 import { chatService } from "@/features/chat/services/chat.service";
 import { toast } from "sonner";
+import { useStreamStore } from "@/features/chat/store/stream.store";
 
 export const useChatMessages = () => {
-  const { currentChatId, messages, isStreaming, streamingChatId, setMessages } =
-    useChatStore();
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const reconcileMessages = useMessageStore((state) => state.reconcileMessages);
+  const setIsRefreshing = useMessageStore((state) => state.setIsRefreshing);
+  
+  // Track loading state for completely empty chats
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
 
   useEffect(() => {
-    // 1. If no chat is selected, reset states and return
     if (!currentChatId) {
-      queueMicrotask(() => {
-        setMessagesLoading(false);
-        setLoadedChatId(null);
-      });
+      setMessagesLoading(false);
+      setLoadedChatId(null);
       return;
     }
 
-    // 2. Let the active stream drive the visible messages without forcing a refetch later.
-    if (isStreaming && streamingChatId === currentChatId) {
-      queueMicrotask(() => {
-        setMessagesLoading(false);
-      });
-      return;
+    // Read store state imperatively to avoid React re-render subscription loops during streaming
+    const messagesByChatId = useMessageStore.getState().messagesByChatId;
+    const hasMessages = (messagesByChatId[currentChatId]?.length || 0) > 0;
+    const isStreaming = useStreamStore.getState().streamsByChatId[currentChatId]?.isStreaming;
+
+    // Do not block rendering if we already have messages
+    if (hasMessages) {
+       setLoadedChatId(currentChatId);
+    } else {
+       setMessagesLoading(true);
     }
 
-    // 3. Reuse messages already committed to the store, such as a finished stream.
-    if (messages.length > 0 && loadedChatId !== currentChatId) {
-      queueMicrotask(() => {
-        setLoadedChatId(currentChatId);
-        setMessagesLoading(false);
-      });
-      return;
-    }
-
-    // 4. If the chat is already loaded, don't fetch
-    if (loadedChatId === currentChatId) {
-      queueMicrotask(() => {
-        setMessagesLoading(false);
-      });
-      return;
+    // Skip silent refresh if actively streaming to prevent race conditions
+    if (isStreaming) {
+       setMessagesLoading(false);
+       return;
     }
 
     let cancelled = false;
 
     const loadMessages = async () => {
-      setMessagesLoading(true);
+      // Mark as refreshing in background (doesn't trigger full UI blocking loaders)
+      if (hasMessages) {
+        setIsRefreshing(currentChatId, true);
+      }
       
       try {
-        const messages = await chatService.fetchMessages(currentChatId);
+        const incomingMessages = await chatService.fetchMessages(currentChatId);
         
         if (!cancelled) {
-          setMessages(messages);
+          // Reconcile silently instead of destructive overwrite
+          reconcileMessages(currentChatId, incomingMessages);
           setLoadedChatId(currentChatId);
         }
       } catch (err) {
         console.error("[useChatMessages] Error fetching messages", err);
-        if (!cancelled) {
+        if (!cancelled && !hasMessages) {
           toast.error("Could not load messages for this chat.");
         }
       } finally {
         if (!cancelled) {
           setMessagesLoading(false);
+          setIsRefreshing(currentChatId, false);
         }
       }
     };
@@ -73,14 +73,7 @@ export const useChatMessages = () => {
     return () => {
       cancelled = true;
     };
-  }, [
-    currentChatId,
-    messages.length,
-    isStreaming,
-    streamingChatId,
-    loadedChatId,
-    setMessages,
-  ]);
+  }, [currentChatId, reconcileMessages, setIsRefreshing]); // safe dependencies
 
   return {
     messagesLoading,

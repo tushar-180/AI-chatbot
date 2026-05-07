@@ -1,4 +1,5 @@
-import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useChatStore } from "@/features/chat/store/chat.store";
+import { useUiStore } from "@/features/chat/store/ui.store";
 import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
 import MessageList from "@/features/chat/components/MessageList";
@@ -13,7 +14,9 @@ import { Spotlight } from "@/components/ui/spotlight";
  * Handles the main layout and orchestrates chat logic via custom hooks.
  */
 const Chat = () => {
-  const { currentChatId, messages, isNewChat, setSidebarOpen } = useChatStore();
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const isNewChat = useChatStore((state) => state.isNewChat);
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId } = useChatMessages();
@@ -22,7 +25,6 @@ const Chat = () => {
   const {
     streamMessage,
     stopGeneration,
-    optimisticMessages,
     isStreaming,
     loading: isCurrentChatLoading,
   } = useChatStream();
@@ -39,9 +41,6 @@ const Chat = () => {
   } = useChatInput({
     onSubmit: streamMessage,
   });
-
-  // Determine which messages to display (prefer optimistic during streaming)
-  const displayMessages = optimisticMessages ?? messages;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
@@ -60,9 +59,8 @@ const Chat = () => {
             onMenuClick={() => setSidebarOpen(true)}
           />
 
-          <div className="relative flex-1">
+          <div className="relative flex-1 flex flex-col">
             <MessageList
-              messages={displayMessages}
               loading={isCurrentChatLoading}
               messagesLoading={messagesLoading}
               hasLoadedCurrentChat={
