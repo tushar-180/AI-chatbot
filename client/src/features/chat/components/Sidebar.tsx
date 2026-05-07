@@ -1,5 +1,5 @@
 import { memo, useState, useRef, useEffect } from "react";
-import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useUiStore } from "@/features/chat/store/ui.store";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import type { Chat } from "@/features/chat/types/chat.types";
 import {
@@ -178,7 +178,9 @@ const SidebarChatItem = memo(
 );
 
 const Sidebar = () => {
-  const { sidebarOpen, setSidebarOpen } = useChatStore();
+  const sidebarOpen = useUiStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
+  
   const {
     chats,
     currentChatId,
@@ -187,6 +189,7 @@ const Sidebar = () => {
     renameChat,
     selectChat,
   } = useChatList();
+  
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);

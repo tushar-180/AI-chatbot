@@ -1,32 +1,31 @@
 import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
 import { toast } from "sonner";
-import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useChatStore } from "@/features/chat/store/chat.store";
+import { useMessageStore } from "@/features/chat/store/message.store";
+import { useUiStore } from "@/features/chat/store/ui.store";
 import { api } from "@/lib/api";
 
 export const useChatList = () => {
   const { user } = useUser();
   const fetchedUserIdRef = useRef<string | null>(null);
-  const {
-    chats,
-    currentChatId,
-    messages,
-    loading,
-    isStreaming,
-    isNewChat,
-    setChats,
-    setCurrentChat,
-    setMessages,
-    setIsNewChat,
-    setSidebarOpen,
-    removeChat,
-    updateChatTitle,
-  } = useChatStore();
+  
+  const chats = useChatStore((state) => state.chats);
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const isNewChat = useChatStore((state) => state.isNewChat);
+  const setChats = useChatStore((state) => state.setChats);
+  const setCurrentChat = useChatStore((state) => state.setCurrentChat);
+  const setIsNewChat = useChatStore((state) => state.setIsNewChat);
+  const removeChat = useChatStore((state) => state.removeChat);
+  const updateChatTitle = useChatStore((state) => state.updateChatTitle);
+
+  const removeChatMessages = useMessageStore((state) => state.removeChatMessages);
+  
+  const setSidebarOpen = useUiStore((state) => state.setSidebarOpen);
 
   const createChat = () => {
     setIsNewChat(true);
     setCurrentChat(null);
-    setMessages([]);
     setSidebarOpen(false);
   };
 
@@ -34,12 +33,14 @@ export const useChatList = () => {
     try {
       await api.delete(`/chat/${chatId}`);
       removeChat(chatId);
+      removeChatMessages(chatId);
       toast.success("Chat deleted successfully.");
     } catch (err) {
       console.error("Error deleting chat", err);
       toast.error("Could not delete chat.");
     }
   };
+
   const renameChat = async (chatId: string, title: string) => {
     try {
       await api.patch(`/chat/${chatId}`, { title });
@@ -48,9 +49,10 @@ export const useChatList = () => {
     } catch (err) {
       console.error("Error renaming chat", err);
       toast.error("Could not rename chat.");
-      throw err; // Propagate error to handle UI state in component
+      throw err;
     }
   };
+
   const selectChat = (chatId: string) => {
     if (chatId === currentChatId) {
       setSidebarOpen(false);
@@ -59,17 +61,11 @@ export const useChatList = () => {
 
     setIsNewChat(false);
     setCurrentChat(chatId);
-    setMessages([]); // Clear messages immediately for smoother transition
     setSidebarOpen(false);
   };
 
   useEffect(() => {
-    if (
-      !user?.id ||
-      loading ||
-      isStreaming ||
-      fetchedUserIdRef.current === user.id
-    ) {
+    if (!user?.id || fetchedUserIdRef.current === user.id) {
       return;
     }
 
@@ -84,18 +80,13 @@ export const useChatList = () => {
         setChats(fetchedChats);
 
         if (fetchedChats.length === 0) {
-          if (isNewChat || messages.length > 0) return;
+          if (isNewChat) return;
           setCurrentChat(null);
-          setMessages([]);
           return;
         }
 
-        const shouldAutoSelectFirstChat =
-          !currentChatId &&
-          !isNewChat &&
-          !loading &&
-          !isStreaming &&
-          messages.length === 0;
+        // Only auto select if current chat is null and it's not a requested new chat
+        const shouldAutoSelectFirstChat = !currentChatId && !isNewChat;
 
         if (shouldAutoSelectFirstChat) {
           setCurrentChat(fetchedChats[0]._id);
@@ -107,17 +98,7 @@ export const useChatList = () => {
     };
 
     fetchChats();
-  }, [
-    user?.id,
-    currentChatId,
-    isNewChat,
-    loading,
-    isStreaming,
-    messages.length,
-    setChats,
-    setCurrentChat,
-    setMessages,
-  ]);
+  }, [user?.id, currentChatId, isNewChat, setChats, setCurrentChat]);
 
   return {
     chats,
