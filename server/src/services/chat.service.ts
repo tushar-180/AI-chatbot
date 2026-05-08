@@ -160,6 +160,7 @@ async function* streamAssistantResponse(
 
   let fullResponse = "";
   let receivedFirstChunk = false;
+  let firstTokenTimedOut = false;
 
   try {
     const stream = aiProvider.generateStreamResponse(
@@ -171,6 +172,7 @@ async function* streamAssistantResponse(
     const timeout = setTimeout(() => {
       if (!receivedFirstChunk) {
         console.error(`AI generation timed out for requestId: ${requestId}`);
+        firstTokenTimedOut = true;
         activeStream.abortController.abort();
       }
     }, 30000);
@@ -183,6 +185,7 @@ async function* streamAssistantResponse(
 
         if (!receivedFirstChunk) {
           receivedFirstChunk = true;
+          firstTokenTimedOut = false;
           clearTimeout(timeout);
         }
 
@@ -231,7 +234,7 @@ async function* streamAssistantResponse(
     }
   } catch (aiError) {
     const isTimeout = aiError instanceof Error && aiError.message.includes("timed out") || 
-                     (activeStream.abortController.signal.aborted && !receivedFirstChunk);
+                     firstTokenTimedOut;
     const errorMessage = isTimeout 
       ? "AI generation timed out. Please try again."
       : "Server Error: AI failed to respond.";
