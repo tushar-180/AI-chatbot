@@ -1,5 +1,13 @@
-import { useRef, useEffect, useLayoutEffect, useCallback, memo, useState } from "react";
+import {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  memo,
+  useState,
+} from "react";
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+
 import MessageItem from "./MessageItem";
 
 interface Message {
@@ -60,100 +68,106 @@ const MessageList = ({
   onSuggestionClick,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const shouldAutoScrollRef = useRef(true);
-  const isProgrammaticScrollRef = useRef(false);
-  const programmaticScrollTimeoutRef = useRef<number | null>(null);
-  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const previousMessageCountRef = useRef(messages.length);
   const previousChatIdRef = useRef<string | null>(currentChatId);
 
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  
+
+  // GET ACTUAL SCROLL CONTAINER
+  const getScrollContainer = () => {
+    return scrollContainerRef.current?.closest(
+      ".overflow-y-auto",
+    ) as HTMLDivElement | null;
+  };
+
+  // CHECK IF USER IS NEAR BOTTOM\
   const isAtBottom = useCallback(() => {
-    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
+    const container = getScrollContainer();
+
     if (!container) return true;
 
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    return scrollHeight - scrollTop - clientHeight < 10;
-  }, []);
 
-  const scrollToBottom = useCallback((instant = false) => {
-    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight <100
+      
+    );
+  }, [])
+
+  // SCROLL TO BOTTOM
+  const scrollToBottom = useCallback((smooth = false) => {
+    const container = getScrollContainer();
+
     if (!container) return;
 
-    isProgrammaticScrollRef.current = true;
-    shouldAutoScrollRef.current = true;
-    setShowScrollToBottom(false);
-
-    requestAnimationFrame(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: instant ? "auto" : "smooth",
-      });
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: smooth ? "smooth" : "auto",
     });
 
-    if (programmaticScrollTimeoutRef.current) {
-      window.clearTimeout(programmaticScrollTimeoutRef.current);
-    }
+    shouldAutoScrollRef.current = true;
 
-    programmaticScrollTimeoutRef.current = window.setTimeout(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "auto",
-      });
-      isProgrammaticScrollRef.current = false;
-      setShowScrollToBottom(false);
-      programmaticScrollTimeoutRef.current = null;
-    }, instant ? 0 : 300);
+    setShowScrollToBottom(false);
   }, []);
 
-  const handleScroll = useCallback(() => {
-    if (isProgrammaticScrollRef.current) return;
 
+  // HANDLE USER SCROLL
+
+  const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
-    setShowScrollToBottom(!atBottom);
+
     shouldAutoScrollRef.current = atBottom;
+
+    setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
 
-  // Initial scroll and chat change
   useEffect(() => {
     if (currentChatId !== previousChatIdRef.current) {
       shouldAutoScrollRef.current = true;
-      scrollToBottom(true);
+
+      scrollToBottom(false);
+
       setShowScrollToBottom(false);
+
       previousChatIdRef.current = currentChatId;
     }
   }, [currentChatId, scrollToBottom]);
 
-  // Handle new messages and streaming
+
+  // AUTO SCROLL DURING STREAMING
+  
   useLayoutEffect(() => {
     const messageCountChanged =
       messages.length !== previousMessageCountRef.current;
 
-    if (messageCountChanged || isStreaming) {
-      if (shouldAutoScrollRef.current) {
-        scrollToBottom(!isStreaming);
-        setShowScrollToBottom(false);
-      }
+    if ((messageCountChanged || isStreaming) && shouldAutoScrollRef.current) {
+      scrollToBottom(false);
     }
 
     previousMessageCountRef.current = messages.length;
   }, [messages, isStreaming, scrollToBottom]);
 
+
   useEffect(() => {
-    const container = scrollContainerRef.current?.closest(".overflow-y-auto");
+    const container = getScrollContainer();
+
     if (!container) return;
 
-    if (!isProgrammaticScrollRef.current) {
-      setShowScrollToBottom(!isAtBottom());
-    }
-
     container.addEventListener("scroll", handleScroll);
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [handleScroll, isAtBottom, currentChatId]);
+
+    handleScroll();
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, [handleScroll, currentChatId]);
 
 
   const showSuggestions = !currentChatId && messages.length === 0;
+
 
   return (
     <div
@@ -164,14 +178,20 @@ const MessageList = ({
     >
       <div className="mx-auto max-w-5xl flex flex-col gap-7">
         {showSuggestions ? (
-          <div className="flex  w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
+          <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
             <div className="mb-10 flex flex-col items-center text-center">
               <div className="mb-6 flex items-center justify-center">
-                <img src="/logo.png" alt="Velora Logo" className="h-24 w-24 object-contain object-center" />
+                <img
+                  src="/logo.png"
+                  alt="Velora Logo"
+                  className="h-24 w-24 object-contain object-center"
+                />
               </div>
+
               <h2 className="mb-3 text-2xl font-bold tracking-tight text-white md:text-3xl">
                 How can I help you today?
               </h2>
+
               <p className="max-w-md leading-relaxed text-slate-400">
                 {isNewChat
                   ? "Your new conversation is ready. Choose a suggestion below or send a message to get started."
@@ -184,16 +204,18 @@ const MessageList = ({
                 <button
                   key={idx}
                   onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                  className="group flex flex-col items-start p-6 text-left bg-white/2 border border-white/5 hover:border-white/20 hover:bg-white/4 rounded-2xl transition-all duration-300"
+                  className="group flex flex-col items-start rounded-2xl border border-white/5 bg-white/2 p-6 text-left transition-all duration-300 hover:border-white/20 hover:bg-white/4"
                 >
                   <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors group-hover:text-indigo-400">
                     <div className="rounded-xl bg-slate-800/50 p-2 transition-colors group-hover:bg-indigo-500/10">
                       <suggestion.icon size={20} />
                     </div>
+
                     <span className="font-medium text-slate-200">
                       {suggestion.title}
                     </span>
                   </div>
+
                   <p className="text-sm text-slate-500 transition-colors group-hover:text-slate-400">
                     {suggestion.desc}
                   </p>
@@ -206,12 +228,17 @@ const MessageList = ({
           <div className="flex w-full animate-in fade-in justify-start duration-300">
             <div className="flex max-w-[85%] flex-row gap-3">
               <div className="flex shrink-0 items-center justify-center">
-                <img src="/logo.png" alt="Velora Logo" className="h-7 w-7 object-contain animate-pulse" />
+                <img
+                  src="/logo.png"
+                  alt="Velora Logo"
+                  className="h-7 w-7 object-contain animate-pulse"
+                />
               </div>
+
               <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></div>
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></div>
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
               </div>
             </div>
           </div>
@@ -240,12 +267,13 @@ const MessageList = ({
                   </div>
                 </div>
               )}
-            <div ref={messagesEndRef} />
+
+            {/* SCROLL TO BOTTOM BUTTON */}
             {showScrollToBottom && messages.length > 0 && (
               <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
                 <button
                   type="button"
-                  onClick={() => scrollToBottom()}
+                  onClick={() => scrollToBottom(true)}
                   aria-label="Scroll to bottom"
                   className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
                 >
