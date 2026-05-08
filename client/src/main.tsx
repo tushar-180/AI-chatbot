@@ -9,7 +9,7 @@ createRoot(document.getElementById('root')!).render(
  
     <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} unsafe_disableDevelopmentModeConsoleWarning>
       <App />
-      <Toaster />
+     <Toaster position="top-center" richColors />
     </ClerkProvider>
   
 )
