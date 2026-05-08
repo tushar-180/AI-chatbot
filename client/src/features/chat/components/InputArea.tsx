@@ -6,19 +6,8 @@ import {
   memo,
   useState,
 } from "react";
-<<<<<<< HEAD
 import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X,Mic } from "lucide-react";
 
-=======
-import {
-  ArrowUp,
-  Loader2,
-  ChevronDown,
-  Square,
-  Paperclip,
-  X,
-} from "lucide-react";
->>>>>>> staging
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -150,7 +139,6 @@ const InputArea = ({
 
   const [isUploading, setIsUploading] = useState(false);
 
-<<<<<<< HEAD
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
   onResult: (text) => {
     console.log("✍️ Injecting voice text into input:", text);
@@ -161,8 +149,6 @@ const InputArea = ({
 
 
 
-=======
->>>>>>> staging
   const { availableProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
