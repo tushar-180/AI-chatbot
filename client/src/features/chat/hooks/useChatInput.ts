@@ -10,7 +10,11 @@ export interface Attachment {
 }
 
 interface UseChatInputProps {
-  onSubmit: (input: string, provider: string, attachments?: Attachment[]) => Promise<void>;
+  onSubmit: (
+    input: string,
+    provider: string,
+    attachments?: Attachment[],
+  ) => Promise<void>;
   initialProvider?: string;
 }
 
@@ -30,10 +34,10 @@ export const useChatInput = ({
 
     const currentInput = input;
     const currentAttachments = [...attachments];
-    
-    setInput(""); 
+
+    setInput("");
     setAttachments([]); // Clear both
-    
+
     await onSubmit(currentInput, selectedProvider, currentAttachments);
   };
 

@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+
 type DeleteConfirmModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -9,21 +12,34 @@ export default function DeleteConfirmModal({
   onClose,
   onConfirm,
 }: DeleteConfirmModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      
-      <div className="w-[400px] max-w-[90vw] rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-200">
-        
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <div 
+        className="w-[400px] max-w-[90vw] rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6">
-          <h2 className="text-lg font-bold text-white mb-2">
-            Delete chat?
-          </h2>
-
-          <p className="text-sm text-slate-400">
-            This will delete the chat.
-          </p>
+          <h2 className="text-lg font-bold text-white mb-2">Delete chat?</h2>
+          <p className="text-sm text-slate-400">This will delete the chat.</p>
         </div>
 
         <div className="flex justify-end gap-3 px-6 pb-6 pt-2">
@@ -42,6 +58,7 @@ export default function DeleteConfirmModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

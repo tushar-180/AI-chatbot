@@ -1,7 +1,11 @@
 import { GoogleGenAI } from "@google/genai";
 import { IAIService } from "../ai.interface";
 import { AIMessage, AIServiceError } from "../types";
-import { AI_PROVIDERS, getDisplayProviderName, supportsVision } from "../constants";
+import {
+  AI_PROVIDERS,
+  getDisplayProviderName,
+  supportsVision,
+} from "../constants";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -9,7 +13,10 @@ dotenv.config();
 export class GeminiAdapter implements IAIService {
   private ai: GoogleGenAI;
   private model: string;
-  private static imageCache = new Map<string, { data: string; mimeType: string }>();
+  private static imageCache = new Map<
+    string,
+    { data: string; mimeType: string }
+  >();
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -50,21 +57,26 @@ export class GeminiAdapter implements IAIService {
                     }
 
                     const response = await fetch(att.url);
-                    if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
-                    
+                    if (!response.ok)
+                      throw new Error(`Fetch failed: ${response.statusText}`);
+
                     const arrayBuffer = await response.arrayBuffer();
-                    const base64Data = Buffer.from(arrayBuffer).toString('base64');
-                    const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
-                    
+                    const base64Data =
+                      Buffer.from(arrayBuffer).toString("base64");
+                    const mimeType =
+                      att.mimeType ||
+                      response.headers.get("content-type") ||
+                      "image/jpeg";
+
                     const data = { mimeType, data: base64Data };
                     GeminiAdapter.imageCache.set(att.url, data);
-                    
+
                     return { inlineData: data };
                   } catch (err) {
                     console.error(`Failed to process image: ${att.url}`, err);
                     return { text: `\n[Image unavailable: ${att.url}]` };
                   }
-                })
+                }),
               );
               parts.push(...imageParts);
             } else {
@@ -80,7 +92,7 @@ export class GeminiAdapter implements IAIService {
             role: msg.role === "assistant" ? "model" : "user",
             parts,
           };
-        })
+        }),
     );
   }
 
@@ -195,9 +207,12 @@ OUTPUT RULES (VERY IMPORTANT):
 
       return response.embeddings?.[0]?.values || response.embeddings || [];
     } catch (error: any) {
-      console.error(`Gemini Embedding Error (Retries left: ${retries}):`, error);
+      console.error(
+        `Gemini Embedding Error (Retries left: ${retries}):`,
+        error,
+      );
       if (retries > 0) {
-        await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+        await new Promise((r) => setTimeout(r, 1000)); // Wait 1s
         return this.generateEmbedding(text, retries - 1);
       }
       return [];

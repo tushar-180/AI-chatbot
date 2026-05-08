@@ -77,6 +77,7 @@ export const chatService = {
    */
   getChatErrorMessage(error: unknown): string {
     if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
       const apiMessage =
         typeof error.response?.data?.error === "string"
           ? error.response.data.error
@@ -87,8 +88,24 @@ export const chatService = {
         return `${apiMessage} Try again in about ${retryAfter} seconds.`;
       }
 
-      return apiMessage || error.message;
+      if (status === 401 || status === 403) {
+        return "Server Error: Authentication failed. Please check API configuration.";
+      }
+
+      if (status && status >= 500) {
+        return "Server Error: AI failed to respond. Please try again later.";
+      }
+
+      return apiMessage || "Server Error: Unable to connect to AI service.";
     }
-    return "Something went wrong while sending your message.";
+
+    if (error instanceof Error) {
+      if (error.name === "AbortError" || error.message.includes("timed out")) {
+        return "AI generation timed out. Please try again.";
+      }
+      return error.message;
+    }
+
+    return "Server Error: Something went wrong while sending your message.";
   },
 };
