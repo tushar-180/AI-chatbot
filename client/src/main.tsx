@@ -9,9 +9,10 @@ import { ServerStatusProvider } from './contexts/ServerStatusContext'
 createRoot(document.getElementById('root')!).render(
  
     <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY} unsafe_disableDevelopmentModeConsoleWarning>
+    
       <ServerStatusProvider>
         <App />
-        <Toaster />
+      <Toaster position="top-center" richColors />
       </ServerStatusProvider>
     </ClerkProvider>
   

@@ -6,6 +6,10 @@ import {
   memo,
   useState,
 } from "react";
+<<<<<<< HEAD
+import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X,Mic } from "lucide-react";
+
+=======
 import {
   ArrowUp,
   Loader2,
@@ -14,6 +18,7 @@ import {
   Paperclip,
   X,
 } from "lucide-react";
+>>>>>>> staging
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -29,6 +34,7 @@ import { supportsVision } from "@/features/chat/constants/chat.constants";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Attachment } from "@/features/chat/hooks/useChatInput";
+import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
 
 interface InputAreaProps {
   input: string;
@@ -80,6 +86,7 @@ const ModelSelector = ({
   const currentProviderName =
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
+
 
   return (
     <div className="flex items-center px-4 pt-3">
@@ -140,8 +147,22 @@ const InputArea = ({
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [isUploading, setIsUploading] = useState(false);
 
+<<<<<<< HEAD
+  const { isListening, isSpeaking, start, stop } = useVoiceInput({
+  onResult: (text) => {
+    console.log("✍️ Injecting voice text into input:", text);
+    onInputChange(text);
+  },
+});
+
+
+
+
+=======
+>>>>>>> staging
   const { availableProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
@@ -298,7 +319,43 @@ const InputArea = ({
               }
               className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
             />
+<button
+  type="button"
+  onClick={() => {
+    if (isListening) {
+      stop();
+    } else {
+      start();
+    }
+  }}
+  className={`relative flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 overflow-hidden ${
+    isListening
+      ? "bg-rose-500/20 text-rose-400"
+      : "text-slate-500 hover:text-white hover:bg-white/5"
+  }`}
+  aria-label="Voice input"
+>
+  {/* Listening animation */}
+  {isListening && !isSpeaking && (
+    <span className="absolute inset-0 rounded-full border border-rose-400/40 animate-pulse" />
+  )}
 
+  {/* Speaking animation */}
+  {isSpeaking && (
+    <>
+      <span className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping" />
+      <span className="absolute inset-1 rounded-full border border-rose-300 animate-pulse" />
+    </>
+  )}
+
+  <span className="relative z-10 flex items-center justify-center">
+    {isListening ? (
+      <Square size={14} fill="currentColor" />
+    ) : (
+      <Mic size={18} />
+    )}
+  </span>
+</button>
             {isStreaming ? (
               <button
                 type="button"
