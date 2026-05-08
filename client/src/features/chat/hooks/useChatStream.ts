@@ -35,7 +35,9 @@ export const useChatStream = () => {
     Record<string, Message[] | null>
   >({});
   const activeAbortControllerRef = useRef<AbortController | null>(null);
-  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const activeRequestIdRef = useRef<string | null>(null);
   const activeResolvedChatIdRef = useRef<string | null>(null);
   const stopRequestedRef = useRef(false);
@@ -382,7 +384,7 @@ export const useChatStream = () => {
 
     try {
       const url = chatService.getStreamUrl(currentChatId || undefined);
-      
+
       // Client-side safety timeout for connection
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {

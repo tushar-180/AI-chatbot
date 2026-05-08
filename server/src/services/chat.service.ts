@@ -233,9 +233,10 @@ async function* streamAssistantResponse(
         });
     }
   } catch (aiError) {
-    const isTimeout = aiError instanceof Error && aiError.message.includes("timed out") || 
-                     firstTokenTimedOut;
-    const errorMessage = isTimeout 
+    const isTimeout =
+      (aiError instanceof Error && aiError.message.includes("timed out")) ||
+      firstTokenTimedOut;
+    const errorMessage = isTimeout
       ? "AI generation timed out. Please try again."
       : "Server Error: AI failed to respond.";
 
