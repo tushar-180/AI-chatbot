@@ -49,12 +49,14 @@ const Chat = () => {
 
       <main className="relative flex flex-1 flex-col h-screen overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
         {/* Spotlight Component - Positioned correctly */}
-          <Spotlight
+        <Spotlight
           className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
-            fill="rgba(255, 255, 255, 0.05)"
-          />
+          fill="rgba(255, 255, 255, 0.05)"
+        />
 
-        <div className="flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)]">
+        <div
+          className={`flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
+        >
           <ChatHeader
             currentChatId={currentChatId}
             onMenuClick={() => setSidebarOpen(true)}
