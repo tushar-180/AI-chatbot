@@ -1,7 +1,11 @@
 import { EventEmitter } from "events";
 
 export type ChatRole = "user" | "assistant" | "system";
-export type ChatMessageStatus = "streaming" | "stopped" | "completed" | "failed";
+export type ChatMessageStatus =
+  | "streaming"
+  | "stopped"
+  | "completed"
+  | "failed";
 export type ChatMessageType = "text" | "image" | "file" | "action";
 
 export type Attachment = {

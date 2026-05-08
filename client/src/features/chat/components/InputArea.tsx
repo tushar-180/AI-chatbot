@@ -6,7 +6,14 @@ import {
   memo,
   useState,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X } from "lucide-react";
+import {
+  ArrowUp,
+  Loader2,
+  ChevronDown,
+  Square,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { ProviderIcon } from "@lobehub/icons";
 import {
   DropdownMenu,
@@ -134,7 +141,7 @@ const InputArea = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  
+
   const { availableProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
@@ -156,7 +163,11 @@ const InputArea = ({
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if ((input.trim() || attachments.length > 0) && !loading && !isUploading) {
+      if (
+        (input.trim() || attachments.length > 0) &&
+        !loading &&
+        !isUploading
+      ) {
         const event = {
           preventDefault: () => {},
         } as SyntheticEvent<HTMLFormElement>;
@@ -170,7 +181,7 @@ const InputArea = ({
     if (!file) return;
 
     // Basic validation
-    if (!file.type.startsWith('image/')) {
+    if (!file.type.startsWith("image/")) {
       toast.error("Only image uploads are supported currently");
       return;
     }
@@ -186,9 +197,9 @@ const InputArea = ({
 
     try {
       const res = await api.post("/upload/image", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
       });
-      
+
       const newAttachment: Attachment = {
         url: res.data.url,
         name: file.name,
@@ -215,7 +226,10 @@ const InputArea = ({
 
   return (
     <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
-      <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative pointer-events-auto">
+      <form
+        onSubmit={onSubmit}
+        className="mx-auto max-w-4xl relative pointer-events-auto"
+      >
         <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
           <ModelSelector
             availableProviders={availableProviders}
@@ -227,8 +241,15 @@ const InputArea = ({
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 px-4 py-2">
               {attachments.map((att, i) => (
-                <div key={att.url} className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5">
-                  <img src={att.url} alt={att.name} className="h-full w-full object-cover" />
+                <div
+                  key={att.url}
+                  className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                >
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="h-full w-full object-cover"
+                  />
                   <button
                     type="button"
                     onClick={() => removeAttachment(i)}
@@ -249,7 +270,7 @@ const InputArea = ({
               className="hidden"
               accept="image/*"
             />
-            
+
             {canUpload && (
               <button
                 type="button"
@@ -275,7 +296,7 @@ const InputArea = ({
               placeholder={
                 currentChatId ? "Ask anything..." : "Start a conversation..."
               }
-              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? 'px-1' : 'px-4'} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
+              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
             />
 
             {isStreaming ? (
@@ -294,9 +315,15 @@ const InputArea = ({
             ) : (
               <button
                 type="submit"
-                disabled={loading || isUploading || (!input.trim() && attachments.length === 0)}
+                disabled={
+                  loading ||
+                  isUploading ||
+                  (!input.trim() && attachments.length === 0)
+                }
                 className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  loading || isUploading || (!input.trim() && attachments.length === 0)
+                  loading ||
+                  isUploading ||
+                  (!input.trim() && attachments.length === 0)
                     ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                     : "bg-white text-slate-900 hover:bg-slate-200"
                 }`}

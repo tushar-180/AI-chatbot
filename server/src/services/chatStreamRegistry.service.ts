@@ -80,7 +80,9 @@ export const chatStreamRegistry = {
 
     if (!activeStream) return;
 
-    activeStream.emitter.emit("error", message);
+    if (activeStream.emitter.listenerCount("error") > 0) {
+      activeStream.emitter.emit("error", message);
+    }
     activeStreams.delete(requestId);
     activeChatRequests.delete(activeStream.chatId);
   },

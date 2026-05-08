@@ -1,7 +1,11 @@
 import OpenAI from "openai";
 import { IAIService } from "../ai.interface";
 import { AIMessage, AIServiceError } from "../types";
-import { AI_PROVIDERS, getDisplayProviderName, supportsVision } from "../constants";
+import {
+  AI_PROVIDERS,
+  getDisplayProviderName,
+  supportsVision,
+} from "../constants";
 
 export class NvidiaAdapter implements IAIService {
   private openai: OpenAI;
