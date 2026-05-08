@@ -5,7 +5,7 @@
 @import "shadcn/tailwind.css";
 
 @theme {
-  --animate-spotlight: spotlight 2s ease .75s 1 forwards;
+  --animate-spotlight: spotlight 2s ease 0.75s 1 forwards;
 }
 
 @keyframes spotlight {
@@ -21,7 +21,7 @@
 
 @layer utilities {
   .animate-spotlight {
-    animation: spotlight 2s ease .75s 1 forwards;
+    animation: spotlight 2s ease 0.75s 1 forwards;
   }
 
   .scrollbar-hide {
@@ -32,7 +32,6 @@
     display: none;
   }
 }
-
 
 :root {
   color-scheme: light;
@@ -169,12 +168,69 @@
     background: transparent;
   }
 
-  @keyframes caret-blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0; }
+  /* Optimized animations for smooth streaming - reduced flickering */
+  @keyframes smooth-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
-  .animate-caret-blink {
-    animation: caret-blink 1s steps(2) infinite;
+  @keyframes smooth-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateY(-6px);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+
+  @keyframes fade-in-smooth {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 4px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  /* Use will-change sparingly for performance */
+  .animate-bounce {
+    animation: smooth-bounce 1s infinite;
+    will-change: transform;
+  }
+
+  .animate-pulse {
+    animation: smooth-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-in {
+    animation: fade-in-smooth 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  .animate-in.fade-in {
+    animation: fade-in-smooth 0.2s ease-out forwards;
+  }
+
+  /* Reduce motion on smaller devices */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-in,
+    .animate-bounce,
+    .animate-pulse {
+      animation: none;
+    }
+  }
+
+  /* Performance optimization for streaming */
+  .will-change-scroll {
+    will-change: scroll-position;
   }
 }
