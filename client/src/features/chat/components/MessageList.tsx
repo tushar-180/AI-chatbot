@@ -6,13 +6,7 @@ import {
   memo,
   useState,
 } from "react";
-import {
-  ChevronDown,
-  Code,
-  Lightbulb,
-  PenTool,
-  Terminal,
-} from "lucide-react";
+import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 
 import MessageItem from "./MessageItem";
 
@@ -81,6 +75,9 @@ const MessageList = ({
   // Ignore scroll events caused by our own auto-scroll
   const autoScrollingRef = useRef(false);
 
+  // Track if user is currently streaming a message
+  const isStreamingMessageRef = useRef(false);
+
   const previousMessageCountRef = useRef(messages.length);
   const previousChatIdRef = useRef<string | null>(currentChatId);
 
@@ -91,7 +88,7 @@ const MessageList = ({
   // ─────────────────────────────────────────────
   const getScrollContainer = () => {
     return scrollContainerRef.current?.closest(
-      ".overflow-y-auto"
+      ".overflow-y-auto",
     ) as HTMLDivElement | null;
   };
 
@@ -103,18 +100,16 @@ const MessageList = ({
 
     if (!container) return true;
 
-    const threshold = 120;
+    const threshold = 100;
 
     return (
-      container.scrollHeight -
-        container.scrollTop -
-        container.clientHeight <
+      container.scrollHeight - container.scrollTop - container.clientHeight <
       threshold
     );
   }, []);
 
   // ─────────────────────────────────────────────
-  // SCROLL TO BOTTOM
+  // SCROLL TO BOTTOM (OPTIMIZED)
   // ─────────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = false) => {
     const container = getScrollContainer();
@@ -123,24 +118,24 @@ const MessageList = ({
 
     autoScrollingRef.current = true;
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: smooth ? "smooth" : "auto",
-    });
-
-    shouldAutoScrollRef.current = true;
-
-    setShowScrollToBottom(false);
-
+    // Use requestAnimationFrame for smoother scrolling
     requestAnimationFrame(() => {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+
       requestAnimationFrame(() => {
         autoScrollingRef.current = false;
       });
     });
+
+    shouldAutoScrollRef.current = true;
+    setShowScrollToBottom(false);
   }, []);
 
   // ─────────────────────────────────────────────
-  // HANDLE USER SCROLL
+  // HANDLE USER SCROLL (OPTIMIZED)
   // ─────────────────────────────────────────────
   const handleScroll = useCallback(() => {
     // Ignore scroll events triggered by auto-scroll
@@ -148,7 +143,13 @@ const MessageList = ({
 
     const atBottom = isAtBottom();
 
-    shouldAutoScrollRef.current = atBottom;
+    // If user manually scrolls away from bottom, disable auto-scroll
+    // It will NOT re-enable until a new message arrives
+    if (!atBottom) {
+      shouldAutoScrollRef.current = false;
+    }
+    // Do NOT re-enable auto-scroll by scrolling to bottom
+    // It will only re-enable when a new message arrives
 
     setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
@@ -169,25 +170,42 @@ const MessageList = ({
   }, [currentChatId, scrollToBottom]);
 
   // ─────────────────────────────────────────────
-  // AUTO SCROLL DURING STREAMING
+  // AUTO SCROLL DURING STREAMING (OPTIMIZED)
   // ─────────────────────────────────────────────
   useLayoutEffect(() => {
     const previousMessageCount = previousMessageCountRef.current;
     const messageCountChanged = messages.length !== previousMessageCount;
-    const addedMessages = messages.slice(previousMessageCount);
-    const hasNewUserMessage = addedMessages.some(
-      (message) => message.role === "user"
-    );
+    const lastMessage = messages[messages.length - 1];
+    const isNewUserMessage =
+      lastMessage?.role === "user" && messageCountChanged;
 
-    if (
-      hasNewUserMessage ||
-      ((messageCountChanged || isStreaming) && shouldAutoScrollRef.current)
-    ) {
+    // User sent a new message - ALWAYS re-enable auto-scroll
+    if (isNewUserMessage) {
+      shouldAutoScrollRef.current = true;
+      isStreamingMessageRef.current = true;
+      scrollToBottom(false);
+    }
+    // New assistant message arrived - re-enable auto-scroll
+    else if (messageCountChanged && lastMessage?.role === "assistant") {
+      shouldAutoScrollRef.current = true;
+      isStreamingMessageRef.current = true;
+      scrollToBottom(false);
+    }
+    // During streaming of current message, continue scrolling smoothly if enabled
+    else if (shouldAutoScrollRef.current && isStreamingMessageRef.current) {
       scrollToBottom(false);
     }
 
+    // Track message count for next comparison
     previousMessageCountRef.current = messages.length;
   }, [messages, isStreaming, scrollToBottom]);
+
+  // Track when streaming completes
+  useEffect(() => {
+    if (!isStreaming) {
+      isStreamingMessageRef.current = false;
+    }
+  }, [isStreaming]);
 
   // ─────────────────────────────────────────────
   // ATTACH SCROLL LISTENER
@@ -289,21 +307,22 @@ const MessageList = ({
         ) : (
           <>
             {messages.map((msg, i) => (
-              <MessageItem
-                key={i}
-                message={msg}
-                isStreaming={isStreaming && i === messages.length - 1}
-              />
+              <div key={i} className="animate-in fade-in duration-200">
+                <MessageItem
+                  message={msg}
+                  isStreaming={isStreaming && i === messages.length - 1}
+                />
+              </div>
             ))}
 
             {isStreaming &&
               messages.length > 0 &&
               messages[messages.length - 1].role === "user" && (
-                <div className="flex w-full animate-in fade-in justify-start duration-300">
+                <div className="flex w-full justify-start duration-300">
                   <div className="flex items-center gap-3 py-6">
-                    <div className="h-1 w-1 animate-pulse rounded-full bg-white/40" />
-                    <div className="delay-75 h-1 w-1 animate-pulse rounded-full bg-white/40" />
-                    <div className="delay-150 h-1 w-1 animate-pulse rounded-full bg-white/40" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:100ms]" />
+                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:200ms]" />
                   </div>
                 </div>
               )}
@@ -319,9 +338,9 @@ const MessageList = ({
                 >
                   {isStreaming ? (
                     <div className="flex items-center gap-1">
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70 [animation-delay:-0.3s]" />
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70 [animation-delay:-0.15s]" />
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:100ms]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:200ms]" />
                     </div>
                   ) : (
                     <ChevronDown size={20} />
