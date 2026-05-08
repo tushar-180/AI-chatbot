@@ -6,7 +6,13 @@ import {
   memo,
   useState,
 } from "react";
-import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import {
+  ChevronDown,
+  Code,
+  Lightbulb,
+  PenTool,
+  Terminal,
+} from "lucide-react";
 
 import MessageItem from "./MessageItem";
 
@@ -69,39 +75,53 @@ const MessageList = ({
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+  // Should auto-scroll continue?
   const shouldAutoScrollRef = useRef(true);
+
+  // Ignore scroll events caused by our own auto-scroll
+  const autoScrollingRef = useRef(false);
 
   const previousMessageCountRef = useRef(messages.length);
   const previousChatIdRef = useRef<string | null>(currentChatId);
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  
 
-  // GET ACTUAL SCROLL CONTAINER
+  // ─────────────────────────────────────────────
+  // GET REAL SCROLL CONTAINER
+  // ─────────────────────────────────────────────
   const getScrollContainer = () => {
     return scrollContainerRef.current?.closest(
-      ".overflow-y-auto",
+      ".overflow-y-auto"
     ) as HTMLDivElement | null;
   };
 
-  // CHECK IF USER IS NEAR BOTTOM\
+  // ─────────────────────────────────────────────
+  // CHECK IF USER IS NEAR BOTTOM
+  // ─────────────────────────────────────────────
   const isAtBottom = useCallback(() => {
     const container = getScrollContainer();
 
     if (!container) return true;
 
+    const threshold = 120;
 
     return (
-      container.scrollHeight - container.scrollTop - container.clientHeight <100
-      
+      container.scrollHeight -
+        container.scrollTop -
+        container.clientHeight <
+      threshold
     );
-  }, [])
+  }, []);
 
+  // ─────────────────────────────────────────────
   // SCROLL TO BOTTOM
+  // ─────────────────────────────────────────────
   const scrollToBottom = useCallback((smooth = false) => {
     const container = getScrollContainer();
 
     if (!container) return;
+
+    autoScrollingRef.current = true;
 
     container.scrollTo({
       top: container.scrollHeight,
@@ -111,12 +131,21 @@ const MessageList = ({
     shouldAutoScrollRef.current = true;
 
     setShowScrollToBottom(false);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        autoScrollingRef.current = false;
+      });
+    });
   }, []);
 
-
+  // ─────────────────────────────────────────────
   // HANDLE USER SCROLL
-
+  // ─────────────────────────────────────────────
   const handleScroll = useCallback(() => {
+    // Ignore scroll events triggered by auto-scroll
+    if (autoScrollingRef.current) return;
+
     const atBottom = isAtBottom();
 
     shouldAutoScrollRef.current = atBottom;
@@ -124,6 +153,9 @@ const MessageList = ({
     setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
 
+  // ─────────────────────────────────────────────
+  // HANDLE CHAT CHANGE
+  // ─────────────────────────────────────────────
   useEffect(() => {
     if (currentChatId !== previousChatIdRef.current) {
       shouldAutoScrollRef.current = true;
@@ -136,21 +168,30 @@ const MessageList = ({
     }
   }, [currentChatId, scrollToBottom]);
 
-
+  // ─────────────────────────────────────────────
   // AUTO SCROLL DURING STREAMING
-  
+  // ─────────────────────────────────────────────
   useLayoutEffect(() => {
-    const messageCountChanged =
-      messages.length !== previousMessageCountRef.current;
+    const previousMessageCount = previousMessageCountRef.current;
+    const messageCountChanged = messages.length !== previousMessageCount;
+    const addedMessages = messages.slice(previousMessageCount);
+    const hasNewUserMessage = addedMessages.some(
+      (message) => message.role === "user"
+    );
 
-    if ((messageCountChanged || isStreaming) && shouldAutoScrollRef.current) {
+    if (
+      hasNewUserMessage ||
+      ((messageCountChanged || isStreaming) && shouldAutoScrollRef.current)
+    ) {
       scrollToBottom(false);
     }
 
     previousMessageCountRef.current = messages.length;
   }, [messages, isStreaming, scrollToBottom]);
 
-
+  // ─────────────────────────────────────────────
+  // ATTACH SCROLL LISTENER
+  // ─────────────────────────────────────────────
   useEffect(() => {
     const container = getScrollContainer();
 
@@ -158,6 +199,7 @@ const MessageList = ({
 
     container.addEventListener("scroll", handleScroll);
 
+    // Initial state
     handleScroll();
 
     return () => {
@@ -165,9 +207,7 @@ const MessageList = ({
     };
   }, [handleScroll, currentChatId]);
 
-
   const showSuggestions = !currentChatId && messages.length === 0;
-
 
   return (
     <div
@@ -176,7 +216,7 @@ const MessageList = ({
         showSuggestions ? "scrollbar-hide" : ""
       }`}
     >
-      <div className="mx-auto max-w-5xl flex flex-col gap-7">
+      <div className="mx-auto flex max-w-5xl flex-col gap-7">
         {showSuggestions ? (
           <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
             <div className="mb-10 flex flex-col items-center text-center">
@@ -231,7 +271,7 @@ const MessageList = ({
                 <img
                   src="/logo.png"
                   alt="Velora Logo"
-                  className="h-7 w-7 object-contain animate-pulse"
+                  className="h-7 w-7 animate-pulse object-contain"
                 />
               </div>
 
@@ -259,11 +299,11 @@ const MessageList = ({
             {isStreaming &&
               messages.length > 0 &&
               messages[messages.length - 1].role === "user" && (
-                <div className="flex w-full justify-start animate-in fade-in duration-300">
+                <div className="flex w-full animate-in fade-in justify-start duration-300">
                   <div className="flex items-center gap-3 py-6">
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                    <div className="h-1 w-1 animate-pulse rounded-full bg-white/40" />
+                    <div className="delay-75 h-1 w-1 animate-pulse rounded-full bg-white/40" />
+                    <div className="delay-150 h-1 w-1 animate-pulse rounded-full bg-white/40" />
                   </div>
                 </div>
               )}
@@ -275,9 +315,17 @@ const MessageList = ({
                   type="button"
                   onClick={() => scrollToBottom(true)}
                   aria-label="Scroll to bottom"
-                  className="pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
+                  className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
                 >
-                  <ChevronDown size={20} />
+                  {isStreaming ? (
+                    <div className="flex items-center gap-1">
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70 [animation-delay:-0.3s]" />
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70 [animation-delay:-0.15s]" />
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/70" />
+                    </div>
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
                 </button>
               </div>
             )}
