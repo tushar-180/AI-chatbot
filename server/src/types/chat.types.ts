@@ -1,5 +1,22 @@
 import { EventEmitter } from "events";
 
+export type Personalization = {
+  nickname: string;
+  occupation: string;
+  tone: string;
+  customInstructions: string;
+};
+
+export type UserProfile = {
+  clerkId: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  imageUrl?: string;
+  lastSignInAt?: Date;
+  personalization?: Personalization;
+};
+
 export type ChatRole = "user" | "assistant" | "system";
 export type ChatMessageStatus =
   | "streaming"
@@ -21,7 +38,7 @@ export type ChatMessage = {
   role: ChatRole;
   content: string;
   type?: ChatMessageType;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
   attachments?: Attachment[];
   model?: string;
   requestId?: string;

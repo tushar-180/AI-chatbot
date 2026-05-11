@@ -31,5 +31,23 @@ export const userController = {
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch profile" });
     }
+  },
+
+  async updatePersonalization(req: Request, res: Response) {
+    try {
+      const clerkId = req.params.clerkId as string;
+      const personalizationData = req.body;
+      
+      const user = await userService.updatePersonalization(clerkId, personalizationData);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      res.status(200).json(user);
+    } catch (error) {
+      console.error("Error updating personalization:", error);
+      res.status(500).json({ error: "Failed to update personalization" });
+    }
   }
 };
