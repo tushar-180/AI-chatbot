@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
@@ -18,6 +18,7 @@ interface GalleryModalProps {
 const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
   const { items, loading, error } = useGallery();
   const { selectChat } = useChatList();
+  const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -26,30 +27,41 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
 
     if (isOpen) {
       window.addEventListener("keydown", handleKeyDown);
+      const root = document.querySelector(".min-h-screen");
+      if (root) root.setAttribute("inert", "");
+    } else {
+      const root = document.querySelector(".min-h-screen");
+      if (root) root.removeAttribute("inert");
     }
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+      const root = document.querySelector(".min-h-screen");
+      if (root) root.removeAttribute("inert");
     };
   }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   const handleGoToChat = (chatId: string) => {
     selectChat(chatId);
     onClose();
   };
 
-  return createPortal(
-    <div className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-10">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-xl animate-in fade-in duration-300"
-        onClick={onClose}
-      />
+  if (!isOpen) return null;
 
+  const modalContent = (
+    <div 
+      className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-10 bg-black/80 backdrop-blur-xl"
+      onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
+      onMouseUp={(e) => {
+        if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();
+        setMouseDownOnBackdrop(false);
+      }}
+    >
       {/* Modal Content */}
-      <div className="relative flex h-full max-h-[800px] w-full max-w-5xl flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#030712] shadow-2xl animate-in zoom-in-95 duration-300">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex h-full max-h-[800px] w-full max-w-5xl flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#030712] shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/5 px-8 py-6">
           <div className="flex items-center gap-4">
@@ -141,9 +153,10 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
           )}
         </div>
       </div>
-    </div>,
-    document.body,
+    </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
 
 export default memo(GalleryModal);
