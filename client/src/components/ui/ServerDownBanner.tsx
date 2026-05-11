@@ -1,4 +1,4 @@
-import { AlertCircle, RefreshCw, WifiOff, X } from "lucide-react";
+import { RefreshCw, WifiOff, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface ServerDownBannerProps {

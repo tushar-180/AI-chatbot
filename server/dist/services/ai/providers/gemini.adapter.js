@@ -74,8 +74,10 @@ class GeminiAdapter {
                                 if (!response.ok)
                                     throw new Error(`Fetch failed: ${response.statusText}`);
                                 const arrayBuffer = yield response.arrayBuffer();
-                                const base64Data = Buffer.from(arrayBuffer).toString('base64');
-                                const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
+                                const base64Data = Buffer.from(arrayBuffer).toString("base64");
+                                const mimeType = att.mimeType ||
+                                    response.headers.get("content-type") ||
+                                    "image/jpeg";
                                 const data = { mimeType, data: base64Data };
                                 GeminiAdapter.imageCache.set(att.url, data);
                                 return { inlineData: data };
@@ -224,7 +226,7 @@ OUTPUT RULES (VERY IMPORTANT):
             catch (error) {
                 console.error(`Gemini Embedding Error (Retries left: ${retries}):`, error);
                 if (retries > 0) {
-                    yield new Promise(r => setTimeout(r, 1000)); // Wait 1s
+                    yield new Promise((r) => setTimeout(r, 1000)); // Wait 1s
                     return this.generateEmbedding(text, retries - 1);
                 }
                 return [];

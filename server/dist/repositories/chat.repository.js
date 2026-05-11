@@ -12,6 +12,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.chatRepository = void 0;
 const Chat_model_1 = require("../models/Chat.model");
 exports.chatRepository = {
+    touchChat(chatId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield Chat_model_1.Chat.findByIdAndUpdate(chatId, {
+                $set: { updatedAt: new Date() },
+            });
+        });
+    },
     create(data) {
         return new Chat_model_1.Chat(data);
     },
@@ -23,17 +30,20 @@ exports.chatRepository = {
             // Fetch messages from the new Message collection
             const messages = yield Chat_model_1.Message.find({ chatId }).sort({ createdAt: 1 });
             // Combine legacy messages (if any) with new messages
-            const legacyMessages = chat.toObject().messages || chat.toObject().legacyMessages || [];
+            const legacyMessages = chat.toObject().messages ||
+                chat.toObject().legacyMessages ||
+                [];
             // Convert Mongoose documents to objects and add 'id' field for frontend consistency
-            const formattedMessages = messages.map(msg => (Object.assign(Object.assign({}, msg.toObject()), { id: msg._id.toString() })));
+            const formattedMessages = messages.map((msg) => (Object.assign(Object.assign({}, msg.toObject()), { id: msg._id.toString() })));
             // Reconstruct the chat object for the service
             const chatObj = chat.toObject();
-            return Object.assign(Object.assign({}, chatObj), { messages: [...legacyMessages, ...formattedMessages], save: () => chat.save() // Allow the service to call .save() for title updates
-             });
+            return Object.assign(Object.assign({}, chatObj), { messages: [...legacyMessages, ...formattedMessages], save: () => chat.save() });
         });
     },
     findAllByUserId(userId) {
-        return Chat_model_1.Chat.find({ userId }).select("-messages -legacyMessages").sort({ updatedAt: -1 });
+        return Chat_model_1.Chat.find({ userId })
+            .select("-messages -legacyMessages")
+            .sort({ updatedAt: -1 });
     },
     deleteById(chatId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -46,25 +56,39 @@ exports.chatRepository = {
     },
     saveMessage(chatId, messageData) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Chat_model_1.Message.create(Object.assign({ chatId, userId: messageData.userId }, messageData));
+            const message = yield Chat_model_1.Message.create(Object.assign({ chatId, userId: messageData.userId }, messageData));
+            yield this.touchChat(chatId);
+            return message;
         });
     },
     updateMessage(messageId, updateData) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Chat_model_1.Message.findByIdAndUpdate(messageId, updateData, { returnDocument: "after" });
+            const message = yield Chat_model_1.Message.findByIdAndUpdate(messageId, updateData, {
+                returnDocument: "after",
+            });
+            if (message === null || message === void 0 ? void 0 : message.chatId) {
+                yield this.touchChat(String(message.chatId));
+            }
+            return message;
         });
     },
     findUserAttachments(userId) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield Chat_model_1.Message.find({
                 userId,
-                attachments: { $exists: true, $not: { $size: 0 } }
-            }).sort({ createdAt: -1 }).lean();
+                attachments: { $exists: true, $not: { $size: 0 } },
+            })
+                .sort({ createdAt: -1 })
+                .lean();
         });
     },
     updateMessageByRequestId(chatId, requestId, updateData) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Chat_model_1.Message.findOneAndUpdate({ chatId, requestId }, updateData, { returnDocument: "after" });
+            const message = yield Chat_model_1.Message.findOneAndUpdate({ chatId, requestId }, updateData, {
+                returnDocument: "after",
+            });
+            yield this.touchChat(chatId);
+            return message;
         });
-    }
+    },
 };

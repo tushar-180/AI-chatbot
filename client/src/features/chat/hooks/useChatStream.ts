@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
+import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
   chatService,
@@ -16,14 +17,15 @@ const createOptimisticTitle = (input: string) =>
 export const useChatStream = () => {
   console.log("Initializing useChatStream hook");
   const { user } = useUser();
+  const navigate = useNavigate();
   const {
+    chats,
     currentChatId,
     messages,
     loading,
     isStreaming,
     streamingChatId,
     setCurrentChat,
-    setChats,
     setIsNewChat,
     upsertChat,
     setMessages,
@@ -75,11 +77,6 @@ export const useChatStream = () => {
     setOptimisticMessagesForChat(currentChatId, null);
   }, [currentChatId]);
 
-  const refreshChats = async (userId: string) => {
-    const chats = await chatService.fetchChats(userId);
-    setChats(chats);
-  };
-
   const commitMessagesForChat = (
     chatId: string | null,
     nextMessages: Message[],
@@ -129,6 +126,8 @@ export const useChatStream = () => {
             useChatStore.getState().currentChatId === initialChatId;
           if (shouldSelectResolvedChat) {
             setCurrentChat(nextChatId);
+            // Update URL to reflect the new chat ID
+            navigate(`/chat/${nextChatId}`, { replace: true });
           }
           setIsNewChat(false);
         }
@@ -363,9 +362,17 @@ export const useChatStream = () => {
       status: "streaming",
     };
     const isCreatingChat = !currentChatId;
+    const currentChat = chats.find((chat) => chat._id === currentChatId);
     const activeKey = getActiveChatKey(currentChatId);
     const optimisticTitle = createOptimisticTitle(input);
     const abortController = new AbortController();
+
+    if (currentChatId && currentChat) {
+      upsertChat({
+        ...currentChat,
+        updatedAt: new Date().toISOString(),
+      });
+    }
 
     activeAbortControllerRef.current = abortController;
     activeRequestIdRef.current = requestId;
@@ -553,9 +560,6 @@ export const useChatStream = () => {
 
     try {
       await chatService.stopStream(requestId, chatId);
-      if (user?.id) {
-        await refreshChats(user.id);
-      }
     } catch (err) {
       console.error("Error stopping stream", err);
       toast.error("Could not stop generation cleanly on the server.");

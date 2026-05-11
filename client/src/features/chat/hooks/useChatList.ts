@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
 
 export const useChatList = () => {
   const { user } = useUser();
+  const navigate = useNavigate();
   const fetchedUserIdRef = useRef<string | null>(null);
   const {
     chats,
@@ -28,12 +30,22 @@ export const useChatList = () => {
     setCurrentChat(null);
     setMessages([]);
     setSidebarOpen(false);
+    navigate("/chat");
   };
 
   const deleteChat = async (chatId: string) => {
     try {
       await api.delete(`/chat/${chatId}`);
       removeChat(chatId);
+      
+      // If the deleted chat was the active one, navigate back to new chat
+      if (chatId === currentChatId) {
+        setCurrentChat(null);
+        setMessages([]);
+        setIsNewChat(true);
+        navigate("/chat");
+      }
+      
       toast.success("Chat deleted successfully.");
     } catch (err) {
       console.error("Error deleting chat", err);
@@ -61,6 +73,7 @@ export const useChatList = () => {
     setCurrentChat(chatId);
     setMessages([]); // Clear messages immediately for smoother transition
     setSidebarOpen(false);
+    navigate(`/chat/${chatId}`);
   };
 
   useEffect(() => {

@@ -29,5 +29,11 @@ const userSchema = new mongoose_1.default.Schema({
     lastSignInAt: {
         type: Date,
     },
+    personalization: {
+        customInstructions: { type: String, default: "" },
+        nickname: { type: String, default: "" },
+        occupation: { type: String, default: "" },
+        tone: { type: String, default: "Default" },
+    },
 }, { timestamps: true });
 exports.User = mongoose_1.default.model("User", userSchema);
