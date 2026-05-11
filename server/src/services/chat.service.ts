@@ -16,6 +16,7 @@ import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
+import { userService } from "./user.service";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -132,6 +133,19 @@ async function* streamAssistantResponse(
     promptMessages.unshift({
       role: "system",
       content: memoryContext,
+      userId: chat.userId,
+      status: "completed",
+    });
+  }
+
+  // Inject personalization context
+  const personalizationContext = await userService.getPersonalizationContext(
+    chat.userId,
+  );
+  if (personalizationContext) {
+    promptMessages.unshift({
+      role: "system",
+      content: personalizationContext,
       userId: chat.userId,
       status: "completed",
     });
@@ -308,8 +322,21 @@ export const chatService = {
         });
       }
 
+      // Inject personalization context
+      const personalizationContext =
+        await userService.getPersonalizationContext(resolvedUserId);
+      if (personalizationContext) {
+        promptMessages.unshift({
+          role: "system",
+          content: personalizationContext,
+          userId: resolvedUserId,
+          status: "completed",
+        });
+      }
+
       let reply = "";
       try {
+        console.log({ promptMessages });
         reply = await aiProvider.generateResponse(promptMessages);
       } catch (err) {
         console.error("AI Error in createChat:", err);
@@ -426,9 +453,24 @@ export const chatService = {
       });
     }
 
+    // Inject personalization context
+    const personalizationContext = await userService.getPersonalizationContext(
+      String(chat.userId),
+    );
+    if (personalizationContext) {
+      promptMessages.unshift({
+        role: "system",
+        content: personalizationContext,
+        userId: String(chat.userId),
+        status: "completed",
+      });
+    }
+
     let reply = "";
     try {
+      console.log({ promptMessages });
       reply = await aiProvider.generateResponse(promptMessages);
+      console.log({ reply });
     } catch (err) {
       console.error("AI Error in sendMessage:", err);
       throw new Error("Server Error: AI failed to respond.");

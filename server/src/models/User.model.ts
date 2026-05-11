@@ -25,6 +25,12 @@ const userSchema = new mongoose.Schema(
     lastSignInAt: {
       type: Date,
     },
+    personalization: {
+      customInstructions: { type: String, default: "" },
+      nickname: { type: String, default: "" },
+      occupation: { type: String, default: "" },
+      tone: { type: String, default: "Default" },
+    },
   },
   { timestamps: true }
 );
