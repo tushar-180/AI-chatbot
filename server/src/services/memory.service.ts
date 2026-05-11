@@ -1,6 +1,6 @@
 import { UserMemory } from "../models/UserMemory.model";
 import { aiService } from "./ai.service";
-import { MEMORY_EXTRACTION_PROMPT } from "../constants/prompt.constants";
+import { MEMORY_CONTEXT_PROMPT,  MEMORY_EXTRACTION_PROMPT } from "../constants/prompt.constants";
 
 export const memoryService = {
   /**
@@ -100,17 +100,7 @@ export const memoryService = {
       if ((facts + factLine).length > MAX_CHARS) break;
       facts += factLine;
     }
-    return `
-      [USER IDENTITY & MEMORY]
-      You have access to the following facts about the user from past sessions. 
-      Use them to make the conversation feel continuous and personal, but follow these rules:
-      1. Do NOT list these facts or say "I remember that...".
-      2. Integrate them naturally only when relevant to the current topic.
-      3. If the user asks for something general, keep your response focused on the task, but let the context subtly influence your tone or examples.
-      
-      FACTS:
-      ${facts}
-    `;
+    return MEMORY_CONTEXT_PROMPT(facts);
   },
 
   /**

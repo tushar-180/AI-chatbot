@@ -38,6 +38,18 @@ TASK EXECUTION
   - Ask concise clarification questions only when necessary.
 `;
 
+export const MEMORY_CONTEXT_PROMPT = (facts: string) => `
+[USER IDENTITY & MEMORY]
+You have access to the following facts about the user from past sessions. 
+Use them to make the conversation feel continuous and personal, but follow these rules:
+1. Do NOT list these facts or say "I remember that...".
+2. Integrate them naturally only when relevant to the current topic.
+3. If the user asks for something general, keep your response focused on the task, but let the context subtly influence your tone or examples.
+
+FACTS:
+${facts}
+`;
+
 export const MEMORY_EXTRACTION_PROMPT = (userMessage: string) => `
 You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
 
