@@ -12,7 +12,7 @@ const Chat = lazy(() => import("./pages/Chat"));
 const Auth = lazy(() => import("./pages/Auth"));
 function App() {
   const { isSignedIn, isLoaded } = useUser();
-  const { isDown, isRetrying, retry, onClose } = useServerStatus();
+  const { isDown } = useServerStatus();
   
   // Sync user with DB whenever authenticated
   useUserSync();

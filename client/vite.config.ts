@@ -22,7 +22,6 @@ export default defineConfig({
             if (id.includes('react-syntax-highlighter')) return 'vendor-syntax';
             if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) return 'vendor-markdown';
             if (id.includes('lucide-react')) return 'vendor-icons';
-            if (id.includes('framer-motion')) return 'vendor-animation';
             if (id.includes('radix-ui')) return 'vendor-ui';
             if (id.includes('@lobehub/icons')) return 'vendor-lobehub-icons';
             if (id.includes('@lobehub')) return 'vendor-lobehub';
