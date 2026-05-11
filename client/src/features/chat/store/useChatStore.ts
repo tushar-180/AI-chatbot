@@ -67,7 +67,8 @@ export const useChatStore = create<ChatState>()(
               content,
             };
           } else {
-            newMessages.push({
+             newMessages.push({
+              id: crypto.randomUUID(), 
               role: "assistant",
               content,
               model,

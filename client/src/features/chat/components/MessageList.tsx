@@ -4,6 +4,7 @@ import {
   useCallback,
   memo,
   useState,
+  useLayoutEffect,
 } from "react";
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 
@@ -71,14 +72,21 @@ const MessageList = ({
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
+  // Track if user manually scrolled up
+  const shouldAutoScrollRef = useRef(true);
+
+  // Track previous values
+  const prevChatIdRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef(0);
+
   // ─────────────────────────────────────────────
   // GET REAL SCROLL CONTAINER
   // ─────────────────────────────────────────────
-  const getScrollContainer = () => {
+  const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
       ".overflow-y-auto",
     ) as HTMLDivElement | null;
-  };
+  }, []);
 
   // ─────────────────────────────────────────────
   // CHECK IF USER IS NEAR BOTTOM
@@ -90,29 +98,34 @@ const MessageList = ({
 
     return (
       container.scrollHeight - container.scrollTop - container.clientHeight <
-      100
+      120
     );
-  }, []);
+  }, [getScrollContainer]);
 
   // ─────────────────────────────────────────────
-  // MANUAL SCROLL TO BOTTOM
+  // SCROLL TO BOTTOM
   // ─────────────────────────────────────────────
-  const scrollToBottom = useCallback((smooth = true) => {
-    const container = getScrollContainer();
+  const scrollToBottom = useCallback(
+    (smooth = false) => {
+      const container = getScrollContainer();
 
-    if (!container) return;
+      if (!container) return;
 
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: smooth ? "smooth" : "auto",
-    });
-  }, []);
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    },
+    [getScrollContainer],
+  );
 
   // ─────────────────────────────────────────────
   // HANDLE SCROLL
   // ─────────────────────────────────────────────
   const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
+
+    shouldAutoScrollRef.current = atBottom;
 
     setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
@@ -127,12 +140,74 @@ const MessageList = ({
 
     container.addEventListener("scroll", handleScroll);
 
+    // Initial check
     handleScroll();
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [handleScroll]);
+  }, [getScrollContainer, handleScroll]);
+
+  // ─────────────────────────────────────────────
+  // AUTO SCROLL ON:
+  // 1. NEW MESSAGE
+  // 2. STREAMING
+  // 3. CHAT SWITCH
+  // 4. PAGE REFRESH
+  // ─────────────────────────────────────────────
+  useLayoutEffect(() => {
+    const messageCountChanged =
+      messages.length !== prevMessageCountRef.current;
+
+    const chatChanged = currentChatId !== prevChatIdRef.current;
+
+    // Always scroll when:
+    // - opening another chat
+    // - refreshing/loading chat
+    // - sending new message while already at bottom
+    if (
+      chatChanged ||
+      (!messagesLoading &&
+        shouldAutoScrollRef.current &&
+        (messageCountChanged || isStreaming))
+    ) {
+      requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
+    }
+
+    prevMessageCountRef.current = messages.length;
+    prevChatIdRef.current = currentChatId;
+  }, [
+    messages,
+    isStreaming,
+    currentChatId,
+    messagesLoading,
+    scrollToBottom,
+  ]);
+
+  // ─────────────────────────────────────────────
+  // FORCE SCROLL AFTER CHAT LOAD
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (
+      hasLoadedCurrentChat &&
+      messages.length > 0 &&
+      !messagesLoading
+    ) {
+      const timeout = setTimeout(() => {
+        scrollToBottom(false);
+      }, 50);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [
+    hasLoadedCurrentChat,
+    currentChatId,
+    messages.length,
+    messagesLoading,
+    scrollToBottom,
+  ]);
 
   const showSuggestions = !currentChatId && messages.length === 0;
 
@@ -241,7 +316,10 @@ const MessageList = ({
               <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
                 <button
                   type="button"
-                  onClick={() => scrollToBottom(true)}
+                  onClick={() => {
+                    shouldAutoScrollRef.current = true;
+                    scrollToBottom(true);
+                  }}
                   aria-label="Scroll to bottom"
                   className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
                 >
