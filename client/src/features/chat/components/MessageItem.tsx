@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useUser } from "@clerk/react";
 import { User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -15,6 +16,7 @@ interface Attachment {
 }
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
   model?: string;
@@ -168,13 +170,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
   const isFailed = msg.status === "failed";
 
   return (
-    <div
-      className={`flex w-full ${
-        !isStreaming
-          ? "animate-in fade-in slide-in-from-bottom-2 duration-300"
-          : ""
-      } ${isUser ? "justify-end" : "justify-start"}`}
-    >
+    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
       <div
         className={`flex w-full gap-4 md:gap-6 ${
           isUser
@@ -198,7 +194,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
           {!isFailed && <MessageMetadata isUser={isUser} model={msg.model} />}
 
           <div
-            className={`transition-all duration-300 ${
+            className={`transition-opacity duration-150 ease-out ${
               isUser
                 ? "max-w-full rounded-2xl border border-white/10 bg-white/3 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
                 : isFailed
@@ -245,4 +241,15 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
   );
 };
 
-export default MessageItem;
+const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
+  return (
+    prev.message.id === next.message.id &&
+    prev.message.content === next.message.content &&
+    prev.message.model === next.message.model &&
+    prev.message.status === next.message.status &&
+    prev.isStreaming === next.isStreaming &&
+    prev.message.attachments === next.message.attachments
+  );
+};
+
+export default memo(MessageItem, areEqual);

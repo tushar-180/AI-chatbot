@@ -42,6 +42,72 @@ export const useChatStream = () => {
   const activeResolvedChatIdRef = useRef<string | null>(null);
   const stopRequestedRef = useRef(false);
 
+  const pendingOptimisticUpdateRef = useRef<
+    Record<string, { messageId: string; partialMessage: Partial<Message> }>
+  >({});
+  const pendingOptimisticFrameRef = useRef<number | null>(null);
+
+  const flushOptimisticUpdates = () => {
+    pendingOptimisticFrameRef.current = null;
+
+    const pendingUpdates = pendingOptimisticUpdateRef.current;
+    if (!Object.keys(pendingUpdates).length) return;
+
+    setOptimisticMessagesByChatId((current) => {
+      let next = current;
+
+      for (const key of Object.keys(pendingUpdates)) {
+        const pending = pendingUpdates[key];
+        const messagesForChat = next[key];
+
+        if (!messagesForChat?.length) continue;
+
+        const lastMessage = messagesForChat[messagesForChat.length - 1];
+        if (!lastMessage || lastMessage.id !== pending.messageId) continue;
+
+        const updatedMessages = [...messagesForChat];
+        updatedMessages[updatedMessages.length - 1] = {
+          ...lastMessage,
+          ...pending.partialMessage,
+        };
+
+        next = {
+          ...next,
+          [key]: updatedMessages,
+        };
+      }
+
+      return next;
+    });
+
+    pendingOptimisticUpdateRef.current = {};
+  };
+
+  const scheduleOptimisticFlush = () => {
+    if (pendingOptimisticFrameRef.current !== null) return;
+    pendingOptimisticFrameRef.current = requestAnimationFrame(
+      flushOptimisticUpdates,
+    );
+  };
+
+  const queueOptimisticMessageUpdate = (
+    key: string,
+    messageId: string,
+    partialMessage: Partial<Message>,
+  ) => {
+    const existing = pendingOptimisticUpdateRef.current[key];
+
+    pendingOptimisticUpdateRef.current[key] = {
+      messageId,
+      partialMessage: {
+        ...existing?.partialMessage,
+        ...partialMessage,
+      },
+    };
+
+    scheduleOptimisticFlush();
+  };
+
   const setOptimisticMessagesForChat = (
     chatId: string | null,
     next: Message[] | null,
@@ -95,6 +161,7 @@ export const useChatStream = () => {
     isCreatingChat: boolean,
     initialChatId: string | null,
     requestId: string,
+    placeholderMessageId: string,
     optimisticTitle?: string,
   ) => {
     const reader = response.body?.getReader();
@@ -143,39 +210,31 @@ export const useChatStream = () => {
               [NEW_CHAT_STREAM_KEY]: null,
             };
           });
+
+          if (pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY]) {
+            pendingOptimisticUpdateRef.current[nextChatId] =
+              pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
+            delete pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
+          }
         }
         setIsStreaming(true, nextChatId);
       }
 
       if (data.model) {
         const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            model: data.model,
-            requestId: activeRequestId,
-          };
-          return { ...current, [key]: next };
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          model: data.model,
+          requestId: activeRequestId,
         });
       }
 
       if (data.chunk) {
         fullContent += data.chunk;
         const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            content: fullContent,
-            requestId: activeRequestId,
-            status: data.status ?? "streaming",
-          };
-          return { ...current, [key]: next };
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          content: fullContent,
+          requestId: activeRequestId,
+          status: data.status ?? "streaming",
         });
       }
 
@@ -196,9 +255,10 @@ export const useChatStream = () => {
       }
 
       if (data.done) {
-        // if (user?.id) {
-        //   await refreshChats(user.id);
-        // }
+        if (pendingOptimisticFrameRef.current !== null) {
+          flushOptimisticUpdates();
+        }
+
         const key = resolvedChatId ?? initialKey;
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -301,7 +361,13 @@ export const useChatStream = () => {
       setIsStreaming(true, chatId);
       setOptimisticMessagesForChat(chatId, [...messages, assistantPlaceholder]);
 
-      await processStream(response, false, chatId, crypto.randomUUID());
+      await processStream(
+        response,
+        false,
+        chatId,
+        crypto.randomUUID(),
+        assistantPlaceholder.id!,
+      );
       return true;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -451,6 +517,7 @@ export const useChatStream = () => {
         isCreatingChat,
         currentChatId,
         requestId,
+        assistantPlaceholder.id!,
         optimisticTitle,
       );
     } catch (err) {
