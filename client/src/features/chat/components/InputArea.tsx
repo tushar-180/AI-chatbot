@@ -8,7 +8,7 @@ import {
 } from "react";
 import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X,Mic } from "lucide-react";
 
-import { ProviderIcon } from "@lobehub/icons";
+import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,13 +44,14 @@ interface InputAreaProps {
  */
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
-  const mapping: Record<string, string> = {
-    gemini: "google",
-    claude: "anthropic",
-    openai: "openai",
-    nvidia: "nvidia",
+  const mapping: Record<string, any> = {
+    gemini: Gemini.Color,
+    claude: Anthropic,
+    openai: OpenAI,
+    nvidia: Nvidia.Color,
   };
-  return <ProviderIcon provider={mapping[p] || p} size={size} type="color" />;
+  const Icon = mapping[p];
+  return Icon ? <Icon size={size} /> : null;
 };
 
 /**
