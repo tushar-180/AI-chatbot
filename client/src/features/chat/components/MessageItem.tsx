@@ -218,7 +218,8 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                   Server Error
                 </span>
                 <span className="text-sm opacity-80">
-                  AI failed to respond. Please try again later.
+                  {msg.content ||
+                    "AI failed to respond. Please try again later."}
                 </span>
               </div>
             ) : (
