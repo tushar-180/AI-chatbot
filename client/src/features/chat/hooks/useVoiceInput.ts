@@ -12,7 +12,12 @@ type VoiceOptions = {
 export const useVoiceInput = ({ onResult }: VoiceOptions) => {
   const recognitionRef = useRef<any | null>(null);
   const toastIdRef = useRef<string | number | null>(null);
+
   const manuallyStoppedRef = useRef(false);
+  const silenceTimerRef = useRef<any | null>(null);
+  const restartTimerRef = useRef<any | null>(null);
+  const inactivityStoppedRef = useRef(false);
+
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -22,67 +27,109 @@ export const useVoiceInput = ({ onResult }: VoiceOptions) => {
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      // console.warn("SpeechRecognition not supported in this browser");
       toast.error("Voice recognition is not supported in this browser");
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+
+    // 🔥 IMPORTANT CHANGE: keep alive session
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
+    const clearSilenceTimer = () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+
+    const startSilenceTimer = () => {
+      clearSilenceTimer();
+
+      silenceTimerRef.current = setTimeout(() => {
+        console.log("⏰ 30s inactivity - stopping recognition");
+
+        inactivityStoppedRef.current = true;
+
+        try {
+          recognition.stop();
+        } catch (err) {
+          console.error("Error stopping recognition:", err);
+        }
+
+        toast.error("Stopped due to inactivity");
+      }, 7000);
+    };
 
     recognition.onstart = () => {
-      // console.log("🎤 Voice recognition started");
       setIsListening(true);
+      startSilenceTimer();
+
       toastIdRef.current = toast.loading("🎤 Listening...");
     };
 
-
     recognition.onend = () => {
-      // console.log("🛑 Voice recognition stopped");
-      setIsListening(false);
       setIsSpeaking(false);
+      clearSilenceTimer();
+
       if (toastIdRef.current) {
         toast.dismiss(toastIdRef.current);
       }
-    };
 
+      if (manuallyStoppedRef.current || inactivityStoppedRef.current) {
+        setIsListening(false);
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const transcript = Array.from(event.results)
-        .map((r) => r[0].transcript)
-        .join("");
-      // console.log("🧠 Voice transcript:", transcript);
+        inactivityStoppedRef.current = false;
 
-      if (event.results[0].isFinal) {
-        const cleanedText = VerifyVoiceProfanity(transcript);
-        // console.log("🧹 Cleaned transcript:", cleanedText);
-        onResult(cleanedText);
+        return;
+      }
+
+      // 🔥 auto-restart (Chrome random stop fix)
+      if (!manuallyStoppedRef.current && !inactivityStoppedRef.current) {
+        restartTimerRef.current = setTimeout(() => {
+          try {
+            recognition.start();
+          } catch {}
+        }, 1000);
       }
     };
 
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      startSilenceTimer();
 
-    recognition.onsoundstart = () => {
-       console.log("🔊 Sound detected");
+      const transcript = Array.from(event.results)
+        .map((r) => r[0].transcript)
+        .join("");
+
+      const lastResult = event.results[event.results.length - 1];
+
+      if (lastResult.isFinal) {
+        const cleaned = VerifyVoiceProfanity(transcript);
+        onResult(cleaned);
+      }
     };
 
+    recognition.onsoundstart = () => {
+      startSilenceTimer();
+    };
 
     recognition.onspeechstart = () => {
-      // console.log("🗣️ Speech started");
       setIsSpeaking(true);
+      startSilenceTimer();
+
       if (toastIdRef.current) {
-        toast.loading("🗣️ Speech detected", {
+        toast.loading("🗣️ Speech Detected...", {
           id: toastIdRef.current,
         });
       }
     };
 
-
     recognition.onspeechend = () => {
-      // console.log("🛑 Speech ended");
       setIsSpeaking(false);
+      startSilenceTimer();
+
       if (toastIdRef.current) {
         toast.loading("🎤 Listening...", {
           id: toastIdRef.current,
@@ -90,53 +137,42 @@ export const useVoiceInput = ({ onResult }: VoiceOptions) => {
       }
     };
 
-
     recognition.onerror = (err: SpeechRecognitionErrorEvent) => {
       handleVoiceRecognitionError(err, manuallyStoppedRef.current);
     };
 
-
     recognitionRef.current = recognition;
 
+    return () => {
+      clearSilenceTimer();
+
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+      }
+
+      try {
+        recognition.stop();
+      } catch {}
+    };
   }, [onResult]);
 
-
   const start = async () => {
-    // Prevent duplicate starts
-    if (isListening) {
-      console.log("⚠️ Already listening");
-      return;
-    }
+    if (isListening) return;
 
     manuallyStoppedRef.current = false;
+    inactivityStoppedRef.current = false;
 
     const ok = await requestMicPermission();
-
-    if (!ok) {
-      console.log("🚫 Mic permission denied");
-      return;
-    }
+    if (!ok) return;
 
     try {
-      console.log("▶️ Starting speech recognition...");
-
-      // Safety stop before restart
-      recognitionRef.current?.stop();
-
-      // Small delay helps Chrome reset internals
-      setTimeout(() => {
-        recognitionRef.current?.start();
-      }, 150);
-    } catch (err) {
-      console.error("❌ Failed to start recognition:", err);
-      toast.error("Unable to start voice recognition");
+      recognitionRef.current?.start();
+    } catch {
+      console.log("Already started");
     }
   };
 
-  
   const stop = () => {
-    console.log("⛔ Stopping voice input...");
-
     manuallyStoppedRef.current = true;
 
     setIsListening(false);
@@ -145,11 +181,18 @@ export const useVoiceInput = ({ onResult }: VoiceOptions) => {
     if (toastIdRef.current) {
       toast.dismiss(toastIdRef.current);
     }
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+    }
+
     try {
       recognitionRef.current?.stop();
-    } catch (err) {
-      console.log("⚠️ Recognition already stopped");
-    }
+    } catch {}
   };
 
   return {
