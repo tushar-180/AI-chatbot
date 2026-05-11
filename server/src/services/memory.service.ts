@@ -1,5 +1,6 @@
 import { UserMemory } from "../models/UserMemory.model";
 import { aiService } from "./ai.service";
+import { MEMORY_EXTRACTION_PROMPT } from "../constants/prompt.constants";
 
 export const memoryService = {
   /**
@@ -139,25 +140,7 @@ export const memoryService = {
     try {
       const provider = aiService.getProvider(); // Use default provider
       
-      const extractionPrompt = `
-        You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
-        
-        RULES:
-        1. Only extract facts that are likely to be useful later.
-        2. Format each fact as: [Fact] | [Category]
-        3. Categories MUST be one of: personal, preference, technical, work, general.
-        4. If no facts are found, return exactly "NONE".
-        5. Return only the facts, one per line.
-        
-        EXAMPLES:
-        "My name is Tushar" -> User's name is Tushar | personal
-        "I love dark mode" -> User prefers dark mode | preference
-        "I'm building a React app" -> User is building a React app | work
-        
-        USER MESSAGE: "${userMessage}"
-        
-        EXTRACTED FACTS:
-      `;
+      const extractionPrompt = MEMORY_EXTRACTION_PROMPT(userMessage);
 
       const response = await provider.generateResponse([
         { role: "user", content: extractionPrompt, userId }
