@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')!).render(
     
       <ServerStatusProvider>
         <App />
-      <Toaster position="top-center" richColors />
+      <Toaster position="top-right" richColors />
       </ServerStatusProvider>
     </ClerkProvider>
   
