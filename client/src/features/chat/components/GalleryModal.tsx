@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
@@ -18,6 +18,7 @@ interface GalleryModalProps {
 const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
   const { items, loading, error } = useGallery();
   const { selectChat } = useChatList();
+  const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -45,7 +46,11 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-xl animate-in fade-in duration-300"
-        onClick={onClose}
+        onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
+        onMouseUp={(e) => {
+          if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();
+          setMouseDownOnBackdrop(false);
+        }}
       />
 
       {/* Modal Content */}

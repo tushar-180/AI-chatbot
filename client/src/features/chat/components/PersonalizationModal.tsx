@@ -47,6 +47,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
     tone: "Default",
     customInstructions: "",
   });
+  const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
 
   const fetchPersonalization = async () => {
     if (!user) return;
@@ -119,7 +120,11 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
       {isOpen && (
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-          onClick={onClose}
+          onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
+          onMouseUp={(e) => {
+            if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();
+            setMouseDownOnBackdrop(false);
+          }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
