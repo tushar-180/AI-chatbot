@@ -1,588 +1,699 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
-  chatService,
-  type Message,
+    chatService,
+    type Message,
 } from "@/features/chat/services/chat.service";
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
 
-const createOptimisticTitle = (input: string) =>
-  input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
-
-export const useChatStream = () => {
-  console.log("Initializing useChatStream hook");
-  const { user } = useUser();
-  const {
-    currentChatId,
-    messages,
-    loading,
-    isStreaming,
-    streamingChatId,
-    setCurrentChat,
-    setChats,
-    setIsNewChat,
-    upsertChat,
-    setMessages,
-    setLoading,
-    setIsStreaming,
-  } = useChatStore();
-
-  const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] = useState<
-    Record<string, Message[] | null>
-  >({});
-  const activeAbortControllerRef = useRef<AbortController | null>(null);
-  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const activeRequestIdRef = useRef<string | null>(null);
-  const activeResolvedChatIdRef = useRef<string | null>(null);
-  const stopRequestedRef = useRef(false);
-
-  const setOptimisticMessagesForChat = (
-    chatId: string | null,
-    next: Message[] | null,
-  ) => {
-    const key = getActiveChatKey(chatId);
-    setOptimisticMessagesByChatId((current) => ({
-      ...current,
-      [key]: next,
-    }));
-  };
-
-  const getActiveChatKey = (chatId: string | null) =>
+const getActiveChatKey = (chatId: string | null) =>
     chatId ?? NEW_CHAT_STREAM_KEY;
 
-  const isStreamingCurrentChat =
-    isStreaming &&
-    streamingChatId === getActiveChatKey(currentChatId) &&
-    !!streamingChatId;
-  const isLoadingCurrentChat =
-    loading &&
-    streamingChatId === getActiveChatKey(currentChatId) &&
-    !!streamingChatId;
+const createOptimisticTitle = (input: string) =>
+    input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
 
-  // Sync optimistic messages with store when switching chats
-  useEffect(() => {
-    if (!currentChatId) return;
-    if (isStreaming && streamingChatId === currentChatId) return;
+export const useChatStream = () => {
+    const { user } = useUser();
+    const currentChatId = useChatStore((state) => state.currentChatId);
+    const messages = useChatStore((state) => state.messages);
+    const loading = useChatStore((state) => state.loading);
+    const isStreaming = useChatStore((state) => state.isStreaming);
+    const streamingChatId = useChatStore((state) => state.streamingChatId);
+    const setCurrentChat = useChatStore((state) => state.setCurrentChat);
+    const setChats = useChatStore((state) => state.setChats);
+    const setIsNewChat = useChatStore((state) => state.setIsNewChat);
+    const upsertChat = useChatStore((state) => state.upsertChat);
+    const setMessages = useChatStore((state) => state.setMessages);
+    const setLoading = useChatStore((state) => state.setLoading);
+    const setIsStreaming = useChatStore((state) => state.setIsStreaming);
 
-    // We only clear optimistic messages when switching chats,
-    // allowing the stream handlers to manage their own cleanup.
-    setOptimisticMessagesForChat(currentChatId, null);
-  }, [currentChatId]);
+    const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] =
+        useState<Record<string, Message[] | null>>({});
+    const activeAbortControllerRef = useRef<AbortController | null>(null);
+    const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+    const activeRequestIdRef = useRef<string | null>(null);
+    const activeResolvedChatIdRef = useRef<string | null>(null);
+    const resumeAttemptedChatIdRef = useRef<string | null>(null);
+    const previousChatIdRef = useRef<string | null>(currentChatId);
+    const resumeStreamRef = useRef<(chatId: string) => Promise<boolean>>(
+        async () => false,
+    );
+    const stopRequestedRef = useRef(false);
 
-  const refreshChats = async (userId: string) => {
-    const chats = await chatService.fetchChats(userId);
-    setChats(chats);
-  };
-
-  const commitMessagesForChat = (
-    chatId: string | null,
-    nextMessages: Message[],
-  ) => {
-    if (useChatStore.getState().currentChatId === chatId) {
-      setMessages(nextMessages);
-    }
-    setOptimisticMessagesForChat(chatId, nextMessages);
-  };
-
-  const processStream = async (
-    response: Response,
-    isCreatingChat: boolean,
-    initialChatId: string | null,
-    requestId: string,
-    optimisticTitle?: string,
-  ) => {
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
-    let fullContent = "";
-    let buffer = "";
-    let resolvedChatId = initialChatId;
-    let activeRequestId = requestId;
-    const initialKey = getActiveChatKey(initialChatId);
-
-    if (!reader) throw new Error("Stream reader unavailable");
-
-    const processEvent = async (rawEvent: string) => {
-      const data = chatService.parseStreamEvent(rawEvent);
-      if (!data) return;
-
-      if (data.requestId) {
-        activeRequestId = data.requestId;
-        activeRequestIdRef.current = data.requestId;
-      }
-
-      if (data.chatId) {
-        const nextChatId: string = data.chatId;
-        resolvedChatId = nextChatId;
-        activeResolvedChatIdRef.current = nextChatId;
-        if (isCreatingChat) {
-          upsertChat({
-            _id: nextChatId,
-            title: optimisticTitle || "New Chat",
-          });
-          const shouldSelectResolvedChat =
-            useChatStore.getState().currentChatId === initialChatId;
-          if (shouldSelectResolvedChat) {
-            setCurrentChat(nextChatId);
-          }
-          setIsNewChat(false);
-        }
-        // If the server resolves a new chat id during a "new chat" stream, move optimistic messages over.
-        if (initialKey === NEW_CHAT_STREAM_KEY) {
-          setOptimisticMessagesByChatId((current) => {
-            const pending = current[NEW_CHAT_STREAM_KEY];
-            if (!pending) return current;
-            return {
-              ...current,
-              [nextChatId]: pending,
-              [NEW_CHAT_STREAM_KEY]: null,
-            };
-          });
-        }
-        setIsStreaming(true, nextChatId);
-      }
-
-      if (data.model) {
-        const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            model: data.model,
-            requestId: activeRequestId,
-          };
-          return { ...current, [key]: next };
-        });
-      }
-
-      if (data.chunk) {
-        fullContent += data.chunk;
-        const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            content: fullContent,
-            requestId: activeRequestId,
-            status: data.status ?? "streaming",
-          };
-          return { ...current, [key]: next };
-        });
-      }
-
-      if (data.error) {
-        toast.error(data.error);
-        const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            status: "failed",
-            requestId: activeRequestId,
-          };
-          return { ...current, [key]: next };
-        });
-      }
-
-      if (data.done) {
-        // if (user?.id) {
-        //   await refreshChats(user.id);
-        // }
-        const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            content: fullContent || next[next.length - 1].content,
-            requestId: activeRequestId,
-            status: data.status ?? "completed",
-          };
-          if (resolvedChatId) {
-            const finalChatId = resolvedChatId;
-            queueMicrotask(() => {
-              commitMessagesForChat(finalChatId, next);
-            });
-          }
-          return { ...current, [key]: next };
-        });
-        activeAbortControllerRef.current = null;
-        activeRequestIdRef.current = null;
-        activeResolvedChatIdRef.current = null;
-        setIsStreaming(false);
-        setLoading(false);
-      }
-    };
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        buffer += decoder.decode(value, { stream: !done });
-
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-
-        for (const event of events) {
-          await processEvent(event);
-        }
-
-        if (done) {
-          if (buffer.trim()) await processEvent(buffer);
-          break;
-        }
-      }
-    } finally {
-      setIsStreaming(false);
-      setLoading(false);
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
-    }
-  };
-
-  const resumeStream = async (chatId: string) => {
-    stopRequestedRef.current = false;
-    try {
-      const url = chatService.getStreamUpdatesUrl(chatId);
-      const abortController = new AbortController();
-      activeAbortControllerRef.current = abortController;
-      activeResolvedChatIdRef.current = chatId;
-
-      // Client-side safety timeout for connection
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
-          abortController.abort();
-          toast.error("Connection timed out. Please try again.");
-        }
-      }, 35000);
-
-      const response = await fetch(url, {
-        headers: {
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
+    const setOptimisticMessagesForChat = useCallback(
+        (chatId: string | null, next: Message[] | null) => {
+            const key = getActiveChatKey(chatId);
+            setOptimisticMessagesByChatId((current) => ({
+                ...current,
+                [key]: next,
+            }));
         },
-        signal: abortController.signal,
-      });
+        [],
+    );
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
+    const isStreamingCurrentChat =
+        isStreaming &&
+        streamingChatId === getActiveChatKey(currentChatId) &&
+        !!streamingChatId;
+    const isLoadingCurrentChat =
+        loading &&
+        streamingChatId === getActiveChatKey(currentChatId) &&
+        !!streamingChatId;
 
-      if (!response.ok) return false;
+    // Clear stale optimistic messages only when the selected chat actually changes.
+    useEffect(() => {
+        if (previousChatIdRef.current === currentChatId) return;
 
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("text/event-stream")) {
-        return false;
-      }
+        const chatIdToClear = currentChatId;
+        previousChatIdRef.current = currentChatId;
 
-      // Add a placeholder message for the incoming stream
-      const assistantPlaceholder: Message = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: "",
-        model: "gemini", // Will be updated by stream
-        status: "streaming",
-      };
+        if (!chatIdToClear) return;
 
-      setLoading(true);
-      setIsStreaming(true, chatId);
-      setOptimisticMessagesForChat(chatId, [...messages, assistantPlaceholder]);
-
-      await processStream(response, false, chatId, crypto.randomUUID());
-      return true;
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        return false;
-      }
-
-      console.error("Error resuming stream", err);
-      setLoading(false);
-      setIsStreaming(false);
-      setOptimisticMessagesForChat(chatId, null);
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
-
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
-
-      return false;
-    }
-  };
-
-  // Attempt to resume stream when chat changes or component mounts
-  useEffect(() => {
-    if (currentChatId && !(isStreaming && streamingChatId === currentChatId)) {
-      // Small timeout to ensure messages are loaded first before attempting recovery
-      // This prevents visual glitches where the AI placeholder appears before user messages
-      const timer = setTimeout(() => {
-        resumeStream(currentChatId);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [currentChatId, isStreaming, streamingChatId]);
-
-  const streamMessage = async (
-    input: string,
-    provider: string,
-    attachments: any[] = [],
-    options?: {
-      webSearchEnabled?: boolean;
-    },
-  ) => {
-    if (!input.trim() && attachments.length === 0) return;
-    if (loading || !user?.id) return;
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: input,
-      model: provider,
-      status: "completed",
-      attachments: attachments,
-    };
-    const requestId = crypto.randomUUID();
-    const assistantPlaceholder: Message = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: "",
-      model: provider,
-      requestId,
-      status: "streaming",
-    };
-    const isCreatingChat = !currentChatId;
-    const activeKey = getActiveChatKey(currentChatId);
-    const optimisticTitle = createOptimisticTitle(input);
-    const abortController = new AbortController();
-
-    activeAbortControllerRef.current = abortController;
-    activeRequestIdRef.current = requestId;
-    activeResolvedChatIdRef.current = currentChatId;
-
-    // Set optimistic UI
-    setOptimisticMessagesForChat(activeKey, [
-      ...messages,
-      userMessage,
-      assistantPlaceholder,
-    ]);
-
-    setLoading(true);
-    setIsStreaming(true, activeKey);
-    stopRequestedRef.current = false;
-
-    try {
-      const url = chatService.getStreamUrl(currentChatId || undefined);
-
-      // Client-side safety timeout for connection
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
-          abortController.abort();
-          toast.error("Connection timed out. Please try again.");
-        }
-      }, 35000); // 35s to allow server-side 30s timeout to trigger first
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-        },
-        signal: abortController.signal,
-        body: JSON.stringify({
-          userId: user.id,
-          message: input,
-          provider,
-          requestId,
-          attachments,
-          webSearchEnabled: Boolean(options?.webSearchEnabled),
-        }),
-      });
-
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
-
-      if (!response.ok) {
-        if (
-          stopRequestedRef.current &&
-          activeRequestIdRef.current === requestId
-        ) {
-          const resolvedChatId =
-            activeResolvedChatIdRef.current ?? currentChatId;
-          const key = getActiveChatKey(resolvedChatId);
-
-          setOptimisticMessagesByChatId((current) => {
-            const messagesForChat = current[key];
-            if (!messagesForChat?.length) return current;
-            const next = [...messagesForChat];
-            next[next.length - 1] = {
-              ...next[next.length - 1],
-              status: stopRequestedRef.current ? "stopped" : "failed",
-            };
-            queueMicrotask(() => {
-              commitMessagesForChat(resolvedChatId, next);
-            });
-            return { ...current, [key]: next };
-          });
-
-          setLoading(false);
-          setIsStreaming(false);
-          return;
-        }
-
-        throw new Error("Failed to connect to stream");
-      }
-
-      await processStream(
-        response,
-        isCreatingChat,
-        currentChatId,
-        requestId,
-        optimisticTitle,
-      );
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
-        const key = getActiveChatKey(resolvedChatId);
-
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            status: stopRequestedRef.current ? "stopped" : "failed",
-          };
-          queueMicrotask(() => {
-            commitMessagesForChat(resolvedChatId, next);
-          });
-          return { ...current, [key]: next };
-        });
-
-        setLoading(false);
-        setIsStreaming(false);
-        return;
-      }
-
-      if (
-        stopRequestedRef.current &&
-        activeRequestIdRef.current === requestId
-      ) {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
-        const key = getActiveChatKey(resolvedChatId);
-
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            status: "stopped",
-          };
-          queueMicrotask(() => {
-            commitMessagesForChat(resolvedChatId, next);
-          });
-          return { ...current, [key]: next };
-        });
-
-        setLoading(false);
-        setIsStreaming(false);
-        return;
-      }
-
-      console.error("Error streaming message", err);
-      const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
-      const key = getActiveChatKey(resolvedChatId);
-
-      setOptimisticMessagesByChatId((current) => {
-        const messagesForChat = current[key];
-        if (!messagesForChat?.length) return current;
-        const next = [...messagesForChat];
-        next[next.length - 1] = {
-          ...next[next.length - 1],
-          status: "failed",
-        };
         queueMicrotask(() => {
-          commitMessagesForChat(resolvedChatId, next);
+            const { isStreaming, streamingChatId } = useChatStore.getState();
+            if (isStreaming && streamingChatId === chatIdToClear) return;
+            setOptimisticMessagesForChat(chatIdToClear, null);
         });
-        return { ...current, [key]: next };
-      });
+    }, [currentChatId, setOptimisticMessagesForChat]);
 
-      toast.error(chatService.getChatErrorMessage(err));
-    } finally {
-      if (activeRequestIdRef.current !== requestId) {
-        return;
-      }
+    const refreshChats = async (userId: string) => {
+        const chats = await chatService.fetchChats(userId);
+        setChats(chats);
+    };
 
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
-      stopRequestedRef.current = false;
+    const commitMessagesForChat = (
+        chatId: string | null,
+        nextMessages: Message[],
+    ) => {
+        if (useChatStore.getState().currentChatId === chatId) {
+            setMessages(nextMessages);
+        }
+        setOptimisticMessagesForChat(chatId, nextMessages);
+    };
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
+    const markAssistantMessageStatus = (
+        chatId: string | null,
+        requestId: string,
+        status: NonNullable<Message["status"]>,
+    ) => {
+        const key = getActiveChatKey(chatId);
 
-      setLoading(false);
-      setIsStreaming(false);
-    }
-  };
+        setOptimisticMessagesByChatId((current) => {
+            const messagesForChat =
+                current[key] ??
+                (useChatStore.getState().currentChatId === chatId
+                    ? useChatStore.getState().messages
+                    : []);
 
-  const stopGeneration = async () => {
-    const requestId = activeRequestIdRef.current;
-    const chatId = activeResolvedChatIdRef.current ?? currentChatId;
+            if (!messagesForChat.length) return current;
 
-    if (!requestId) return;
+            const assistantIndex = messagesForChat.findLastIndex(
+                (message) =>
+                    message.role === "assistant" &&
+                    (!message.requestId || message.requestId === requestId),
+            );
 
-    stopRequestedRef.current = true;
-    activeAbortControllerRef.current?.abort();
+            if (assistantIndex === -1) return current;
 
-    try {
-      await chatService.stopStream(requestId, chatId);
-      if (user?.id) {
-        await refreshChats(user.id);
-      }
-    } catch (err) {
-      console.error("Error stopping stream", err);
-      toast.error("Could not stop generation cleanly on the server.");
-    } finally {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
-      }
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
-      stopRequestedRef.current = false;
-      setIsStreaming(false);
-      setLoading(false);
-    }
-  };
+            const next = [...messagesForChat];
+            next[assistantIndex] = {
+                ...next[assistantIndex],
+                requestId,
+                status,
+            };
 
-  return {
-    streamMessage,
-    stopGeneration,
-    optimisticMessages:
-      optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ?? null,
-    isStreaming: isStreamingCurrentChat,
-    loading: isLoadingCurrentChat,
-  };
+            queueMicrotask(() => {
+                commitMessagesForChat(chatId, next);
+            });
+
+            return { ...current, [key]: next };
+        });
+    };
+
+    const loadMessagesForResume = async (chatId: string) => {
+        const fallbackMessages =
+            useChatStore.getState().currentChatId === chatId
+                ? useChatStore.getState().messages
+                : [];
+
+        try {
+            const fetchedMessages = await chatService.fetchMessages(chatId);
+            if (useChatStore.getState().currentChatId === chatId) {
+                setMessages(fetchedMessages);
+            }
+            return fetchedMessages;
+        } catch (err) {
+            console.error("Error loading messages before stream resume", err);
+            return fallbackMessages;
+        }
+    };
+
+    const buildResumeMessages = (
+        baseMessages: Message[],
+        assistantPlaceholder: Message,
+    ) => {
+        const lastMessage = baseMessages[baseMessages.length - 1];
+        const hasPersistedStreamingAssistant =
+            lastMessage?.role === "assistant" &&
+            (lastMessage.status === "streaming" || !lastMessage.content);
+
+        if (!hasPersistedStreamingAssistant) {
+            return [...baseMessages, assistantPlaceholder];
+        }
+
+        const nextMessages = [...baseMessages];
+        nextMessages[nextMessages.length - 1] = {
+            ...lastMessage,
+            model: lastMessage.model ?? assistantPlaceholder.model,
+            requestId: lastMessage.requestId ?? assistantPlaceholder.requestId,
+            status: "streaming",
+        };
+        return nextMessages;
+    };
+
+    const processStream = async (
+        response: Response,
+        isCreatingChat: boolean,
+        initialChatId: string | null,
+        requestId: string,
+        optimisticTitle?: string,
+    ) => {
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = "";
+        let buffer = "";
+        let resolvedChatId = initialChatId;
+        let activeRequestId = requestId;
+        const initialKey = getActiveChatKey(initialChatId);
+
+        if (!reader) throw new Error("Stream reader unavailable");
+
+        const processEvent = async (rawEvent: string) => {
+            const data = chatService.parseStreamEvent(rawEvent);
+            if (!data) return;
+
+            if (data.requestId) {
+                activeRequestId = data.requestId;
+                activeRequestIdRef.current = data.requestId;
+            }
+
+            if (data.chatId) {
+                const nextChatId: string = data.chatId;
+                resolvedChatId = nextChatId;
+                activeResolvedChatIdRef.current = nextChatId;
+                if (isCreatingChat) {
+                    upsertChat({
+                        _id: nextChatId,
+                        title: optimisticTitle || "New Chat",
+                    });
+                    const shouldSelectResolvedChat =
+                        useChatStore.getState().currentChatId === initialChatId;
+                    if (shouldSelectResolvedChat) {
+                        setCurrentChat(nextChatId);
+                    }
+                    setIsNewChat(false);
+                }
+                // If the server resolves a new chat id during a "new chat" stream, move optimistic messages over.
+                if (initialKey === NEW_CHAT_STREAM_KEY) {
+                    setOptimisticMessagesByChatId((current) => {
+                        const pending = current[NEW_CHAT_STREAM_KEY];
+                        if (!pending) return current;
+                        return {
+                            ...current,
+                            [nextChatId]: pending,
+                            [NEW_CHAT_STREAM_KEY]: null,
+                        };
+                    });
+                }
+                setIsStreaming(true, nextChatId);
+            }
+
+            if (data.model) {
+                const key = resolvedChatId ?? initialKey;
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        model: data.model,
+                        requestId: activeRequestId,
+                    };
+                    return { ...current, [key]: next };
+                });
+            }
+
+            if (data.chunk) {
+                fullContent += data.chunk;
+                const key = resolvedChatId ?? initialKey;
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        content: fullContent,
+                        requestId: activeRequestId,
+                        status: data.status ?? "streaming",
+                    };
+                    return { ...current, [key]: next };
+                });
+            }
+
+            if (data.error) {
+                const errorMessage = data.error;
+                toast.error(errorMessage);
+                const key = resolvedChatId ?? initialKey;
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        content: errorMessage,
+                        status: "failed",
+                        requestId: activeRequestId,
+                    };
+                    return { ...current, [key]: next };
+                });
+            }
+
+            if (data.done) {
+                // if (user?.id) {
+                //   await refreshChats(user.id);
+                // }
+                const key = resolvedChatId ?? initialKey;
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        content: fullContent || next[next.length - 1].content,
+                        requestId: activeRequestId,
+                        status: data.status ?? "completed",
+                    };
+                    if (resolvedChatId) {
+                        const finalChatId = resolvedChatId;
+                        queueMicrotask(() => {
+                            commitMessagesForChat(finalChatId, next);
+                        });
+                    }
+                    return { ...current, [key]: next };
+                });
+                activeAbortControllerRef.current = null;
+                activeRequestIdRef.current = null;
+                activeResolvedChatIdRef.current = null;
+                setIsStreaming(false);
+                setLoading(false);
+            }
+        };
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                buffer += decoder.decode(value, { stream: !done });
+
+                const events = buffer.split("\n\n");
+                buffer = events.pop() ?? "";
+
+                for (const event of events) {
+                    await processEvent(event);
+                }
+
+                if (done) {
+                    if (buffer.trim()) await processEvent(buffer);
+                    break;
+                }
+            }
+        } finally {
+            setIsStreaming(false);
+            setLoading(false);
+            activeAbortControllerRef.current = null;
+            activeRequestIdRef.current = null;
+            activeResolvedChatIdRef.current = null;
+        }
+    };
+
+    const resumeStream = async (chatId: string) => {
+        stopRequestedRef.current = false;
+        try {
+            const url = chatService.getStreamUpdatesUrl(chatId);
+            const abortController = new AbortController();
+            activeAbortControllerRef.current = abortController;
+            activeResolvedChatIdRef.current = chatId;
+
+            // Client-side safety timeout for connection
+            connectionTimeoutRef.current = setTimeout(() => {
+                if (activeAbortControllerRef.current === abortController) {
+                    abortController.abort();
+                    toast.error("Connection timed out. Please try again.");
+                }
+            }, 35000);
+
+            const response = await fetch(url, {
+                headers: {
+                    Accept: "text/event-stream",
+                    "Cache-Control": "no-cache",
+                },
+                signal: abortController.signal,
+            });
+
+            if (connectionTimeoutRef.current) {
+                clearTimeout(connectionTimeoutRef.current);
+                connectionTimeoutRef.current = null;
+            }
+
+            if (!response.ok) return false;
+
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("text/event-stream")) {
+                return false;
+            }
+
+            // Add a placeholder message for the incoming stream
+            const assistantPlaceholder: Message = {
+                id: crypto.randomUUID(),
+                role: "assistant",
+                content: "",
+                model: "gemini", // Will be updated by stream
+                status: "streaming",
+            };
+
+            setLoading(true);
+            setIsStreaming(true, chatId);
+            const baseMessages = await loadMessagesForResume(chatId);
+            setOptimisticMessagesForChat(
+                chatId,
+                buildResumeMessages(baseMessages, assistantPlaceholder),
+            );
+
+            await processStream(response, false, chatId, crypto.randomUUID());
+            return true;
+        } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+                return false;
+            }
+
+            console.error("Error resuming stream", err);
+            setLoading(false);
+            setIsStreaming(false);
+            setOptimisticMessagesForChat(chatId, null);
+            activeAbortControllerRef.current = null;
+            activeRequestIdRef.current = null;
+            activeResolvedChatIdRef.current = null;
+
+            if (connectionTimeoutRef.current) {
+                clearTimeout(connectionTimeoutRef.current);
+                connectionTimeoutRef.current = null;
+            }
+
+            return false;
+        }
+    };
+
+    useEffect(() => {
+        resumeStreamRef.current = resumeStream;
+    });
+
+    // Attempt to resume stream when chat changes or component mounts
+    useEffect(() => {
+        if (!currentChatId) {
+            resumeAttemptedChatIdRef.current = null;
+            return;
+        }
+
+        if (resumeAttemptedChatIdRef.current === currentChatId) return;
+        resumeAttemptedChatIdRef.current = currentChatId;
+
+        if (isStreaming && streamingChatId === currentChatId) return;
+
+        // Small timeout to ensure messages are loaded first before attempting recovery.
+        const timer = setTimeout(() => {
+            resumeStreamRef.current(currentChatId);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [currentChatId, isStreaming, streamingChatId]);
+
+    const streamMessage = async (
+        input: string,
+        provider: string,
+        attachments: NonNullable<Message["attachments"]> = [],
+        options?: {
+            webSearchEnabled?: boolean;
+        },
+    ) => {
+        if (!input.trim() && attachments.length === 0) return;
+        if (loading || !user?.id) return;
+
+        const userMessage: Message = {
+            id: crypto.randomUUID(),
+            role: "user",
+            content: input,
+            model: provider,
+            status: "completed",
+            attachments: attachments,
+        };
+        const requestId = crypto.randomUUID();
+        const assistantPlaceholder: Message = {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "",
+            model: provider,
+            requestId,
+            status: "streaming",
+        };
+        const isCreatingChat = !currentChatId;
+        const activeKey = getActiveChatKey(currentChatId);
+        const baseMessages = optimisticMessagesByChatId[activeKey] ?? messages;
+        const optimisticTitle = createOptimisticTitle(input);
+        const abortController = new AbortController();
+
+        activeAbortControllerRef.current = abortController;
+        activeRequestIdRef.current = requestId;
+        activeResolvedChatIdRef.current = currentChatId;
+
+        // Set optimistic UI
+        setOptimisticMessagesForChat(activeKey, [
+            ...baseMessages,
+            userMessage,
+            assistantPlaceholder,
+        ]);
+
+        setLoading(true);
+        setIsStreaming(true, activeKey);
+        stopRequestedRef.current = false;
+
+        try {
+            const url = chatService.getStreamUrl(currentChatId || undefined);
+
+            // Client-side safety timeout for connection
+            connectionTimeoutRef.current = setTimeout(() => {
+                if (activeAbortControllerRef.current === abortController) {
+                    abortController.abort();
+                    toast.error("Connection timed out. Please try again.");
+                }
+            }, 35000); // 35s to allow server-side 30s timeout to trigger first
+
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Accept: "text/event-stream",
+                    "Cache-Control": "no-cache",
+                },
+                signal: abortController.signal,
+                body: JSON.stringify({
+                    userId: user.id,
+                    message: input,
+                    provider,
+                    requestId,
+                    attachments,
+                    webSearchEnabled: Boolean(options?.webSearchEnabled),
+                }),
+            });
+
+            if (connectionTimeoutRef.current) {
+                clearTimeout(connectionTimeoutRef.current);
+                connectionTimeoutRef.current = null;
+            }
+
+            if (!response.ok) {
+                if (
+                    stopRequestedRef.current &&
+                    activeRequestIdRef.current === requestId
+                ) {
+                    const resolvedChatId =
+                        activeResolvedChatIdRef.current ?? currentChatId;
+                    const key = getActiveChatKey(resolvedChatId);
+
+                    setOptimisticMessagesByChatId((current) => {
+                        const messagesForChat = current[key];
+                        if (!messagesForChat?.length) return current;
+                        const next = [...messagesForChat];
+                        next[next.length - 1] = {
+                            ...next[next.length - 1],
+                            status: stopRequestedRef.current
+                                ? "stopped"
+                                : "failed",
+                        };
+                        queueMicrotask(() => {
+                            commitMessagesForChat(resolvedChatId, next);
+                        });
+                        return { ...current, [key]: next };
+                    });
+
+                    setLoading(false);
+                    setIsStreaming(false);
+                    return;
+                }
+
+                throw new Error("Failed to connect to stream");
+            }
+
+            await processStream(
+                response,
+                isCreatingChat,
+                currentChatId,
+                requestId,
+                optimisticTitle,
+            );
+        } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+                const resolvedChatId =
+                    activeResolvedChatIdRef.current ?? currentChatId;
+                const key = getActiveChatKey(resolvedChatId);
+
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        status: stopRequestedRef.current ? "stopped" : "failed",
+                    };
+                    queueMicrotask(() => {
+                        commitMessagesForChat(resolvedChatId, next);
+                    });
+                    return { ...current, [key]: next };
+                });
+
+                setLoading(false);
+                setIsStreaming(false);
+                return;
+            }
+
+            if (
+                stopRequestedRef.current &&
+                activeRequestIdRef.current === requestId
+            ) {
+                const resolvedChatId =
+                    activeResolvedChatIdRef.current ?? currentChatId;
+                const key = getActiveChatKey(resolvedChatId);
+
+                setOptimisticMessagesByChatId((current) => {
+                    const messagesForChat = current[key];
+                    if (!messagesForChat?.length) return current;
+                    const next = [...messagesForChat];
+                    next[next.length - 1] = {
+                        ...next[next.length - 1],
+                        status: "stopped",
+                    };
+                    queueMicrotask(() => {
+                        commitMessagesForChat(resolvedChatId, next);
+                    });
+                    return { ...current, [key]: next };
+                });
+
+                setLoading(false);
+                setIsStreaming(false);
+                return;
+            }
+
+            console.error("Error streaming message", err);
+            const resolvedChatId =
+                activeResolvedChatIdRef.current ?? currentChatId;
+            const key = getActiveChatKey(resolvedChatId);
+            const errorMessage = chatService.getChatErrorMessage(err);
+
+            setOptimisticMessagesByChatId((current) => {
+                const messagesForChat = current[key];
+                if (!messagesForChat?.length) return current;
+                const next = [...messagesForChat];
+                next[next.length - 1] = {
+                    ...next[next.length - 1],
+                    content: errorMessage,
+                    status: "failed",
+                };
+                queueMicrotask(() => {
+                    commitMessagesForChat(resolvedChatId, next);
+                });
+                return { ...current, [key]: next };
+            });
+
+            toast.error(errorMessage);
+        } finally {
+            if (activeRequestIdRef.current === requestId) {
+                activeAbortControllerRef.current = null;
+                activeRequestIdRef.current = null;
+                activeResolvedChatIdRef.current = null;
+                stopRequestedRef.current = false;
+
+                if (connectionTimeoutRef.current) {
+                    clearTimeout(connectionTimeoutRef.current);
+                    connectionTimeoutRef.current = null;
+                }
+
+                setLoading(false);
+                setIsStreaming(false);
+            }
+        }
+    };
+
+    const stopGeneration = async () => {
+        const requestId = activeRequestIdRef.current;
+        const chatId = activeResolvedChatIdRef.current ?? currentChatId;
+
+        if (!requestId) return;
+
+        stopRequestedRef.current = true;
+        markAssistantMessageStatus(chatId, requestId, "stopped");
+        activeAbortControllerRef.current?.abort();
+
+        try {
+            await chatService.stopStream(requestId, chatId);
+            if (user?.id) {
+                await refreshChats(user.id);
+            }
+        } catch (err) {
+            console.error("Error stopping stream", err);
+            toast.error("Could not stop generation cleanly on the server.");
+        } finally {
+            if (connectionTimeoutRef.current) {
+                clearTimeout(connectionTimeoutRef.current);
+                connectionTimeoutRef.current = null;
+            }
+            activeAbortControllerRef.current = null;
+            activeRequestIdRef.current = null;
+            activeResolvedChatIdRef.current = null;
+            stopRequestedRef.current = false;
+            setIsStreaming(false);
+            setLoading(false);
+        }
+    };
+
+    return {
+        streamMessage,
+        stopGeneration,
+        optimisticMessages:
+            optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ?? null,
+        isStreaming: isStreamingCurrentChat,
+        loading: isLoadingCurrentChat,
+    };
 };
