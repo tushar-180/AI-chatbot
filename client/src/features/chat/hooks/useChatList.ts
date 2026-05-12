@@ -3,6 +3,7 @@ import { useUser } from "@clerk/react";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
+import { useServerStatus } from "@/contexts/ServerStatusContext";
 
 export const useChatList = () => {
   const { user } = useUser();
@@ -63,6 +64,8 @@ export const useChatList = () => {
     setSidebarOpen(false);
   };
 
+  const { isDown } = useServerStatus();
+
   useEffect(() => {
     if (
       !user?.id ||
@@ -102,7 +105,10 @@ export const useChatList = () => {
         }
       } catch (err) {
         console.error("Error fetching chats", err);
-        toast.error("Could not load chats.");
+        // Only show error if server is not already confirmed down
+        if (!isDown) {
+          toast.error("Could not load chats.");
+        }
       }
     };
 

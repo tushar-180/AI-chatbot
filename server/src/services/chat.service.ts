@@ -3,6 +3,7 @@ import {
   DEFAULT_AI_PROVIDER,
   DEFAULT_CHAT_TITLE,
 } from "../constants/chat.constants";
+import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import { chatRepository } from "../repositories/chat.repository";
 import type {
   Attachment,
@@ -151,6 +152,13 @@ async function* streamAssistantResponse(
     });
   }
 
+  promptMessages.unshift({
+    role: "system",
+    content: BASE_SYSTEM_PROMPT,
+    userId: chat.userId,
+    status: "completed"
+  })
+
   // Create assistant message in its own collection
   const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
     role: "assistant",
@@ -175,6 +183,9 @@ async function* streamAssistantResponse(
   let fullResponse = "";
   let receivedFirstChunk = false;
   let firstTokenTimedOut = false;
+
+  console.log("=== FINAL PROMPT MESSAGES (STREAMING) ===");
+  console.log(JSON.stringify(promptMessages, null, 2));
 
   try {
     const stream = aiProvider.generateStreamResponse(
@@ -336,7 +347,6 @@ export const chatService = {
 
       let reply = "";
       try {
-        console.log({ promptMessages });
         reply = await aiProvider.generateResponse(promptMessages);
       } catch (err) {
         console.error("AI Error in createChat:", err);
@@ -468,7 +478,6 @@ export const chatService = {
 
     let reply = "";
     try {
-      console.log({ promptMessages });
       reply = await aiProvider.generateResponse(promptMessages);
       console.log({ reply });
     } catch (err) {

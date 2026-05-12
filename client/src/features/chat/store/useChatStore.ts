@@ -83,9 +83,7 @@ export const useChatStore = create<ChatState>()(
       setIsStreaming: (isStreaming, chatId) =>
         set((state) => ({
           isStreaming,
-          streamingChatId: isStreaming
-            ? (chatId ?? state.currentChatId)
-            : null,
+          streamingChatId: isStreaming ? (chatId ?? state.currentChatId) : null,
         })),
 
       setIsNewChat: (isNew) => set({ isNewChat: isNew }),
@@ -116,11 +114,9 @@ export const useChatStore = create<ChatState>()(
       updateChatTitle: (id, title) =>
         set((state) => ({
           chats: state.chats.map((chat) =>
-            chat._id === id ? { ...chat, title } : chat
+            chat._id === id ? { ...chat, title } : chat,
           ),
         })),
-
-      
 
       clearMessages: () => set({ messages: [] }),
     }),

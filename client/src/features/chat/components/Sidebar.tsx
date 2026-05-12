@@ -15,10 +15,11 @@ import {
   Brain,
   Sparkles,
 } from "lucide-react";
-import DeleteConfirmModal from "./DeleteConfirmModal";
-import GalleryModal from "./GalleryModal";
-import MemoryModal from "./MemoryModal";
-import PersonalizationModal from "./PersonalizationModal";
+import { lazy, Suspense } from "react";
+const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
+const GalleryModal = lazy(() => import("./GalleryModal"));
+const MemoryModal = lazy(() => import("./MemoryModal"));
+const PersonalizationModal = lazy(() => import("./PersonalizationModal"));
 
 /**
  * Sidebar Component
@@ -307,29 +308,31 @@ const Sidebar = () => {
         </div>
       </aside>
 
-      <DeleteConfirmModal
-        isOpen={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={() => {
-          if (deleteId) deleteChat(deleteId);
-          setDeleteId(null);
-        }}
-      />
+      <Suspense fallback={null}>
+        <DeleteConfirmModal
+          isOpen={!!deleteId}
+          onClose={() => setDeleteId(null)}
+          onConfirm={() => {
+            if (deleteId) deleteChat(deleteId);
+            setDeleteId(null);
+          }}
+        />
 
-      <GalleryModal
-        isOpen={galleryOpen}
-        onClose={() => setGalleryOpen(false)}
-      />
+        <GalleryModal
+          isOpen={galleryOpen}
+          onClose={() => setGalleryOpen(false)}
+        />
 
-      <MemoryModal
-        isOpen={memoryOpen}
-        onClose={() => setMemoryOpen(false)}
-      />
+        <MemoryModal
+          isOpen={memoryOpen}
+          onClose={() => setMemoryOpen(false)}
+        />
 
-      <PersonalizationModal
-        isOpen={personalizationOpen}
-        onClose={() => setPersonalizationOpen(false)}
-      />
+        <PersonalizationModal
+          isOpen={personalizationOpen}
+          onClose={() => setPersonalizationOpen(false)}
+        />
+      </Suspense>
     </>
   );
 };

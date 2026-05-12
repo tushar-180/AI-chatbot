@@ -10,6 +10,12 @@ import { errorHandler } from "./middleware/error.middleware";
 
 const app = express();
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:4173",
+  process.env.CLIENT_URL,
+].filter(Boolean) as string[];
+
 app.use(
   cors({
     origin: [
@@ -24,7 +30,8 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  res.send("API running...");
+  const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+  res.send(`API running... Server URL: ${serverUrl}`);
 });
 
 app.use("/api/chat", chatRoutes);
