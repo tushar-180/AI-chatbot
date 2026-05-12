@@ -32,6 +32,10 @@ app.get("/", (req, res) => {
   res.send(`API running... Server URL: ${serverUrl}`);
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ ok: true });
+});
+
 app.use("/api/chat", chatRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/user", userRoutes);
