@@ -8,7 +8,7 @@ import {
 } from "react";
 import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X,Mic } from "lucide-react";
 
-import { ProviderIcon } from "@lobehub/icons";
+import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,13 +44,14 @@ interface InputAreaProps {
  */
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
-  const mapping: Record<string, string> = {
-    gemini: "google",
-    claude: "anthropic",
-    openai: "openai",
-    nvidia: "nvidia",
+  const mapping: Record<string, any> = {
+    gemini: Gemini.Color,
+    claude: Anthropic,
+    openai: OpenAI,
+    nvidia: Nvidia.Color,
   };
-  return <ProviderIcon provider={mapping[p] || p} size={size} type="color" />;
+  const Icon = mapping[p];
+  return Icon ? <Icon size={size} /> : null;
 };
 
 /**
@@ -203,6 +204,7 @@ const InputArea = ({
     formData.append("image", file);
 
     try {
+      
       const res = await api.post("/upload/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -303,7 +305,7 @@ const InputArea = ({
               placeholder={
                 currentChatId ? "Ask anything..." : "Start a conversation..."
               }
-              className={`max-h-[200px] md:max-h-[300px] min-h-[48px] md:min-h-[56px] flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
+              className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
             />
 <button
   type="button"

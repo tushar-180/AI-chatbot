@@ -1,16 +1,17 @@
 import {
   useRef,
   useEffect,
-  useLayoutEffect,
   useCallback,
   memo,
   useState,
+  useLayoutEffect,
 } from "react";
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 
 import MessageItem from "./MessageItem";
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
   model?: string;
@@ -71,147 +72,62 @@ const MessageList = ({
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // Should auto-scroll continue?
-  const shouldAutoScrollRef = useRef(true);
-
-  // Ignore scroll events caused by our own auto-scroll
-  const autoScrollingRef = useRef(false);
-
-  // Track if user is currently streaming a message
-  const isStreamingMessageRef = useRef(false);
-
-  const previousMessageCountRef = useRef(messages.length);
-  const previousChatIdRef = useRef<string | null>(currentChatId);
-
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
-  // ─────────────────────────────────────────────
+  // Track if user manually scrolled up
+  const shouldAutoScrollRef = useRef(true);
+
+  // Track previous values
+  const prevChatIdRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef(0);
+
   // GET REAL SCROLL CONTAINER
-  // ─────────────────────────────────────────────
-  const getScrollContainer = () => {
+
+  const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
       ".overflow-y-auto",
     ) as HTMLDivElement | null;
-  };
+  }, []);
 
-  // ─────────────────────────────────────────────
   // CHECK IF USER IS NEAR BOTTOM
-  // ─────────────────────────────────────────────
+
   const isAtBottom = useCallback(() => {
     const container = getScrollContainer();
 
     if (!container) return true;
 
-    const threshold = 100;
-
     return (
       container.scrollHeight - container.scrollTop - container.clientHeight <
-      threshold
+      120
     );
-  }, []);
+  }, [getScrollContainer]);
 
-  // ─────────────────────────────────────────────
-  // SCROLL TO BOTTOM (OPTIMIZED)
-  // ─────────────────────────────────────────────
-  const scrollToBottom = useCallback((smooth = false) => {
-    const container = getScrollContainer();
+  // SCROLL TO BOTTOM
+  const scrollToBottom = useCallback(
+    (smooth = false) => {
+      const container = getScrollContainer();
 
-    if (!container) return;
+      if (!container) return;
 
-    autoScrollingRef.current = true;
-
-    // Use requestAnimationFrame for smoother scrolling
-    requestAnimationFrame(() => {
       container.scrollTo({
         top: container.scrollHeight,
         behavior: smooth ? "smooth" : "auto",
       });
+    },
+    [getScrollContainer],
+  );
 
-      requestAnimationFrame(() => {
-        autoScrollingRef.current = false;
-      });
-    });
+  // HANDLE SCROLL
 
-    shouldAutoScrollRef.current = true;
-    setShowScrollToBottom(false);
-  }, []);
-
-  // ─────────────────────────────────────────────
-  // HANDLE USER SCROLL (OPTIMIZED)
-  // ─────────────────────────────────────────────
   const handleScroll = useCallback(() => {
-    // Ignore scroll events triggered by auto-scroll
-    if (autoScrollingRef.current) return;
-
     const atBottom = isAtBottom();
 
-    // If user manually scrolls away from bottom, disable auto-scroll
-    // It will NOT re-enable until a new message arrives
-    if (!atBottom) {
-      shouldAutoScrollRef.current = false;
-    }
-    // Do NOT re-enable auto-scroll by scrolling to bottom
-    // It will only re-enable when a new message arrives
+    shouldAutoScrollRef.current = atBottom;
 
     setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
 
-  // ─────────────────────────────────────────────
-  // HANDLE CHAT CHANGE
-  // ─────────────────────────────────────────────
-  useEffect(() => {
-    if (currentChatId !== previousChatIdRef.current) {
-      shouldAutoScrollRef.current = true;
-
-      scrollToBottom(false);
-
-      setShowScrollToBottom(false);
-
-      previousChatIdRef.current = currentChatId;
-    }
-  }, [currentChatId, scrollToBottom]);
-
-  // ─────────────────────────────────────────────
-  // AUTO SCROLL DURING STREAMING (OPTIMIZED)
-  // ─────────────────────────────────────────────
-  useLayoutEffect(() => {
-    const previousMessageCount = previousMessageCountRef.current;
-    const messageCountChanged = messages.length !== previousMessageCount;
-    const lastMessage = messages[messages.length - 1];
-    const isNewUserMessage =
-      lastMessage?.role === "user" && messageCountChanged;
-
-    // User sent a new message - ALWAYS re-enable auto-scroll
-    if (isNewUserMessage) {
-      shouldAutoScrollRef.current = true;
-      isStreamingMessageRef.current = true;
-      scrollToBottom(false);
-    }
-    // New assistant message arrived - re-enable auto-scroll
-    else if (messageCountChanged && lastMessage?.role === "assistant") {
-      shouldAutoScrollRef.current = true;
-      isStreamingMessageRef.current = true;
-      scrollToBottom(false);
-    }
-    // During streaming of current message, continue scrolling smoothly if enabled
-    else if (shouldAutoScrollRef.current && isStreamingMessageRef.current) {
-      scrollToBottom(false);
-    }
-
-    // Track message count for next comparison
-    previousMessageCountRef.current = messages.length;
-  }, [messages, isStreaming, scrollToBottom]);
-
-  // Track when streaming completes
-  useEffect(() => {
-    if (!isStreaming) {
-      isStreamingMessageRef.current = false;
-    }
-  }, [isStreaming]);
-
-  // ─────────────────────────────────────────────
   // ATTACH SCROLL LISTENER
-  // ─────────────────────────────────────────────
   useEffect(() => {
     const container = getScrollContainer();
 
@@ -219,13 +135,56 @@ const MessageList = ({
 
     container.addEventListener("scroll", handleScroll);
 
-    // Initial state
+    // Initial check
     handleScroll();
 
     return () => {
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [handleScroll, currentChatId]);
+  }, [getScrollContainer, handleScroll]);
+
+  // AUTO SCROLL ON:
+  // 1. NEW MESSAGE
+  // 2. CHAT SWITCH
+  // 3. PAGE REFRESH
+  useLayoutEffect(() => {
+    const messageCountChanged = messages.length !== prevMessageCountRef.current;
+
+    const chatChanged = currentChatId !== prevChatIdRef.current;
+
+    // Always scroll when:
+    // - opening another chat
+    // - refreshing/loading chat
+    // - sending new message while already at bottom
+    if (
+      chatChanged ||
+      (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
+    ) {
+      requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
+    }
+
+    prevMessageCountRef.current = messages.length;
+    prevChatIdRef.current = currentChatId;
+  }, [messages, currentChatId, messagesLoading, scrollToBottom]);
+
+  // FORCE SCROLL AFTER CHAT LOAD
+  useEffect(() => {
+    if (hasLoadedCurrentChat && messages.length > 0 && !messagesLoading) {
+      const timeout = setTimeout(() => {
+        scrollToBottom(false);
+      }, 50);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [
+    hasLoadedCurrentChat,
+    currentChatId,
+    messages.length,
+    messagesLoading,
+    scrollToBottom,
+  ]);
 
   const showSuggestions = !currentChatId && messages.length === 0;
 
@@ -318,7 +277,7 @@ const MessageList = ({
         ) : (
           <>
             {messages.map((msg, i) => (
-              <div key={i} className="animate-in fade-in duration-200">
+              <div key={msg.id}>
                 <MessageItem
                   message={msg}
                   isStreaming={isStreaming && i === messages.length - 1}
@@ -343,7 +302,10 @@ const MessageList = ({
               <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
                 <button
                   type="button"
-                  onClick={() => scrollToBottom(true)}
+                  onClick={() => {
+                    shouldAutoScrollRef.current = true;
+                    scrollToBottom(true);
+                  }}
                   aria-label="Scroll to bottom"
                   className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
                 >

@@ -1,2 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# Environment
 .env
-node_modules
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Server specific
+uploads/
+!uploads/.gitkeep
+temp/
+.cache/
+

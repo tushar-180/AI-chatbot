@@ -1,5 +1,6 @@
 import { UserMemory } from "../models/UserMemory.model";
 import { aiService } from "./ai.service";
+import { MEMORY_CONTEXT_PROMPT,  MEMORY_EXTRACTION_PROMPT } from "../constants/prompt.constants";
 
 export const memoryService = {
   /**
@@ -99,17 +100,7 @@ export const memoryService = {
       if ((facts + factLine).length > MAX_CHARS) break;
       facts += factLine;
     }
-    return `
-      [USER IDENTITY & MEMORY]
-      You have access to the following facts about the user from past sessions. 
-      Use them to make the conversation feel continuous and personal, but follow these rules:
-      1. Do NOT list these facts or say "I remember that...".
-      2. Integrate them naturally only when relevant to the current topic.
-      3. If the user asks for something general, keep your response focused on the task, but let the context subtly influence your tone or examples.
-      
-      FACTS:
-      ${facts}
-    `;
+    return MEMORY_CONTEXT_PROMPT(facts);
   },
 
   /**
@@ -139,25 +130,7 @@ export const memoryService = {
     try {
       const provider = aiService.getProvider(); // Use default provider
       
-      const extractionPrompt = `
-        You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
-        
-        RULES:
-        1. Only extract facts that are likely to be useful later.
-        2. Format each fact as: [Fact] | [Category]
-        3. Categories MUST be one of: personal, preference, technical, work, general.
-        4. If no facts are found, return exactly "NONE".
-        5. Return only the facts, one per line.
-        
-        EXAMPLES:
-        "My name is Tushar" -> User's name is Tushar | personal
-        "I love dark mode" -> User prefers dark mode | preference
-        "I'm building a React app" -> User is building a React app | work
-        
-        USER MESSAGE: "${userMessage}"
-        
-        EXTRACTED FACTS:
-      `;
+      const extractionPrompt = MEMORY_EXTRACTION_PROMPT(userMessage);
 
       const response = await provider.generateResponse([
         { role: "user", content: extractionPrompt, userId }

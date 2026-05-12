@@ -37,7 +37,23 @@ export class NvidiaAdapter implements IAIService {
   private formatMessages(messages: AIMessage[]) {
     const isVision = supportsVision(this.model);
 
-    return messages.map((m) => {
+    const systemMessages = messages.filter((m) => m.role === "system");
+    const chatMessages = messages.filter((m) => m.role !== "system");
+
+    const formattedMessages: any[] = [];
+
+    if (systemMessages.length > 0) {
+      const combinedSystemContent = systemMessages
+        .map((m) => m.content)
+        .join("\n\n---\n\n");
+
+      formattedMessages.push({
+        role: "system",
+        content: combinedSystemContent,
+      });
+    }
+
+    const formattedChatMessages = chatMessages.map((m) => {
       let content: any = m.content;
 
       // If there are attachments and the model doesn't support vision, append them as text
@@ -64,6 +80,9 @@ export class NvidiaAdapter implements IAIService {
         content,
       };
     });
+
+        return [...formattedMessages, ...formattedChatMessages];
+
   }
 
   async generateResponse(messages: AIMessage[]): Promise<string> {

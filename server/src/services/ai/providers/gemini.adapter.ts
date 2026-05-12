@@ -99,16 +99,19 @@ export class GeminiAdapter implements IAIService {
   async generateResponse(messages: AIMessage[]): Promise<string> {
     const contents = await this.formatContents(messages);
 
-    const systemMessage = messages.find((msg) => msg.role === "system");
+    const systemMessages = messages.filter((msg) => msg.role === "system");
+    const combinedSystemPrompt = systemMessages
+      .map((msg) => msg.content)
+      .join("\n\n---\n\n");
 
     try {
       const res = await this.ai.models.generateContent({
         model: this.model,
         contents,
         config: {
-          systemInstruction: systemMessage
+          systemInstruction: combinedSystemPrompt
             ? {
-                parts: [{ text: systemMessage.content }],
+                parts: [{ text: combinedSystemPrompt }],
               }
             : {
                 parts: [
@@ -161,16 +164,20 @@ OUTPUT RULES (VERY IMPORTANT):
   ): AsyncIterable<string> {
     const contents = await this.formatContents(messages);
 
-    const systemMessage = messages.find((msg) => msg.role === "system");
+    const systemMessages = messages.filter((msg) => msg.role === "system");
+    const combinedSystemPrompt = systemMessages
+      .map((msg) => msg.content)
+      .join("\n\n---\n\n");
 
     try {
+      console.log(combinedSystemPrompt)
       const res = await this.ai.models.generateContentStream({
         model: this.model,
         contents,
         config: {
-          systemInstruction: systemMessage
+          systemInstruction: combinedSystemPrompt
             ? {
-                parts: [{ text: systemMessage.content }],
+                parts: [{ text: combinedSystemPrompt }],
               }
             : {
                 parts: [
