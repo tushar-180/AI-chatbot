@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { API_BASE_URL, API_ORIGIN } from "../lib/api";
+import {API_ORIGIN } from "../lib/api";
 
 interface ServerStatusContextType {
   isDown: boolean;
