@@ -1,3 +1,5 @@
+import { useParams } from "react-router-dom";
+import { useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
@@ -13,10 +15,25 @@ import { Spotlight } from "@/components/ui/spotlight";
  * Handles the main layout and orchestrates chat logic via custom hooks.
  */
 const Chat = () => {
-  const { currentChatId, messages, isNewChat, setSidebarOpen } = useChatStore();
+  const { chatId } = useParams<{ chatId?: string }>();
+  const { currentChatId, messages, isNewChat, setSidebarOpen, setCurrentChat, setMessages, setIsNewChat } = useChatStore();
+
+  // Sync URL parameter with store when chatId changes from URL
+  useEffect(() => {
+    if (chatId && chatId !== currentChatId) {
+      setCurrentChat(chatId);
+      setMessages([]);
+      setIsNewChat(false);
+    } else if (!chatId && currentChatId) {
+      // If no chatId in URL but currentChatId exists, reset to new chat
+      setCurrentChat(null);
+      setMessages([]);
+      setIsNewChat(true);
+    }
+  }, [chatId]);
 
   // 1. Manage Message Fetching & Sync
-  const { messagesLoading, loadedChatId } = useChatMessages();
+  const { messagesLoading, loadedChatId, messagesError } = useChatMessages();
 
   // 2. Manage Streaming Logic & Optimistic UI
   const {
@@ -39,7 +56,11 @@ const Chat = () => {
     setWebSearchEnabled,
     handleFormSubmit,
   } = useChatInput({
-    onSubmit: streamMessage,
+    onSubmit: (input, provider, attachments, options) =>
+      streamMessage(input, provider, attachments, {
+        forceNewChat: Boolean(messagesError && currentChatId),
+        webSearchEnabled: options?.webSearchEnabled,
+      }),
   });
 
   // Determine which messages to display (prefer optimistic during streaming)
@@ -69,6 +90,7 @@ const Chat = () => {
               messages={displayMessages}
               loading={isCurrentChatLoading}
               messagesLoading={messagesLoading}
+              messagesError={messagesError}
               hasLoadedCurrentChat={
                 !currentChatId || loadedChatId === currentChatId
               }

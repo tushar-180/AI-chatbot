@@ -16,6 +16,7 @@ interface UseChatInputProps {
     attachments?: Attachment[],
     options?: {
       webSearchEnabled?: boolean;
+      forceNewChat?: boolean;
     },
   ) => Promise<void>;
   initialProvider?: string;

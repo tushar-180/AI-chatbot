@@ -51,6 +51,7 @@ interface MessageListProps {
   messages: Message[];
   loading: boolean;
   messagesLoading: boolean;
+  messagesError: string | null;
   hasLoadedCurrentChat: boolean;
   isStreaming: boolean;
   currentChatId: string | null;
@@ -62,6 +63,7 @@ const MessageList = ({
   messages,
   loading,
   messagesLoading,
+  messagesError,
   hasLoadedCurrentChat,
   isStreaming,
   currentChatId,
@@ -79,16 +81,14 @@ const MessageList = ({
   const prevChatIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
 
-  
   // GET REAL SCROLL CONTAINER
-  
+
   const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
       ".overflow-y-auto",
     ) as HTMLDivElement | null;
   }, []);
 
-  
   // CHECK IF USER IS NEAR BOTTOM
 
   const isAtBottom = useCallback(() => {
@@ -102,7 +102,6 @@ const MessageList = ({
     );
   }, [getScrollContainer]);
 
-  
   // SCROLL TO BOTTOM
   const scrollToBottom = useCallback(
     (smooth = false) => {
@@ -119,7 +118,7 @@ const MessageList = ({
   );
 
   // HANDLE SCROLL
-  
+
   const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
 
@@ -159,9 +158,7 @@ const MessageList = ({
     // - sending new message while already at bottom
     if (
       chatChanged ||
-      (!messagesLoading &&
-        shouldAutoScrollRef.current &&
-        messageCountChanged)
+      (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
     ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
@@ -244,6 +241,15 @@ const MessageList = ({
                 </button>
               ))}
             </div>
+          </div>
+        ) : messagesError && currentChatId && messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-base font-medium text-slate-200">
+              Unable to load messages
+            </p>
+            <p className="mt-2 max-w-md text-sm text-slate-400">
+              {messagesError}
+            </p>
           </div>
         ) : (messagesLoading || (currentChatId && !hasLoadedCurrentChat)) &&
           messages.length === 0 ? (

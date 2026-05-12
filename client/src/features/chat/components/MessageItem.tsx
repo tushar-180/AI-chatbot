@@ -270,7 +270,8 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
         prev.message.model === next.message.model &&
         prev.message.status === next.message.status &&
         prev.isStreaming === next.isStreaming &&
-        prev.message.attachments === next.message.attachments
+        prev.message.attachments === next.message.attachments &&
+        prev.message.isWebSearching === next.message.isWebSearching
     );
 };
 

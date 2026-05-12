@@ -36,7 +36,12 @@ const TONE_OPTIONS = [
   "Friendly",
 ];
 
-const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onClose }) => {
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+
+const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
+  isOpen,
+  onClose,
+}) => {
   const { user } = useUser();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,7 +58,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/user/profile/${user.id}`
+        `${API_BASE_URL}/api/user/profile/${user.id}`
       );
       if (!response.ok) throw new Error("Failed to fetch profile");
       const userData = await response.json();
@@ -78,12 +83,12 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
     setIsSaving(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/user/personalization/${user.id}`,
+        `${API_BASE_URL}/api/user/personalization/${user.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
-        }
+        },
       );
 
       if (!response.ok) throw new Error("Update failed");
@@ -117,8 +122,8 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
   if (!isOpen) return null;
 
   const modalContent = (
-    <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+    <div
+      className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
       onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
       onMouseUp={(e) => {
         if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();
@@ -130,7 +135,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
         className="w-full max-w-xl bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
-        <div className="px-8 py-8 border-b border-zinc-900 flex items-center justify-between bg-gradient-to-br from-zinc-900/50 to-transparent">
+        <div className="px-8 py-8 border-b border-zinc-900 flex items-center justify-between bg-linear-to-br from-zinc-900/50 to-transparent">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Sparkles className="w-4 h-4 text-emerald-400" />
@@ -171,7 +176,9 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
                   <input
                     type="text"
                     value={data.nickname}
-                    onChange={(e) => setData({ ...data, nickname: e.target.value })}
+                    onChange={(e) =>
+                      setData({ ...data, nickname: e.target.value })
+                    }
                     placeholder="What should Velora call you?"
                     className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all"
                   />
@@ -184,7 +191,9 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
                   <input
                     type="text"
                     value={data.occupation}
-                    onChange={(e) => setData({ ...data, occupation: e.target.value })}
+                    onChange={(e) =>
+                      setData({ ...data, occupation: e.target.value })
+                    }
                     placeholder="e.g. Software Engineer"
                     className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all"
                   />
@@ -222,7 +231,9 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({ isOpen, onC
                 </label>
                 <textarea
                   value={data.customInstructions}
-                  onChange={(e) => setData({ ...data, customInstructions: e.target.value })}
+                  onChange={(e) =>
+                    setData({ ...data, customInstructions: e.target.value })
+                  }
                   placeholder="e.g. Always explain code step-by-step, or 'Keep answers short and direct'..."
                   rows={4}
                   className="w-full bg-zinc-900/50 border border-zinc-800 rounded-2xl px-4 py-3 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all resize-none"

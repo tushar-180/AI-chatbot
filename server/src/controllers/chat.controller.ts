@@ -9,6 +9,7 @@ const getHttpStatus = (error: unknown) => {
   if (!(error instanceof Error)) return 500;
   if (error.name === "ValidationError") return 400;
   if (error.name === "NotFoundError") return 404;
+  if (error.name === "ForbiddenError") return 403;
   return 500;
 };
 
@@ -110,7 +111,21 @@ export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
 
 export const getChatById = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const chat = await chatService.getChatById(String(req.params.id));
+    const chatId = String(req.params.id);
+    const currentUserId = req.query.userId as string;
+
+    if (!currentUserId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
+
+    const chat = await chatService.getChatById(chatId);
+
+    if (!chat?.userId || chat.userId !== currentUserId) {
+      return res
+        .status(403)
+        .json({ error: "You are not allowed to view messages for this chat." });
+    }
+
     return res.json(chat);
   } catch (error) {
     return sendControllerError(res, error, "Failed to fetch chat");
