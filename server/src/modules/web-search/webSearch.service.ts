@@ -2,330 +2,460 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
+import type { ChatMessage } from "../../types/chat.types";
+import {
+  getExtractionCache,
+  getGroundingCache,
+  getSearchCache,
+  setExtractionCache,
+  setGroundingCache,
+  setSearchCache,
+  type ExtractedPage,
+} from "./cache";
+import { withEstimatedConfidence } from "./confidence";
+import { deduplicateCandidates } from "./deduplication";
+import { localRerank } from "./reranker";
+import { resolveSearchQuery } from "./queryResolver";
 import { WEB_GROUNDING_SYSTEM_PROMPT } from "./webSearch.prompts";
 import type {
-    SearchCandidate,
-    SearchSource,
-    WebGroundingContext,
+  SearchCandidate,
+  SearchSource,
+  WebGroundingContext,
 } from "./webSearch.types";
 
-const MAX_SEARCH_RESULTS = 5;
-const MAX_FETCHED_RESULTS = 3;
+const MAX_SEARCH_RESULTS = 6;
+const MAX_FETCHED_RESULTS = 5;
 const MAX_SOURCE_COUNT = 3;
 const MAX_EXCERPT_CHARS = 900;
-const MAX_TEXT_CHARS = 12000;
-const REQUEST_TIMEOUT_MS = 10000;
+const MAX_TEXT_CHARS = 14_000;
+const REQUEST_TIMEOUT_MS = 10_000;
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
+const LIVE_QUERY_TTL_MS = 5 * 60 * 1000;
+const LIVE_EXTRACTION_TTL_MS = 10 * 60 * 1000;
+const STABLE_QUERY_TTL_MS = 6 * 60 * 60 * 1000;
+const STABLE_EXTRACTION_TTL_MS = 24 * 60 * 60 * 1000;
 
 const DEFAULT_HEADERS = {
-    "User-Agent":
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
-    "Accept-Language": "en-US,en;q=0.9",
+  "User-Agent":
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+  "Accept-Language": "en-US,en;q=0.9",
 };
 
 const logPrefix = "[web-search]";
 
-const STOP_WORDS = new Set([
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-    "how", "i", "in", "is", "it", "of", "on", "or", "the", "to",
-    "was", "what", "when", "where", "which", "who", "with",
-]);
-
-// ---------- Redis/Memory Cache Support ----------
-const searchCache = new Map<string, { results: SearchCandidate[]; expires: number }>();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-const getCachedResults = (query: string): SearchCandidate[] | null => {
-    const cached = searchCache.get(query.toLowerCase());
-    if (cached && cached.expires > Date.now()) {
-        return cached.results;
-    }
-    return null;
-};
-
-const setCachedResults = (query: string, results: SearchCandidate[]) => {
-    searchCache.set(query.toLowerCase(), {
-        results,
-        expires: Date.now() + CACHE_TTL_MS,
-    });
-};
-
-// ---------- Helpers ----------
-
 const stripHtml = (value?: string) => {
-    if (!value) return "";
-    return cheerio.load(value).text().replace(/\s+/g, " ").trim();
+  if (!value) return "";
+  return cheerio.load(value).text().replace(/\s+/g, " ").trim();
 };
 
 const getHostname = (value: string) => {
-    try {
-        return new URL(value).hostname;
-    } catch {
-        return "";
-    }
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return "";
+  }
 };
-
-const normalizeWhitespace = (value: string) =>
-    value.replace(/\u0000/g, " ").replace(/\s+/g, " ").trim();
 
 const sanitizeExtractedText = (value: string) => {
-    const suspiciousLine =
-        /\b(ignore (all|any|previous|above)|system prompt|developer message|follow these instructions|you are chatgpt|assistant:|user:)\b/i;
+  const suspiciousLine =
+    /\b(ignore (all|any|previous|above)|system prompt|developer message|follow these instructions|you are chatgpt|assistant:|user:)\b/i;
 
-    return value
-        .split(/\n+/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !suspiciousLine.test(line))
-        .join("\n")
-        .slice(0, MAX_TEXT_CHARS);
+  return value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !suspiciousLine.test(line))
+    .join("\n")
+    .slice(0, MAX_TEXT_CHARS);
 };
 
-const tokenize = (value: string) =>
-    value
-        .toLowerCase()
-        .split(/[^a-z0-9]+/i)
-        .map((token) => token.trim())
-        .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
+const detectStructuredPageScore = (candidate: SearchCandidate) => {
+  const haystack =
+    `${candidate.url} ${candidate.title} ${candidate.snippet}`.toLowerCase();
 
-const chunkText = (text: string, chunkSize = 900, overlap = 150) => {
-    const normalized = text.replace(/\r/g, "");
-    const paragraphs = normalized
-        .split(/\n{2,}/)
-        .map((paragraph) => normalizeWhitespace(paragraph))
-        .filter(Boolean);
+  let score = 0;
+  if (
+    /(standings|ranking|rankings|leaderboard|table|stats|statistics|schedule|fixtures|scoreboard|box-score)/.test(
+      haystack,
+    )
+  ) {
+    score += 0.45;
+  }
+  if (
+    /(espn|nba\.com|nfl\.com|mlb\.com|nhl\.com|premierleague\.com|uefa\.com|fifa\.com|icc-cricket\.com|atptour\.com|wtatennis\.com|fbref\.com|statbunker|flashscore|sofascore|cricbuzz|bcci)/.test(
+      candidate.hostname,
+    )
+  ) {
+    score += 0.45;
+  }
+  if (/(blog|opinion|review|guide|best-)/.test(haystack)) {
+    score -= 0.2;
+  }
 
-    const chunks: string[] = [];
-    let current = "";
-
-    for (const paragraph of paragraphs) {
-        const next = current ? `${current}\n\n${paragraph}` : paragraph;
-        if (next.length <= chunkSize) {
-            current = next;
-            continue;
-        }
-
-        if (current) chunks.push(current);
-
-        if (paragraph.length <= chunkSize) {
-            current = paragraph;
-            continue;
-        }
-
-        let start = 0;
-        while (start < paragraph.length) {
-            const slice = paragraph.slice(start, start + chunkSize).trim();
-            if (slice) chunks.push(slice);
-            start += Math.max(chunkSize - overlap, 1);
-        }
-        current = "";
-    }
-
-    if (current) chunks.push(current);
-    return chunks;
+  return Math.max(0, Math.min(1, score));
 };
 
-const scoreChunk = (
-    queryTokens: string[],
-    text: string,
-    title: string,
-    snippet: string,
-) => {
-    const haystack = `${title} ${snippet} ${text}`.toLowerCase();
-    let score = 0;
+const detectFreshnessScore = (params: {
+  publishedAt?: string | null;
+  lastModified?: string | null;
+  url?: string;
+  snippet?: string;
+  liveDataQuery: boolean;
+}) => {
+  const urlDateMatch = params.url?.match(
+    /(20\d{2})[/-](0[1-9]|1[0-2])[/-](0[1-9]|[12]\d|3[01])/,
+  );
+  const snippetDateMatch = params.snippet?.match(
+    /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}\b/i,
+  );
 
-    for (const token of queryTokens) {
-        const matches = haystack.match(
-            new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"),
-        );
-        score += matches ? matches.length : 0;
-    }
+  const dateCandidates = [
+    params.publishedAt,
+    params.lastModified,
+    urlDateMatch?.[0],
+    snippetDateMatch?.[0],
+  ].filter(Boolean) as string[];
 
-    if (title) score += 1;
-    if (snippet) score += 1;
-    return score;
+  if (!dateCandidates.length) {
+    return params.liveDataQuery ? 0.25 : 0.45;
+  }
+
+  const timestamps = dateCandidates
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value));
+  if (!timestamps.length) {
+    return params.liveDataQuery ? 0.25 : 0.45;
+  }
+
+  const ageHours = (Date.now() - Math.max(...timestamps)) / (60 * 60 * 1000);
+  if (ageHours <= 6) return 1;
+  if (ageHours <= 24) return 0.9;
+  if (ageHours <= 72) return 0.75;
+  if (ageHours <= 24 * 7) return 0.55;
+  if (ageHours <= 24 * 30) return 0.35;
+  return 0.15;
 };
 
-// ---------- Search Providers ----------
-
-const searchTavily = async (query: string): Promise<SearchCandidate[]> => {
-    const apiKey = process.env.TAVILY_API_KEY || process.env.TAVILY_API;
-    if (!apiKey) return [];
-
-    try {
-        const response = await axios.post(TAVILY_SEARCH_URL, {
-            api_key: apiKey,
-            query: query,
-            search_depth: "basic",
-            max_results: MAX_SEARCH_RESULTS,
-        }, { timeout: REQUEST_TIMEOUT_MS });
-
-        const results = response.data?.results || [];
-        return results.map((r: any) => ({
-            title: stripHtml(r.title),
-            url: r.url,
-            hostname: getHostname(r.url),
-            snippet: stripHtml(r.content),
-        }));
-    } catch (error: any) {
-        const errMsg = axios.isAxiosError(error) ? `${error.message} (Status: ${error.response?.status})` : String(error);
-        console.warn(`${logPrefix} Tavily search failed: ${errMsg}`);
-        return [];
-    }
+const getTtlMs = (liveDataQuery: boolean, kind: "query" | "extraction") => {
+  if (kind === "query") {
+    return liveDataQuery ? LIVE_QUERY_TTL_MS : STABLE_QUERY_TTL_MS;
+  }
+  return liveDataQuery ? LIVE_EXTRACTION_TTL_MS : STABLE_EXTRACTION_TTL_MS;
 };
-
-const searchWeb = async (query: string): Promise<{
-    candidates: SearchCandidate[];
-    strategy: "tavily" | null;
-}> => {
-    const candidates = await searchTavily(query);
-    return {
-        candidates,
-        strategy: candidates.length > 0 ? "tavily" : null,
-    };
-};
-
-// ---------- Extraction Pipeline ----------
 
 const extractArticleText = (html: string, url: string) => {
-    const dom = new JSDOM(html, { url });
-    const { document } = dom.window;
+  const dom = new JSDOM(html, { url });
+  const { document } = dom.window;
 
-    document
-        .querySelectorAll(
-            "script, style, noscript, iframe, form, input, button, select, option, textarea, svg, canvas, nav, footer, header, aside, template, dialog, meta, link",
-        )
-        .forEach((node: Element) => node.remove());
+  document
+    .querySelectorAll(
+      "script, style, noscript, iframe, form, input, button, select, option, textarea, svg, canvas, nav, footer, header, aside, template, dialog, meta, link",
+    )
+    .forEach((node: Element) => node.remove());
 
-    const reader = new Readability(document);
-    const parsed = reader.parse();
-    const readableText = sanitizeExtractedText(parsed?.textContent || "");
+  const reader = new Readability(document);
+  const parsed = reader.parse();
+  const readableText = sanitizeExtractedText(parsed?.textContent || "");
 
-    const $ = cheerio.load(html);
-    $("script, style, noscript, iframe, form, nav, footer, header, aside, svg, canvas").remove();
-    const fallbackText = sanitizeExtractedText($.root().text());
+  const $ = cheerio.load(html);
+  $(
+    "script, style, noscript, iframe, form, nav, footer, header, aside, svg, canvas",
+  ).remove();
+  const fallbackText = sanitizeExtractedText($.root().text());
 
-    dom.window.close();
-    return readableText.length >= fallbackText.length ? readableText : fallbackText;
+  dom.window.close();
+  return readableText.length >= fallbackText.length
+    ? readableText
+    : fallbackText;
 };
 
-const fetchBestExcerpt = async (
-    result: SearchCandidate,
-    query: string,
-): Promise<SearchSource | null> => {
-    try {
-        const response = await axios.get<string>(result.url, {
-            timeout: REQUEST_TIMEOUT_MS,
-            responseType: "text",
-            maxContentLength: 1_500_000,
-            headers: DEFAULT_HEADERS,
-            validateStatus: (status) => status >= 200 && status < 400,
-        });
+const searchTavily = async (
+  query: string,
+  liveDataQuery: boolean,
+): Promise<SearchCandidate[]> => {
+  const apiKey = process.env.TAVILY_API_KEY || process.env.TAVILY_API;
+  if (!apiKey) return [];
 
-        const contentType = String(response.headers["content-type"] || "");
-        if (!/text\/html|application\/xhtml\+xml|text\/plain/i.test(contentType)) {
-            return null;
-        }
+  try {
+    const response = await axios.post(
+      TAVILY_SEARCH_URL,
+      {
+        api_key: apiKey,
+        query,
+        search_depth: "basic",
+        max_results: MAX_SEARCH_RESULTS,
+      },
+      { timeout: REQUEST_TIMEOUT_MS },
+    );
 
-        const articleText = extractArticleText(response.data, result.url);
-        if (!articleText) return null;
+    const results = response.data?.results || [];
+    return results.map((result: any) => {
+      const title = stripHtml(result.title);
+      const snippet = stripHtml(result.content);
+      const url = String(result.url || "");
+      const hostname = getHostname(url);
+      const publishedAt =
+        typeof result.published_date === "string" ? result.published_date : null;
+      const lastModified =
+        typeof result.last_modified === "string" ? result.last_modified : null;
+      const candidate: SearchCandidate = {
+        title,
+        url,
+        hostname,
+        snippet,
+        searchProviderScore:
+          typeof result.score === "number" ? result.score : undefined,
+        publishedAt,
+        lastModified,
+      };
 
-        const queryTokens = tokenize(query);
-        const chunks = chunkText(articleText);
+      return {
+        ...candidate,
+        freshnessScore: detectFreshnessScore({
+          publishedAt,
+          lastModified,
+          url,
+          snippet,
+          liveDataQuery,
+        }),
+        structuredScore: detectStructuredPageScore(candidate),
+      };
+    });
+  } catch (error: any) {
+    const errMsg = axios.isAxiosError(error)
+      ? `${error.message} (Status: ${error.response?.status})`
+      : String(error);
+    console.warn(`${logPrefix} Tavily search failed: ${errMsg}`);
+    return [];
+  }
+};
 
-        const bestChunk =
-            chunks
-                .map((chunk) => ({
-                    chunk,
-                    score: scoreChunk(queryTokens, chunk, result.title, result.snippet),
-                }))
-                .sort((a, b) => b.score - a.score)[0] || null;
+const fetchExtractedPage = async (
+  candidate: SearchCandidate,
+  liveDataQuery: boolean,
+): Promise<ExtractedPage | null> => {
+  const cached = getExtractionCache(candidate.url);
+  if (cached) return cached;
 
-        if (!bestChunk) return null;
+  try {
+    const response = await axios.get<string>(candidate.url, {
+      timeout: REQUEST_TIMEOUT_MS,
+      responseType: "text",
+      maxContentLength: 1_500_000,
+      headers: DEFAULT_HEADERS,
+      validateStatus: (status) => status >= 200 && status < 400,
+    });
 
-        return {
-            id: 0,
-            title: result.title,
-            url: result.url,
-            hostname: result.hostname,
-            snippet: result.snippet,
-            excerpt: bestChunk.chunk.slice(0, MAX_EXCERPT_CHARS),
-            score: bestChunk.score,
-        };
-    } catch (error: any) {
-        const errMsg = axios.isAxiosError(error) ? `${error.message} (Status: ${error.response?.status})` : String(error);
-        console.warn(`${logPrefix} Fetch failed for ${result.url}: ${errMsg}`);
-        return null;
+    const contentType = String(response.headers["content-type"] || "");
+    if (!/text\/html|application\/xhtml\+xml|text\/plain/i.test(contentType)) {
+      return null;
     }
+
+    const text = extractArticleText(response.data, candidate.url);
+    if (!text) return null;
+
+    const extractedPage: ExtractedPage = {
+      title: candidate.title,
+      url: candidate.url,
+      hostname: candidate.hostname,
+      snippet: candidate.snippet,
+      text,
+      publishedAt: candidate.publishedAt || null,
+      lastModified:
+        String(response.headers["last-modified"] || candidate.lastModified || "") ||
+        null,
+      fetchedAt: Date.now(),
+    };
+
+    setExtractionCache(
+      candidate.url,
+      extractedPage,
+      getTtlMs(liveDataQuery, "extraction"),
+    );
+    return extractedPage;
+  } catch (error: any) {
+    const errMsg = axios.isAxiosError(error)
+      ? `${error.message} (Status: ${error.response?.status})`
+      : String(error);
+    console.warn(`${logPrefix} Fetch failed for ${candidate.url}: ${errMsg}`);
+    return null;
+  }
 };
 
 const buildFallbackSources = (candidates: SearchCandidate[]): SearchSource[] =>
-    candidates
-        .slice(0, MAX_SOURCE_COUNT)
-        .map((candidate, index) => ({
-            id: index + 1,
-            title: candidate.title,
-            url: candidate.url,
-            hostname: candidate.hostname,
-            snippet: candidate.snippet,
-            excerpt: candidate.snippet || candidate.title,
-            score: 0,
-        }));
+  candidates.slice(0, MAX_SOURCE_COUNT).map((candidate, index) => ({
+    id: index + 1,
+    title: candidate.title,
+    url: candidate.url,
+    hostname: candidate.hostname,
+    snippet: candidate.snippet,
+    excerpt: (candidate.snippet || candidate.title).slice(0, MAX_EXCERPT_CHARS),
+    score:
+      (candidate.searchProviderScore || 0) +
+      (candidate.freshnessScore || 0) +
+      (candidate.structuredScore || 0),
+    freshnessScore: candidate.freshnessScore,
+    structuredScore: candidate.structuredScore,
+    publishedAt: candidate.publishedAt || null,
+    lastModified: candidate.lastModified || null,
+    cacheHit: Boolean(candidate.extractionCacheHit),
+  }));
 
 const buildCitationsMarkdown = (sources: SearchSource[]) => {
-    if (!sources.length) return "";
-    return [
-        "",
-        "",
-        "Sources:",
-        ...sources.map(s => `- [${s.id}] [${s.title.replace(/[[\]]/g, "") || s.hostname}](${s.url})`),
-    ].join("\n");
+  if (!sources.length) return "";
+  return [
+    "",
+    "",
+    "Sources:",
+    ...sources.map(
+      (source) =>
+        `[${source.id}] [${
+          source.title.replace(/[[\]]/g, "") || source.hostname
+        }](${source.url})`,
+    ),
+  ].join("\n");
+};
+
+const searchWeb = async (params: {
+  query: string;
+  cacheKey: string;
+  liveDataQuery: boolean;
+}) => {
+  const cached = getSearchCache(params.cacheKey);
+  if (cached) {
+    return {
+      candidates: cached.map((candidate) => ({
+        ...candidate,
+        extractionCacheHit: Boolean(getExtractionCache(candidate.url)),
+      })),
+      strategy: "tavily" as const,
+      cacheTier: "search" as const,
+    };
+  }
+
+  const candidates = await searchTavily(params.query, params.liveDataQuery);
+  if (candidates.length) {
+    setSearchCache(
+      params.cacheKey,
+      candidates,
+      getTtlMs(params.liveDataQuery, "query"),
+    );
+  }
+
+  return {
+    candidates,
+    strategy: candidates.length > 0 ? ("tavily" as const) : null,
+    cacheTier: "none" as const,
+  };
 };
 
 export const webSearchService = {
-    async buildGroundingContext(query?: string): Promise<WebGroundingContext | null> {
-        const trimmedQuery = query?.trim();
-        if (!trimmedQuery) return null;
+  async buildGroundingContext(
+    query?: string,
+    chatMessages: ChatMessage[] = [],
+  ): Promise<WebGroundingContext | null> {
+    const trimmedQuery = query?.trim();
+    if (!trimmedQuery) return null;
 
-        const cached = getCachedResults(trimmedQuery);
+    const resolved = resolveSearchQuery(trimmedQuery, chatMessages);
+    const cachedGrounding = getGroundingCache(resolved.cacheKey);
+    if (cachedGrounding) {
+      return {
+        ...cachedGrounding,
+        debug: {
+          ...cachedGrounding.debug,
+          cacheHit: true,
+          cacheTier: "grounding",
+        },
+      };
+    }
 
-        const { candidates, strategy } = cached 
-            ? { candidates: cached, strategy: "tavily" as const } 
-            : await searchWeb(trimmedQuery);
-        
-        if (!candidates.length || !strategy) return null;
-        if (!cached) setCachedResults(trimmedQuery, candidates);
+    const { candidates, strategy, cacheTier } = await searchWeb({
+      query: resolved.resolvedQuery,
+      cacheKey: resolved.cacheKey,
+      liveDataQuery: resolved.liveDataQuery,
+    });
 
-        const fetchedSources = (
-            await Promise.all(
-                candidates
-                    .slice(0, MAX_FETCHED_RESULTS)
-                    .map((result) => fetchBestExcerpt(result, trimmedQuery)),
-            )
-        )
-            .filter((s): s is SearchSource => Boolean(s))
-            .sort((a, b) => b.score - a.score)
-            .slice(0, MAX_SOURCE_COUNT)
-            .map((s, i) => ({ ...s, id: i + 1 }));
+    if (!candidates.length || !strategy) return null;
 
-        const finalSources = fetchedSources.length > 0 ? fetchedSources : buildFallbackSources(candidates);
-        if (!finalSources.length) return null;
+    const dedupedCandidates = await deduplicateCandidates(candidates);
 
-        const debug = {
-            searchStrategy: strategy,
-            sourceStrategy: fetchedSources.length > 0 ? "page-extract" as const : "snippet-fallback" as const,
-            candidateCount: candidates.length,
-            fetchedSourceCount: fetchedSources.length,
-        };
+    const fetchedPages = (
+      await Promise.all(
+        dedupedCandidates
+          .slice(0, MAX_FETCHED_RESULTS)
+          .map((candidate) =>
+            fetchExtractedPage(candidate, resolved.liveDataQuery),
+          ),
+      )
+    ).filter((page): page is ExtractedPage => Boolean(page));
 
-        console.log(`${logPrefix} used sources: ${finalSources.map(s => s.title).join(", ")}`);
+    const scoredPages = fetchedPages.map((page) => ({
+      ...page,
+      freshnessScore: detectFreshnessScore({
+        publishedAt: page.publishedAt,
+        lastModified: page.lastModified,
+        url: page.url,
+        snippet: page.snippet,
+        liveDataQuery: resolved.liveDataQuery,
+      }),
+      structuredScore: detectStructuredPageScore({
+        title: page.title,
+        url: page.url,
+        hostname: page.hostname,
+        snippet: page.snippet,
+      }),
+    }));
 
-        return {
-            query: trimmedQuery,
-            sources: finalSources,
-            systemPrompt: WEB_GROUNDING_SYSTEM_PROMPT(trimmedQuery, finalSources),
-            citationsMarkdown: buildCitationsMarkdown(finalSources),
-            debug,
-        };
-    },
+    const sources = localRerank({
+      query: resolved.resolvedQuery,
+      pages: scoredPages as Array<
+        ExtractedPage & { freshnessScore: number; structuredScore: number }
+      >,
+      maxSourceCount: MAX_SOURCE_COUNT,
+    });
+
+    const finalSources =
+      sources.length > 0 ? sources : buildFallbackSources(dedupedCandidates);
+    if (!finalSources.length) return null;
+
+    const context = withEstimatedConfidence({
+      query: resolved.rawQuery,
+      resolvedQuery: resolved.resolvedQuery,
+      normalizedQuery: resolved.normalizedQuery,
+      reusedPreviousQuery: resolved.reusedPreviousQuery,
+      liveDataQuery: resolved.liveDataQuery,
+      sources: finalSources,
+      systemPrompt: WEB_GROUNDING_SYSTEM_PROMPT(
+        resolved.resolvedQuery,
+        finalSources,
+      ),
+      citationsMarkdown: buildCitationsMarkdown(finalSources),
+      debug: {
+        searchStrategy: strategy,
+        sourceStrategy: sources.length > 0 ? "local-rerank" : "snippet-fallback",
+        candidateCount: candidates.length,
+        dedupedCandidateCount: dedupedCandidates.length,
+        fetchedSourceCount: scoredPages.length,
+        cacheHit: cacheTier !== "none",
+        cacheTier,
+        liveDataQuery: resolved.liveDataQuery,
+      },
+    });
+
+    setGroundingCache(
+      resolved.cacheKey,
+      context,
+      getTtlMs(resolved.liveDataQuery, "query"),
+    );
+
+    console.log(
+      `${logPrefix} resolved="${resolved.resolvedQuery}" sources=${finalSources
+        .map((source) => source.title)
+        .join(", ")}`,
+    );
+
+    return context;
+  },
 };

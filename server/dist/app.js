@@ -13,18 +13,21 @@ const memory_routes_1 = __importDefault(require("./routes/memory.routes"));
 const morgan_1 = __importDefault(require("morgan"));
 const error_middleware_1 = require("./middleware/error.middleware");
 const app = (0, express_1.default)();
+const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:4173",
+    process.env.CLIENT_URL,
+    "https://khz5bstr-5173.inc1.devtunnels.ms"
+].filter(Boolean);
 app.use((0, cors_1.default)({
-    origin: [
-        "http://localhost:5173",
-        "https://code-bot-1-z2qi.onrender.com",
-        "http://localhost:4173",
-        "https://44g0q4j6-5173.inc1.devtunnels.ms",
-    ],
+    origin: allowedOrigins,
+    credentials: true,
 }));
 app.use(express_1.default.json());
 app.use((0, morgan_1.default)("dev"));
 app.get("/", (req, res) => {
-    res.send("API running...");
+    const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+    res.send(`API running... Server URL: ${serverUrl}`);
 });
 app.use("/api/chat", chat_routes_1.default);
 app.use("/api/ai", ai_routes_1.default);

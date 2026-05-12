@@ -50,42 +50,29 @@ const axios_1 = __importDefault(require("axios"));
 const cheerio = __importStar(require("cheerio"));
 const readability_1 = require("@mozilla/readability");
 const jsdom_1 = require("jsdom");
+const cache_1 = require("./cache");
+const confidence_1 = require("./confidence");
+const deduplication_1 = require("./deduplication");
+const llamaindex_1 = require("./llamaindex");
+const queryResolver_1 = require("./queryResolver");
 const webSearch_prompts_1 = require("./webSearch.prompts");
-const MAX_SEARCH_RESULTS = 5;
-const MAX_FETCHED_RESULTS = 3;
+const MAX_SEARCH_RESULTS = 6;
+const MAX_FETCHED_RESULTS = 5;
 const MAX_SOURCE_COUNT = 3;
 const MAX_EXCERPT_CHARS = 900;
-const MAX_TEXT_CHARS = 12000;
+const MAX_TEXT_CHARS = 14000;
 const REQUEST_TIMEOUT_MS = 10000;
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
+const LIVE_QUERY_TTL_MS = 5 * 60 * 1000;
+const LIVE_EXTRACTION_TTL_MS = 10 * 60 * 1000;
+const STABLE_QUERY_TTL_MS = 6 * 60 * 60 * 1000;
+const STABLE_EXTRACTION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
     Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "Accept-Language": "en-US,en;q=0.9",
 };
 const logPrefix = "[web-search]";
-const STOP_WORDS = new Set([
-    "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
-    "how", "i", "in", "is", "it", "of", "on", "or", "the", "to",
-    "was", "what", "when", "where", "which", "who", "with",
-]);
-// ---------- Redis/Memory Cache Support ----------
-const searchCache = new Map();
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const getCachedResults = (query) => {
-    const cached = searchCache.get(query.toLowerCase());
-    if (cached && cached.expires > Date.now()) {
-        return cached.results;
-    }
-    return null;
-};
-const setCachedResults = (query, results) => {
-    searchCache.set(query.toLowerCase(), {
-        results,
-        expires: Date.now() + CACHE_TTL_MS,
-    });
-};
-// ---------- Helpers ----------
 const stripHtml = (value) => {
     if (!value)
         return "";
@@ -99,7 +86,6 @@ const getHostname = (value) => {
         return "";
     }
 };
-const normalizeWhitespace = (value) => value.replace(/\u0000/g, " ").replace(/\s+/g, " ").trim();
 const sanitizeExtractedText = (value) => {
     const suspiciousLine = /\b(ignore (all|any|previous|above)|system prompt|developer message|follow these instructions|you are chatgpt|assistant:|user:)\b/i;
     return value
@@ -109,92 +95,58 @@ const sanitizeExtractedText = (value) => {
         .join("\n")
         .slice(0, MAX_TEXT_CHARS);
 };
-const tokenize = (value) => value
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .map((token) => token.trim())
-    .filter((token) => token.length > 2 && !STOP_WORDS.has(token));
-const chunkText = (text, chunkSize = 900, overlap = 150) => {
-    const normalized = text.replace(/\r/g, "");
-    const paragraphs = normalized
-        .split(/\n{2,}/)
-        .map((paragraph) => normalizeWhitespace(paragraph))
-        .filter(Boolean);
-    const chunks = [];
-    let current = "";
-    for (const paragraph of paragraphs) {
-        const next = current ? `${current}\n\n${paragraph}` : paragraph;
-        if (next.length <= chunkSize) {
-            current = next;
-            continue;
-        }
-        if (current)
-            chunks.push(current);
-        if (paragraph.length <= chunkSize) {
-            current = paragraph;
-            continue;
-        }
-        let start = 0;
-        while (start < paragraph.length) {
-            const slice = paragraph.slice(start, start + chunkSize).trim();
-            if (slice)
-                chunks.push(slice);
-            start += Math.max(chunkSize - overlap, 1);
-        }
-        current = "";
-    }
-    if (current)
-        chunks.push(current);
-    return chunks;
-};
-const scoreChunk = (queryTokens, text, title, snippet) => {
-    const haystack = `${title} ${snippet} ${text}`.toLowerCase();
+const detectStructuredPageScore = (candidate) => {
+    const haystack = `${candidate.url} ${candidate.title} ${candidate.snippet}`.toLowerCase();
     let score = 0;
-    for (const token of queryTokens) {
-        const matches = haystack.match(new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"));
-        score += matches ? matches.length : 0;
+    if (/(standings|ranking|rankings|leaderboard|table|stats|statistics|schedule|fixtures|scoreboard|box-score)/.test(haystack)) {
+        score += 0.45;
     }
-    if (title)
-        score += 1;
-    if (snippet)
-        score += 1;
-    return score;
+    if (/(espn|nba\.com|nfl\.com|mlb\.com|nhl\.com|premierleague\.com|uefa\.com|fifa\.com|icc-cricket\.com|atptour\.com|wtatennis\.com|fbref\.com|statbunker|flashscore|sofascore|cricbuzz|bcci)/.test(candidate.hostname)) {
+        score += 0.45;
+    }
+    if (/(blog|opinion|review|guide|best-)/.test(haystack)) {
+        score -= 0.2;
+    }
+    return Math.max(0, Math.min(1, score));
 };
-// ---------- Search Providers ----------
-const searchTavily = (query) => __awaiter(void 0, void 0, void 0, function* () {
+const detectFreshnessScore = (params) => {
     var _a, _b;
-    const apiKey = process.env.TAVILY_API_KEY || process.env.TAVILY_API;
-    if (!apiKey)
-        return [];
-    try {
-        const response = yield axios_1.default.post(TAVILY_SEARCH_URL, {
-            api_key: apiKey,
-            query: query,
-            search_depth: "basic",
-            max_results: MAX_SEARCH_RESULTS,
-        }, { timeout: REQUEST_TIMEOUT_MS });
-        const results = ((_a = response.data) === null || _a === void 0 ? void 0 : _a.results) || [];
-        return results.map((r) => ({
-            title: stripHtml(r.title),
-            url: r.url,
-            hostname: getHostname(r.url),
-            snippet: stripHtml(r.content),
-        }));
+    const urlDateMatch = (_a = params.url) === null || _a === void 0 ? void 0 : _a.match(/(20\d{2})[/-](0[1-9]|1[0-2])[/-](0[1-9]|[12]\d|3[01])/);
+    const snippetDateMatch = (_b = params.snippet) === null || _b === void 0 ? void 0 : _b.match(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+20\d{2}\b/i);
+    const dateCandidates = [
+        params.publishedAt,
+        params.lastModified,
+        urlDateMatch === null || urlDateMatch === void 0 ? void 0 : urlDateMatch[0],
+        snippetDateMatch === null || snippetDateMatch === void 0 ? void 0 : snippetDateMatch[0],
+    ].filter(Boolean);
+    if (!dateCandidates.length) {
+        return params.liveDataQuery ? 0.25 : 0.45;
     }
-    catch (error) {
-        const errMsg = axios_1.default.isAxiosError(error) ? `${error.message} (Status: ${(_b = error.response) === null || _b === void 0 ? void 0 : _b.status})` : String(error);
-        console.warn(`${logPrefix} Tavily search failed: ${errMsg}`);
-        return [];
+    const timestamps = dateCandidates
+        .map((value) => new Date(value).getTime())
+        .filter((value) => Number.isFinite(value));
+    if (!timestamps.length) {
+        return params.liveDataQuery ? 0.25 : 0.45;
     }
-});
-const searchWeb = (query) => __awaiter(void 0, void 0, void 0, function* () {
-    const candidates = yield searchTavily(query);
-    return {
-        candidates,
-        strategy: candidates.length > 0 ? "tavily" : null,
-    };
-});
-// ---------- Extraction Pipeline ----------
+    const ageHours = (Date.now() - Math.max(...timestamps)) / (60 * 60 * 1000);
+    if (ageHours <= 6)
+        return 1;
+    if (ageHours <= 24)
+        return 0.9;
+    if (ageHours <= 72)
+        return 0.75;
+    if (ageHours <= 24 * 7)
+        return 0.55;
+    if (ageHours <= 24 * 30)
+        return 0.35;
+    return 0.15;
+};
+const getTtlMs = (liveDataQuery, kind) => {
+    if (kind === "query") {
+        return liveDataQuery ? LIVE_QUERY_TTL_MS : STABLE_QUERY_TTL_MS;
+    }
+    return liveDataQuery ? LIVE_EXTRACTION_TTL_MS : STABLE_EXTRACTION_TTL_MS;
+};
 const extractArticleText = (html, url) => {
     const dom = new jsdom_1.JSDOM(html, { url });
     const { document } = dom.window;
@@ -208,12 +160,63 @@ const extractArticleText = (html, url) => {
     $("script, style, noscript, iframe, form, nav, footer, header, aside, svg, canvas").remove();
     const fallbackText = sanitizeExtractedText($.root().text());
     dom.window.close();
-    return readableText.length >= fallbackText.length ? readableText : fallbackText;
+    return readableText.length >= fallbackText.length
+        ? readableText
+        : fallbackText;
 };
-const fetchBestExcerpt = (result, query) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
+const searchTavily = (query, liveDataQuery) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
+    const apiKey = process.env.TAVILY_API_KEY || process.env.TAVILY_API;
+    if (!apiKey)
+        return [];
     try {
-        const response = yield axios_1.default.get(result.url, {
+        const response = yield axios_1.default.post(TAVILY_SEARCH_URL, {
+            api_key: apiKey,
+            query,
+            search_depth: "basic",
+            max_results: MAX_SEARCH_RESULTS,
+        }, { timeout: REQUEST_TIMEOUT_MS });
+        const results = ((_a = response.data) === null || _a === void 0 ? void 0 : _a.results) || [];
+        return results.map((result) => {
+            const title = stripHtml(result.title);
+            const snippet = stripHtml(result.content);
+            const url = String(result.url || "");
+            const hostname = getHostname(url);
+            const publishedAt = typeof result.published_date === "string" ? result.published_date : null;
+            const lastModified = typeof result.last_modified === "string" ? result.last_modified : null;
+            const candidate = {
+                title,
+                url,
+                hostname,
+                snippet,
+                searchProviderScore: typeof result.score === "number" ? result.score : undefined,
+                publishedAt,
+                lastModified,
+            };
+            return Object.assign(Object.assign({}, candidate), { freshnessScore: detectFreshnessScore({
+                    publishedAt,
+                    lastModified,
+                    url,
+                    snippet,
+                    liveDataQuery,
+                }), structuredScore: detectStructuredPageScore(candidate) });
+        });
+    }
+    catch (error) {
+        const errMsg = axios_1.default.isAxiosError(error)
+            ? `${error.message} (Status: ${(_b = error.response) === null || _b === void 0 ? void 0 : _b.status})`
+            : String(error);
+        console.warn(`${logPrefix} Tavily search failed: ${errMsg}`);
+        return [];
+    }
+});
+const fetchExtractedPage = (candidate, liveDataQuery) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const cached = (0, cache_1.getExtractionCache)(candidate.url);
+    if (cached)
+        return cached;
+    try {
+        const response = yield axios_1.default.get(candidate.url, {
             timeout: REQUEST_TIMEOUT_MS,
             responseType: "text",
             maxContentLength: 1500000,
@@ -224,45 +227,46 @@ const fetchBestExcerpt = (result, query) => __awaiter(void 0, void 0, void 0, fu
         if (!/text\/html|application\/xhtml\+xml|text\/plain/i.test(contentType)) {
             return null;
         }
-        const articleText = extractArticleText(response.data, result.url);
-        if (!articleText)
+        const text = extractArticleText(response.data, candidate.url);
+        if (!text)
             return null;
-        const queryTokens = tokenize(query);
-        const chunks = chunkText(articleText);
-        const bestChunk = chunks
-            .map((chunk) => ({
-            chunk,
-            score: scoreChunk(queryTokens, chunk, result.title, result.snippet),
-        }))
-            .sort((a, b) => b.score - a.score)[0] || null;
-        if (!bestChunk)
-            return null;
-        return {
-            id: 0,
-            title: result.title,
-            url: result.url,
-            hostname: result.hostname,
-            snippet: result.snippet,
-            excerpt: bestChunk.chunk.slice(0, MAX_EXCERPT_CHARS),
-            score: bestChunk.score,
+        const extractedPage = {
+            title: candidate.title,
+            url: candidate.url,
+            hostname: candidate.hostname,
+            snippet: candidate.snippet,
+            text,
+            publishedAt: candidate.publishedAt || null,
+            lastModified: String(response.headers["last-modified"] || candidate.lastModified || "") ||
+                null,
+            fetchedAt: Date.now(),
         };
+        (0, cache_1.setExtractionCache)(candidate.url, extractedPage, getTtlMs(liveDataQuery, "extraction"));
+        return extractedPage;
     }
     catch (error) {
-        const errMsg = axios_1.default.isAxiosError(error) ? `${error.message} (Status: ${(_a = error.response) === null || _a === void 0 ? void 0 : _a.status})` : String(error);
-        console.warn(`${logPrefix} Fetch failed for ${result.url}: ${errMsg}`);
+        const errMsg = axios_1.default.isAxiosError(error)
+            ? `${error.message} (Status: ${(_a = error.response) === null || _a === void 0 ? void 0 : _a.status})`
+            : String(error);
+        console.warn(`${logPrefix} Fetch failed for ${candidate.url}: ${errMsg}`);
         return null;
     }
 });
-const buildFallbackSources = (candidates) => candidates
-    .slice(0, MAX_SOURCE_COUNT)
-    .map((candidate, index) => ({
+const buildFallbackSources = (candidates) => candidates.slice(0, MAX_SOURCE_COUNT).map((candidate, index) => ({
     id: index + 1,
     title: candidate.title,
     url: candidate.url,
     hostname: candidate.hostname,
     snippet: candidate.snippet,
-    excerpt: candidate.snippet || candidate.title,
-    score: 0,
+    excerpt: (candidate.snippet || candidate.title).slice(0, MAX_EXCERPT_CHARS),
+    score: (candidate.searchProviderScore || 0) +
+        (candidate.freshnessScore || 0) +
+        (candidate.structuredScore || 0),
+    freshnessScore: candidate.freshnessScore,
+    structuredScore: candidate.structuredScore,
+    publishedAt: candidate.publishedAt || null,
+    lastModified: candidate.lastModified || null,
+    cacheHit: Boolean(candidate.extractionCacheHit),
 }));
 const buildCitationsMarkdown = (sources) => {
     if (!sources.length)
@@ -271,47 +275,111 @@ const buildCitationsMarkdown = (sources) => {
         "",
         "",
         "Sources:",
-        ...sources.map(s => `- [${s.id}] [${s.title.replace(/[[\]]/g, "") || s.hostname}](${s.url})`),
+        ...sources.map((source) => `[${source.id}] [${source.title.replace(/[[\]]/g, "") || source.hostname}](${source.url})`),
     ].join("\n");
 };
+const searchWeb = (params) => __awaiter(void 0, void 0, void 0, function* () {
+    const cached = (0, cache_1.getSearchCache)(params.cacheKey);
+    if (cached) {
+        return {
+            candidates: cached.map((candidate) => (Object.assign(Object.assign({}, candidate), { extractionCacheHit: Boolean((0, cache_1.getExtractionCache)(candidate.url)) }))),
+            strategy: "tavily",
+            cacheTier: "search",
+        };
+    }
+    const candidates = yield searchTavily(params.query, params.liveDataQuery);
+    if (candidates.length) {
+        (0, cache_1.setSearchCache)(params.cacheKey, candidates, getTtlMs(params.liveDataQuery, "query"));
+    }
+    return {
+        candidates,
+        strategy: candidates.length > 0 ? "tavily" : null,
+        cacheTier: "none",
+    };
+});
 exports.webSearchService = {
-    buildGroundingContext(query) {
-        return __awaiter(this, void 0, void 0, function* () {
+    buildGroundingContext(query_1) {
+        return __awaiter(this, arguments, void 0, function* (query, chatMessages = []) {
             const trimmedQuery = query === null || query === void 0 ? void 0 : query.trim();
             if (!trimmedQuery)
                 return null;
-            const cached = getCachedResults(trimmedQuery);
-            const { candidates, strategy } = cached
-                ? { candidates: cached, strategy: "tavily" }
-                : yield searchWeb(trimmedQuery);
+            const resolved = (0, queryResolver_1.resolveSearchQuery)(trimmedQuery, chatMessages);
+            const cachedGrounding = (0, cache_1.getGroundingCache)(resolved.cacheKey);
+            if (cachedGrounding) {
+                return Object.assign(Object.assign({}, cachedGrounding), { debug: Object.assign(Object.assign({}, cachedGrounding.debug), { cacheHit: true, cacheTier: "grounding" }) });
+            }
+            const { candidates, strategy, cacheTier } = yield searchWeb({
+                query: resolved.resolvedQuery,
+                cacheKey: resolved.cacheKey,
+                liveDataQuery: resolved.liveDataQuery,
+            });
             if (!candidates.length || !strategy)
                 return null;
-            if (!cached)
-                setCachedResults(trimmedQuery, candidates);
-            const fetchedSources = (yield Promise.all(candidates
+            let embedTexts;
+            try {
+                const semanticEmbedder = yield (0, llamaindex_1.createSemanticEmbedder)();
+                embedTexts = semanticEmbedder.embedTexts;
+            }
+            catch (error) {
+                console.warn(`${logPrefix} semantic embedder unavailable: ${String(error)}`);
+            }
+            const dedupedCandidates = yield (0, deduplication_1.deduplicateCandidates)(candidates, {
+                getEmbeddings: embedTexts,
+            });
+            const fetchedPages = (yield Promise.all(dedupedCandidates
                 .slice(0, MAX_FETCHED_RESULTS)
-                .map((result) => fetchBestExcerpt(result, trimmedQuery))))
-                .filter((s) => Boolean(s))
-                .sort((a, b) => b.score - a.score)
-                .slice(0, MAX_SOURCE_COUNT)
-                .map((s, i) => (Object.assign(Object.assign({}, s), { id: i + 1 })));
-            const finalSources = fetchedSources.length > 0 ? fetchedSources : buildFallbackSources(candidates);
+                .map((candidate) => fetchExtractedPage(candidate, resolved.liveDataQuery)))).filter((page) => Boolean(page));
+            const scoredPages = fetchedPages.map((page) => (Object.assign(Object.assign({}, page), { freshnessScore: detectFreshnessScore({
+                    publishedAt: page.publishedAt,
+                    lastModified: page.lastModified,
+                    url: page.url,
+                    snippet: page.snippet,
+                    liveDataQuery: resolved.liveDataQuery,
+                }), structuredScore: detectStructuredPageScore({
+                    title: page.title,
+                    url: page.url,
+                    hostname: page.hostname,
+                    snippet: page.snippet,
+                }) })));
+            let sources = [];
+            try {
+                sources = yield (0, llamaindex_1.retrieveAndRerank)({
+                    query: resolved.resolvedQuery,
+                    pages: scoredPages,
+                    maxSourceCount: MAX_SOURCE_COUNT,
+                });
+            }
+            catch (error) {
+                console.warn(`${logPrefix} llamaindex retrieval failed: ${String(error)}`);
+            }
+            const finalSources = sources.length > 0 ? sources : buildFallbackSources(dedupedCandidates);
             if (!finalSources.length)
                 return null;
-            const debug = {
-                searchStrategy: strategy,
-                sourceStrategy: fetchedSources.length > 0 ? "page-extract" : "snippet-fallback",
-                candidateCount: candidates.length,
-                fetchedSourceCount: fetchedSources.length,
-            };
-            console.log(`${logPrefix} used sources: ${finalSources.map(s => s.title).join(", ")}`);
-            return {
-                query: trimmedQuery,
+            const context = (0, confidence_1.withEstimatedConfidence)({
+                query: resolved.rawQuery,
+                resolvedQuery: resolved.resolvedQuery,
+                normalizedQuery: resolved.normalizedQuery,
+                reusedPreviousQuery: resolved.reusedPreviousQuery,
+                liveDataQuery: resolved.liveDataQuery,
                 sources: finalSources,
-                systemPrompt: (0, webSearch_prompts_1.WEB_GROUNDING_SYSTEM_PROMPT)(trimmedQuery, finalSources),
+                systemPrompt: (0, webSearch_prompts_1.WEB_GROUNDING_SYSTEM_PROMPT)(resolved.resolvedQuery, finalSources),
                 citationsMarkdown: buildCitationsMarkdown(finalSources),
-                debug,
-            };
+                debug: {
+                    searchStrategy: strategy,
+                    sourceStrategy: sources.length > 0 ? "llamaindex" : "snippet-fallback",
+                    candidateCount: candidates.length,
+                    dedupedCandidateCount: dedupedCandidates.length,
+                    fetchedSourceCount: scoredPages.length,
+                    cacheHit: cacheTier !== "none",
+                    cacheTier,
+                    liveDataQuery: resolved.liveDataQuery,
+                },
+            });
+            (0, cache_1.setGroundingCache)(resolved.cacheKey, context, getTtlMs(resolved.liveDataQuery, "query"));
+            console.log(`${logPrefix} resolved="${resolved.resolvedQuery}" sources=${finalSources
+                .map((source) => source.title)
+                .join(", ")}`);
+            return context;
         });
     },
 };

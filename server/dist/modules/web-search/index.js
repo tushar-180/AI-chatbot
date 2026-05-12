@@ -1,5 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.webSearchService = void 0;
+exports.resolveSearchQuery = exports.normalizeQuery = exports.isLiveDataQuery = exports.deduplicateCandidates = exports.withEstimatedConfidence = exports.estimateConfidence = exports.webSearchService = void 0;
 var webSearch_service_1 = require("./webSearch.service");
 Object.defineProperty(exports, "webSearchService", { enumerable: true, get: function () { return webSearch_service_1.webSearchService; } });
+var confidence_1 = require("./confidence");
+Object.defineProperty(exports, "estimateConfidence", { enumerable: true, get: function () { return confidence_1.estimateConfidence; } });
+Object.defineProperty(exports, "withEstimatedConfidence", { enumerable: true, get: function () { return confidence_1.withEstimatedConfidence; } });
+var deduplication_1 = require("./deduplication");
+Object.defineProperty(exports, "deduplicateCandidates", { enumerable: true, get: function () { return deduplication_1.deduplicateCandidates; } });
+var queryResolver_1 = require("./queryResolver");
+Object.defineProperty(exports, "isLiveDataQuery", { enumerable: true, get: function () { return queryResolver_1.isLiveDataQuery; } });
+Object.defineProperty(exports, "normalizeQuery", { enumerable: true, get: function () { return queryResolver_1.normalizeQuery; } });
+Object.defineProperty(exports, "resolveSearchQuery", { enumerable: true, get: function () { return queryResolver_1.resolveSearchQuery; } });

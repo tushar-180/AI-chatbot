@@ -16,6 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@google/genai": "^1.50.1",
+    "@llamaindex/openai": "^0.4.18",
     "@mozilla/readability": "^0.6.0",
     "axios": "^1.16.0",
     "cheerio": "^1.2.0",
@@ -24,6 +25,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsdom": "^29.1.1",
+    "llamaindex": "^0.11.28",
     "mongoose": "^9.4.1",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",

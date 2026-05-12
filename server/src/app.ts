@@ -14,6 +14,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
   process.env.CLIENT_URL,
+  "https://khz5bstr-5173.inc1.devtunnels.ms"
 ].filter(Boolean) as string[];
 
 app.use(

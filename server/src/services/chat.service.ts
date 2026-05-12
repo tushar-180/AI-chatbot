@@ -122,6 +122,12 @@ const buildGroundingMetadata = (webGrounding: WebGroundingContext | null) => {
 
   return {
     grounded: true,
+    query: webGrounding.query,
+    resolvedQuery: webGrounding.resolvedQuery,
+    normalizedQuery: webGrounding.normalizedQuery,
+    reusedPreviousQuery: webGrounding.reusedPreviousQuery,
+    liveDataQuery: webGrounding.liveDataQuery,
+    confidence: webGrounding.confidence,
     debug: webGrounding.debug,
     sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
       id,
@@ -160,6 +166,7 @@ const buildPromptMessages = async (
   chatMessages: ChatMessage[],
   latestUserMessage?: string,
   webSearchEnabled = false,
+  provider?: string,
 ) => {
   const promptMessages = getLimitedMessages(chatMessages);
   const systemMessages: ChatMessage[] = [
@@ -198,7 +205,10 @@ const buildPromptMessages = async (
 
   let webGrounding = null;
   if (webSearchEnabled && latestUserMessage) {
-    webGrounding = await webSearchService.buildGroundingContext(latestUserMessage);
+    webGrounding = await webSearchService.buildGroundingContext(
+      latestUserMessage,
+      chatMessages,
+    );
   }
   if (webGrounding) {
     systemMessages.push({
@@ -232,6 +242,7 @@ async function* streamAssistantResponse(
     chat.messages as ChatMessage[],
     lastUserMessage?.content,
     Boolean(lastUserMessage?.metadata?.webSearchEnabled),
+    provider,
   );
 
   // Create assistant message in its own collection
@@ -418,6 +429,7 @@ export const chatService = {
         messages,
         trimmedMessage,
         webSearchEnabled,
+        provider,
       );
 
       let reply = "";
@@ -545,6 +557,7 @@ export const chatService = {
       updatedChat?.messages as ChatMessage[],
       trimmedMessage,
       webSearchEnabled,
+      provider,
     );
 
     let reply = "";

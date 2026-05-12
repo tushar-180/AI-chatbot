@@ -106,6 +106,12 @@ const buildGroundingMetadata = (webGrounding) => {
         return undefined;
     return {
         grounded: true,
+        query: webGrounding.query,
+        resolvedQuery: webGrounding.resolvedQuery,
+        normalizedQuery: webGrounding.normalizedQuery,
+        reusedPreviousQuery: webGrounding.reusedPreviousQuery,
+        liveDataQuery: webGrounding.liveDataQuery,
+        confidence: webGrounding.confidence,
         debug: webGrounding.debug,
         sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
             id,
@@ -159,7 +165,7 @@ const buildPromptMessages = (userId_1, chatMessages_1, latestUserMessage_1, ...a
     }
     let webGrounding = null;
     if (webSearchEnabled && latestUserMessage) {
-        webGrounding = yield web_search_1.webSearchService.buildGroundingContext(latestUserMessage);
+        webGrounding = yield web_search_1.webSearchService.buildGroundingContext(latestUserMessage, chatMessages);
     }
     if (webGrounding) {
         systemMessages.push({
