@@ -57,7 +57,19 @@ class NvidiaAdapter {
     }
     formatMessages(messages) {
         const isVision = (0, constants_1.supportsVision)(this.model);
-        return messages.map((m) => {
+        const systemMessages = messages.filter((m) => m.role === "system");
+        const chatMessages = messages.filter((m) => m.role !== "system");
+        const formattedMessages = [];
+        if (systemMessages.length > 0) {
+            const combinedSystemContent = systemMessages
+                .map((m) => m.content)
+                .join("\n\n---\n\n");
+            formattedMessages.push({
+                role: "system",
+                content: combinedSystemContent,
+            });
+        }
+        const formattedChatMessages = chatMessages.map((m) => {
             let content = m.content;
             // If there are attachments and the model doesn't support vision, append them as text
             if (m.attachments && m.attachments.length > 0) {
@@ -83,6 +95,7 @@ class NvidiaAdapter {
                 content,
             };
         });
+        return [...formattedMessages, ...formattedChatMessages];
     }
     generateResponse(messages) {
         return __awaiter(this, void 0, void 0, function* () {

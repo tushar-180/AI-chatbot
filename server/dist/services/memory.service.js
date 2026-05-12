@@ -12,6 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.memoryService = void 0;
 const UserMemory_model_1 = require("../models/UserMemory.model");
 const ai_service_1 = require("./ai.service");
+const prompt_constants_1 = require("../constants/prompt.constants");
 exports.memoryService = {
     /**
      * Fetch all memories for a specific user
@@ -106,17 +107,7 @@ exports.memoryService = {
                     break;
                 facts += factLine;
             }
-            return `
-      [USER IDENTITY & MEMORY]
-      You have access to the following facts about the user from past sessions. 
-      Use them to make the conversation feel continuous and personal, but follow these rules:
-      1. Do NOT list these facts or say "I remember that...".
-      2. Integrate them naturally only when relevant to the current topic.
-      3. If the user asks for something general, keep your response focused on the task, but let the context subtly influence your tone or examples.
-      
-      FACTS:
-      ${facts}
-    `;
+            return (0, prompt_constants_1.MEMORY_CONTEXT_PROMPT)(facts);
         });
     },
     /**
@@ -146,25 +137,7 @@ exports.memoryService = {
         return __awaiter(this, void 0, void 0, function* () {
             try {
                 const provider = ai_service_1.aiService.getProvider(); // Use default provider
-                const extractionPrompt = `
-        You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
-        
-        RULES:
-        1. Only extract facts that are likely to be useful later.
-        2. Format each fact as: [Fact] | [Category]
-        3. Categories MUST be one of: personal, preference, technical, work, general.
-        4. If no facts are found, return exactly "NONE".
-        5. Return only the facts, one per line.
-        
-        EXAMPLES:
-        "My name is Tushar" -> User's name is Tushar | personal
-        "I love dark mode" -> User prefers dark mode | preference
-        "I'm building a React app" -> User is building a React app | work
-        
-        USER MESSAGE: "${userMessage}"
-        
-        EXTRACTED FACTS:
-      `;
+                const extractionPrompt = (0, prompt_constants_1.MEMORY_EXTRACTION_PROMPT)(userMessage);
                 const response = yield provider.generateResponse([
                     { role: "user", content: extractionPrompt, userId }
                 ]);

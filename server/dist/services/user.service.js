@@ -35,5 +35,31 @@ exports.userService = {
         return __awaiter(this, void 0, void 0, function* () {
             return yield User_model_1.User.findOne({ clerkId });
         });
+    },
+    updatePersonalization(clerkId, data) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return yield User_model_1.User.findOneAndUpdate({ clerkId }, { $set: { personalization: data } }, { returnDocument: "after" });
+        });
+    },
+    getPersonalizationContext(clerkId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const user = yield this.getUserByClerkId(clerkId);
+            if (!user || !user.personalization)
+                return null;
+            const { customInstructions, nickname, occupation, tone } = user.personalization;
+            if (!customInstructions && !nickname && !occupation && tone === "Default") {
+                return null;
+            }
+            let context = "USER PERSONALIZATION (ADAPT YOUR RESPONSE ACCORDINGLY):\n";
+            if (nickname)
+                context += `- Call the user: ${nickname}\n`;
+            if (occupation)
+                context += `- User's Occupation: ${occupation}\n`;
+            if (tone && tone !== "Default")
+                context += `- Response Tone: ${tone}\n`;
+            if (customInstructions)
+                context += `- Custom Instructions: ${customInstructions}\n`;
+            return context;
+        });
     }
 };

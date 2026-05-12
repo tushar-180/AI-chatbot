@@ -35,6 +35,8 @@ const Chat = () => {
     setSelectedProvider,
     attachments,
     setAttachments,
+    webSearchEnabled,
+    setWebSearchEnabled,
     handleFormSubmit,
   } = useChatInput({
     onSubmit: streamMessage,
@@ -92,6 +94,8 @@ const Chat = () => {
               onProviderChange={setSelectedProvider}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
+              webSearchEnabled={webSearchEnabled}
+              onWebSearchToggle={setWebSearchEnabled}
             />
           </div>
         </div>

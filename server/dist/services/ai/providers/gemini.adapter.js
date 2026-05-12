@@ -74,8 +74,10 @@ class GeminiAdapter {
                                 if (!response.ok)
                                     throw new Error(`Fetch failed: ${response.statusText}`);
                                 const arrayBuffer = yield response.arrayBuffer();
-                                const base64Data = Buffer.from(arrayBuffer).toString('base64');
-                                const mimeType = att.mimeType || response.headers.get('content-type') || 'image/jpeg';
+                                const base64Data = Buffer.from(arrayBuffer).toString("base64");
+                                const mimeType = att.mimeType ||
+                                    response.headers.get("content-type") ||
+                                    "image/jpeg";
                                 const data = { mimeType, data: base64Data };
                                 GeminiAdapter.imageCache.set(att.url, data);
                                 return { inlineData: data };
@@ -106,15 +108,18 @@ class GeminiAdapter {
         return __awaiter(this, void 0, void 0, function* () {
             var _a, _b, _c, _d, _e;
             const contents = yield this.formatContents(messages);
-            const systemMessage = messages.find((msg) => msg.role === "system");
+            const systemMessages = messages.filter((msg) => msg.role === "system");
+            const combinedSystemPrompt = systemMessages
+                .map((msg) => msg.content)
+                .join("\n\n---\n\n");
             try {
                 const res = yield this.ai.models.generateContent({
                     model: this.model,
                     contents,
                     config: {
-                        systemInstruction: systemMessage
+                        systemInstruction: combinedSystemPrompt
                             ? {
-                                parts: [{ text: systemMessage.content }],
+                                parts: [{ text: combinedSystemPrompt }],
                             }
                             : {
                                 parts: [
@@ -163,15 +168,18 @@ OUTPUT RULES (VERY IMPORTANT):
         return __asyncGenerator(this, arguments, function* generateStreamResponse_1() {
             var _a, e_1, _b, _c;
             const contents = yield __await(this.formatContents(messages));
-            const systemMessage = messages.find((msg) => msg.role === "system");
+            const systemMessages = messages.filter((msg) => msg.role === "system");
+            const combinedSystemPrompt = systemMessages
+                .map((msg) => msg.content)
+                .join("\n\n---\n\n");
             try {
                 const res = yield __await(this.ai.models.generateContentStream({
                     model: this.model,
                     contents,
                     config: {
-                        systemInstruction: systemMessage
+                        systemInstruction: combinedSystemPrompt
                             ? {
-                                parts: [{ text: systemMessage.content }],
+                                parts: [{ text: combinedSystemPrompt }],
                             }
                             : {
                                 parts: [
@@ -224,7 +232,7 @@ OUTPUT RULES (VERY IMPORTANT):
             catch (error) {
                 console.error(`Gemini Embedding Error (Retries left: ${retries}):`, error);
                 if (retries > 0) {
-                    yield new Promise(r => setTimeout(r, 1000)); // Wait 1s
+                    yield new Promise((r) => setTimeout(r, 1000)); // Wait 1s
                     return this.generateEmbedding(text, retries - 1);
                 }
                 return [];

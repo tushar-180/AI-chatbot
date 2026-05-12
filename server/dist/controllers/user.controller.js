@@ -42,5 +42,22 @@ exports.userController = {
                 res.status(500).json({ error: "Failed to fetch profile" });
             }
         });
+    },
+    updatePersonalization(req, res) {
+        return __awaiter(this, void 0, void 0, function* () {
+            try {
+                const clerkId = req.params.clerkId;
+                const personalizationData = req.body;
+                const user = yield user_service_1.userService.updatePersonalization(clerkId, personalizationData);
+                if (!user) {
+                    return res.status(404).json({ error: "User not found" });
+                }
+                res.status(200).json(user);
+            }
+            catch (error) {
+                console.error("Error updating personalization:", error);
+                res.status(500).json({ error: "Failed to update personalization" });
+            }
+        });
     }
 };

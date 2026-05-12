@@ -170,7 +170,6 @@ OUTPUT RULES (VERY IMPORTANT):
       .join("\n\n---\n\n");
 
     try {
-      console.log(combinedSystemPrompt)
       const res = await this.ai.models.generateContentStream({
         model: this.model,
         contents,

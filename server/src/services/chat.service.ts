@@ -14,6 +14,10 @@ import type {
   StreamPayload,
 } from "../types/chat.types";
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
+import {
+  type WebGroundingContext,
+  webSearchService,
+} from "../modules/web-search";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
@@ -42,6 +46,7 @@ const createAssistantMessage = (
   model: string,
   requestId?: string,
   status: ChatMessage["status"] = "completed",
+  metadata?: Record<string, unknown>,
 ): ChatMessage => ({
   role: "assistant",
   userId,
@@ -49,6 +54,7 @@ const createAssistantMessage = (
   model,
   requestId,
   status,
+  metadata,
 });
 
 const createTitle = (message?: string) => {
@@ -111,6 +117,104 @@ const getAssistantMessageByRequestId = (
       message.role === "assistant" && message.requestId === requestId,
   );
 
+const buildGroundingMetadata = (webGrounding: WebGroundingContext | null) => {
+  if (!webGrounding) return undefined;
+
+  return {
+    grounded: true,
+    debug: webGrounding.debug,
+    sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
+      id,
+      title,
+      url,
+      hostname,
+    })),
+  };
+};
+
+const finalizeGroundedResponse = (
+  response: string,
+  webGrounding: WebGroundingContext | null,
+) => {
+  if (!webGrounding?.citationsMarkdown) {
+    return { content: response, appendedCitations: "" };
+  }
+
+  const alreadyHasSources = webGrounding.sources.some((source) =>
+    response.includes(source.url),
+  );
+
+  if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
+    return { content: response, appendedCitations: "" };
+  }
+
+  const appendedCitations = webGrounding.citationsMarkdown;
+  return {
+    content: `${response.trimEnd()}${appendedCitations}`,
+    appendedCitations,
+  };
+};
+
+const buildPromptMessages = async (
+  userId: string,
+  chatMessages: ChatMessage[],
+  latestUserMessage?: string,
+  webSearchEnabled = false,
+) => {
+  const promptMessages = getLimitedMessages(chatMessages);
+  const systemMessages: ChatMessage[] = [
+    {
+      role: "system",
+      content: BASE_SYSTEM_PROMPT,
+      userId,
+      status: "completed",
+    },
+  ];
+
+  const personalizationContext = await userService.getPersonalizationContext(
+    userId,
+  );
+  if (personalizationContext) {
+    systemMessages.push({
+      role: "system",
+      content: personalizationContext,
+      userId,
+      status: "completed",
+    });
+  }
+
+  const memoryContext = await memoryService.getMemoryContext(
+    userId,
+    latestUserMessage,
+  );
+  if (memoryContext) {
+    systemMessages.push({
+      role: "system",
+      content: memoryContext,
+      userId,
+      status: "completed",
+    });
+  }
+
+  let webGrounding = null;
+  if (webSearchEnabled && latestUserMessage) {
+    webGrounding = await webSearchService.buildGroundingContext(latestUserMessage);
+  }
+  if (webGrounding) {
+    systemMessages.push({
+      role: "system",
+      content: webGrounding.systemPrompt,
+      userId,
+      status: "completed",
+    });
+  }
+
+  return {
+    promptMessages: [...systemMessages, ...promptMessages],
+    webGrounding,
+  };
+};
+
 async function* streamAssistantResponse(
   chat: Awaited<ReturnType<typeof requireChat>>,
   requestId: string,
@@ -120,44 +224,15 @@ async function* streamAssistantResponse(
   const aiProvider = aiService.getProvider(provider);
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
-  const promptMessages = getLimitedMessages(chat.messages as ChatMessage[]);
-
-  // Inject long-term memory context
   const lastUserMessage = (chat.messages as ChatMessage[])
     .filter((m) => m.role === "user")
     .pop();
-  const memoryContext = await memoryService.getMemoryContext(
-    chat.userId,
+  const { promptMessages, webGrounding } = await buildPromptMessages(
+    String(chat.userId),
+    chat.messages as ChatMessage[],
     lastUserMessage?.content,
+    Boolean(lastUserMessage?.metadata?.webSearchEnabled),
   );
-  if (memoryContext) {
-    promptMessages.unshift({
-      role: "system",
-      content: memoryContext,
-      userId: chat.userId,
-      status: "completed",
-    });
-  }
-
-  // Inject personalization context
-  const personalizationContext = await userService.getPersonalizationContext(
-    chat.userId,
-  );
-  if (personalizationContext) {
-    promptMessages.unshift({
-      role: "system",
-      content: personalizationContext,
-      userId: chat.userId,
-      status: "completed",
-    });
-  }
-
-  promptMessages.unshift({
-    role: "system",
-    content: BASE_SYSTEM_PROMPT,
-    userId: chat.userId,
-    status: "completed"
-  })
 
   // Create assistant message in its own collection
   const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
@@ -167,6 +242,7 @@ async function* streamAssistantResponse(
     model: providerName,
     requestId,
     status: "streaming",
+    metadata: buildGroundingMetadata(webGrounding),
   });
 
   const activeStream = chatStreamRegistry.create({
@@ -183,9 +259,6 @@ async function* streamAssistantResponse(
   let fullResponse = "";
   let receivedFirstChunk = false;
   let firstTokenTimedOut = false;
-
-  console.log("=== FINAL PROMPT MESSAGES (STREAMING) ===");
-  console.log(JSON.stringify(promptMessages, null, 2));
 
   try {
     const stream = aiProvider.generateStreamResponse(
@@ -222,6 +295,24 @@ async function* streamAssistantResponse(
       clearTimeout(timeout);
     }
 
+    const groundedResponse = finalizeGroundedResponse(fullResponse, webGrounding);
+    if (
+      groundedResponse.appendedCitations &&
+      !activeStream.abortController.signal.aborted
+    ) {
+      fullResponse = groundedResponse.content;
+      chatStreamRegistry.updateResponse(
+        requestId,
+        fullResponse,
+        groundedResponse.appendedCitations,
+      );
+      yield {
+        chunk: groundedResponse.appendedCitations,
+        requestId,
+        status: "streaming",
+      };
+    }
+
     const finalStatus = activeStream.abortController.signal.aborted
       ? "stopped"
       : "completed";
@@ -236,6 +327,7 @@ async function* streamAssistantResponse(
       model: providerName,
       attachments,
       type: type as any,
+      metadata: buildGroundingMetadata(webGrounding),
     });
 
     if (activeStream.abortController.signal.aborted) {
@@ -290,6 +382,7 @@ export const chatService = {
     message,
     provider,
     attachments,
+    webSearchEnabled,
   }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim() || "";
@@ -310,6 +403,9 @@ export const chatService = {
         provider,
         attachments,
       );
+      userMessage.metadata = {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      };
       await chatRepository.saveMessage(chatId, userMessage);
 
       const aiProvider = aiService.getProvider(provider);
@@ -317,33 +413,12 @@ export const chatService = {
 
       // Get history for context
       const messages = [userMessage];
-
-      // Inject long-term memory context
-      const memoryContext = await memoryService.getMemoryContext(
-        resolvedUserId,
+      const { promptMessages, webGrounding } = await buildPromptMessages(
+        String(resolvedUserId),
+        messages,
         trimmedMessage,
+        webSearchEnabled,
       );
-      const promptMessages = getLimitedMessages(messages);
-      if (memoryContext) {
-        promptMessages.unshift({
-          role: "system",
-          content: memoryContext,
-          userId: resolvedUserId,
-          status: "completed",
-        });
-      }
-
-      // Inject personalization context
-      const personalizationContext =
-        await userService.getPersonalizationContext(resolvedUserId);
-      if (personalizationContext) {
-        promptMessages.unshift({
-          role: "system",
-          content: personalizationContext,
-          userId: resolvedUserId,
-          status: "completed",
-        });
-      }
 
       let reply = "";
       try {
@@ -353,12 +428,21 @@ export const chatService = {
         throw new Error("Server Error: AI failed to respond.");
       }
 
+      reply = finalizeGroundedResponse(reply, webGrounding).content;
+
       // Parse multimedia from reply
       const { attachments: aiAttachments, type } = parseMultimedia(reply);
 
       // Save Assistant Message
       await chatRepository.saveMessage(chatId, {
-        ...createAssistantMessage(reply, String(resolvedUserId), providerName),
+        ...createAssistantMessage(
+          reply,
+          String(resolvedUserId),
+          providerName,
+          undefined,
+          "completed",
+          buildGroundingMetadata(webGrounding),
+        ),
         attachments: aiAttachments,
         type: type as any,
       });
@@ -396,12 +480,17 @@ export const chatService = {
     // Save User Message
     await chatRepository.saveMessage(
       chatId,
-      createUserMessage(
-        trimmedMessage,
-        String(resolvedUserId),
-        input.provider,
-        input.attachments,
-      ),
+      {
+        ...createUserMessage(
+          trimmedMessage,
+          String(resolvedUserId),
+          input.provider,
+          input.attachments,
+        ),
+        metadata: {
+          webSearchEnabled: Boolean(input.webSearchEnabled),
+        },
+      },
     );
 
     // Refetch to get messages for prompt
@@ -420,6 +509,7 @@ export const chatService = {
     message,
     provider,
     attachments,
+    webSearchEnabled,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || "";
     const chat = await requireChat(chatId);
@@ -427,12 +517,17 @@ export const chatService = {
     // Save User Message
     await chatRepository.saveMessage(
       chatId,
-      createUserMessage(
-        trimmedMessage,
-        String(chat.userId),
-        provider,
-        attachments,
-      ),
+      {
+        ...createUserMessage(
+          trimmedMessage,
+          String(chat.userId),
+          provider,
+          attachments,
+        ),
+        metadata: {
+          webSearchEnabled: Boolean(webSearchEnabled),
+        },
+      },
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
@@ -445,52 +540,36 @@ export const chatService = {
 
     // Fetch updated history
     const updatedChat = await chatRepository.findById(chatId);
-    const promptMessages = getLimitedMessages(
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
       updatedChat?.messages as ChatMessage[],
-    );
-
-    // Inject long-term memory context
-    const memoryContext = await memoryService.getMemoryContext(
-      String(chat.userId),
       trimmedMessage,
+      webSearchEnabled,
     );
-    if (memoryContext) {
-      promptMessages.unshift({
-        role: "system",
-        content: memoryContext,
-        userId: String(chat.userId),
-        status: "completed",
-      });
-    }
-
-    // Inject personalization context
-    const personalizationContext = await userService.getPersonalizationContext(
-      String(chat.userId),
-    );
-    if (personalizationContext) {
-      promptMessages.unshift({
-        role: "system",
-        content: personalizationContext,
-        userId: String(chat.userId),
-        status: "completed",
-      });
-    }
 
     let reply = "";
     try {
       reply = await aiProvider.generateResponse(promptMessages);
-      console.log({ reply });
     } catch (err) {
       console.error("AI Error in sendMessage:", err);
       throw new Error("Server Error: AI failed to respond.");
     }
+
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
 
     // Parse multimedia from reply
     const { attachments: aiAttachments, type } = parseMultimedia(reply);
 
     // Save Assistant Message
     await chatRepository.saveMessage(chatId, {
-      ...createAssistantMessage(reply, String(chat.userId), providerName),
+      ...createAssistantMessage(
+        reply,
+        String(chat.userId),
+        providerName,
+        undefined,
+        "completed",
+        buildGroundingMetadata(webGrounding),
+      ),
       attachments: aiAttachments,
       type: type as any,
     });
@@ -513,6 +592,7 @@ export const chatService = {
     provider,
     requestId,
     attachments,
+    webSearchEnabled,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || "";
     const resolvedRequestId = requireRequestId(requestId);
@@ -521,12 +601,17 @@ export const chatService = {
     // Save User Message
     await chatRepository.saveMessage(
       chatId,
-      createUserMessage(
-        trimmedMessage,
-        String(chat.userId),
-        provider,
-        attachments,
-      ),
+      {
+        ...createUserMessage(
+          trimmedMessage,
+          String(chat.userId),
+          provider,
+          attachments,
+        ),
+        metadata: {
+          webSearchEnabled: Boolean(webSearchEnabled),
+        },
+      },
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {

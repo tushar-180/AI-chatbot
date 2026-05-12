@@ -1,4 +1,7 @@
-export const BASE_SYSTEM_PROMPT = `
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MEMORY_EXTRACTION_PROMPT = exports.MEMORY_CONTEXT_PROMPT = exports.BASE_SYSTEM_PROMPT = void 0;
+exports.BASE_SYSTEM_PROMPT = `
 You are a capable AI assistant.
 
 CORE BEHAVIOR
@@ -37,8 +40,7 @@ TASK EXECUTION
 - For ambiguous requests:
   - Ask concise clarification questions only when necessary.
 `;
-
-export const MEMORY_CONTEXT_PROMPT = (facts: string) => `
+const MEMORY_CONTEXT_PROMPT = (facts) => `
 [USER IDENTITY & MEMORY]
 You have access to the following facts about the user from past sessions. 
 Use them to make the conversation feel continuous and personal, but follow these rules:
@@ -49,8 +51,8 @@ Use them to make the conversation feel continuous and personal, but follow these
 FACTS:
 ${facts}
 `;
-
-export const MEMORY_EXTRACTION_PROMPT = (userMessage: string) => `
+exports.MEMORY_CONTEXT_PROMPT = MEMORY_CONTEXT_PROMPT;
+const MEMORY_EXTRACTION_PROMPT = (userMessage) => `
 You are a memory extraction module. Analyze the following user message and extract important personal facts, preferences, or project details.
 
 RULES:
@@ -69,3 +71,4 @@ USER MESSAGE: "${userMessage}"
 
 EXTRACTED FACTS:
 `;
+exports.MEMORY_EXTRACTION_PROMPT = MEMORY_EXTRACTION_PROMPT;

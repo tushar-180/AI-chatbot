@@ -32,7 +32,9 @@ class AIServiceFactory {
      */
     static getProvider(name) {
         console.log("name", name);
-        const fullId = (name || process.env.AI_PROVIDER || "gemini").toLowerCase();
+        const fullId = (name ||
+            process.env.AI_PROVIDER ||
+            "gemini").toLowerCase();
         const [providerType, modelId] = fullId.split(":");
         const adapter = this.providers[providerType];
         if (!adapter) {

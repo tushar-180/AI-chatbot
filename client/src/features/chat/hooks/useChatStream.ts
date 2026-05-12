@@ -341,6 +341,9 @@ export const useChatStream = () => {
     input: string,
     provider: string,
     attachments: any[] = [],
+    options?: {
+      webSearchEnabled?: boolean;
+    },
   ) => {
     if (!input.trim() && attachments.length === 0) return;
     if (loading || !user?.id) return;
@@ -407,6 +410,7 @@ export const useChatStream = () => {
           provider,
           requestId,
           attachments,
+          webSearchEnabled: Boolean(options?.webSearchEnabled),
         }),
       });
 

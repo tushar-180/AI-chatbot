@@ -14,6 +14,9 @@ interface UseChatInputProps {
     input: string,
     provider: string,
     attachments?: Attachment[],
+    options?: {
+      webSearchEnabled?: boolean;
+    },
   ) => Promise<void>;
   initialProvider?: string;
 }
@@ -27,6 +30,7 @@ export const useChatInput = ({
     initialProvider || DEFAULT_CHAT_PROVIDER,
   );
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,7 +42,9 @@ export const useChatInput = ({
     setInput("");
     setAttachments([]); // Clear both
 
-    await onSubmit(currentInput, selectedProvider, currentAttachments);
+    await onSubmit(currentInput, selectedProvider, currentAttachments, {
+      webSearchEnabled,
+    });
   };
 
   return {
@@ -48,6 +54,8 @@ export const useChatInput = ({
     setSelectedProvider,
     attachments,
     setAttachments,
+    webSearchEnabled,
+    setWebSearchEnabled,
     handleFormSubmit,
   };
 };

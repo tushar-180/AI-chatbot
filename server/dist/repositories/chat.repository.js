@@ -23,17 +23,20 @@ exports.chatRepository = {
             // Fetch messages from the new Message collection
             const messages = yield Chat_model_1.Message.find({ chatId }).sort({ createdAt: 1 });
             // Combine legacy messages (if any) with new messages
-            const legacyMessages = chat.toObject().messages || chat.toObject().legacyMessages || [];
+            const legacyMessages = chat.toObject().messages ||
+                chat.toObject().legacyMessages ||
+                [];
             // Convert Mongoose documents to objects and add 'id' field for frontend consistency
-            const formattedMessages = messages.map(msg => (Object.assign(Object.assign({}, msg.toObject()), { id: msg._id.toString() })));
+            const formattedMessages = messages.map((msg) => (Object.assign(Object.assign({}, msg.toObject()), { id: msg._id.toString() })));
             // Reconstruct the chat object for the service
             const chatObj = chat.toObject();
-            return Object.assign(Object.assign({}, chatObj), { messages: [...legacyMessages, ...formattedMessages], save: () => chat.save() // Allow the service to call .save() for title updates
-             });
+            return Object.assign(Object.assign({}, chatObj), { messages: [...legacyMessages, ...formattedMessages], save: () => chat.save() });
         });
     },
     findAllByUserId(userId) {
-        return Chat_model_1.Chat.find({ userId }).select("-messages -legacyMessages").sort({ updatedAt: -1 });
+        return Chat_model_1.Chat.find({ userId })
+            .select("-messages -legacyMessages")
+            .sort({ updatedAt: -1 });
     },
     deleteById(chatId) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -51,20 +54,26 @@ exports.chatRepository = {
     },
     updateMessage(messageId, updateData) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Chat_model_1.Message.findByIdAndUpdate(messageId, updateData, { returnDocument: "after" });
+            return yield Chat_model_1.Message.findByIdAndUpdate(messageId, updateData, {
+                returnDocument: "after",
+            });
         });
     },
     findUserAttachments(userId) {
         return __awaiter(this, void 0, void 0, function* () {
             return yield Chat_model_1.Message.find({
                 userId,
-                attachments: { $exists: true, $not: { $size: 0 } }
-            }).sort({ createdAt: -1 }).lean();
+                attachments: { $exists: true, $not: { $size: 0 } },
+            })
+                .sort({ createdAt: -1 })
+                .lean();
         });
     },
     updateMessageByRequestId(chatId, requestId, updateData) {
         return __awaiter(this, void 0, void 0, function* () {
-            return yield Chat_model_1.Message.findOneAndUpdate({ chatId, requestId }, updateData, { returnDocument: "after" });
+            return yield Chat_model_1.Message.findOneAndUpdate({ chatId, requestId }, updateData, {
+                returnDocument: "after",
+            });
         });
-    }
+    },
 };

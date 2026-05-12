@@ -36,11 +36,14 @@ var __asyncDelegator = (this && this.__asyncDelegator) || function (o) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.chatService = void 0;
 const chat_constants_1 = require("../constants/chat.constants");
+const prompt_constants_1 = require("../constants/prompt.constants");
 const chat_repository_1 = require("../repositories/chat.repository");
 const chatHistory_1 = require("../utils/chatHistory");
+const web_search_1 = require("../modules/web-search");
 const ai_service_1 = require("./ai.service");
 const chatStreamRegistry_service_1 = require("./chatStreamRegistry.service");
 const memory_service_1 = require("./memory.service");
+const user_service_1 = require("./user.service");
 const getChatId = (chat) => String(chat._id);
 const createUserMessage = (content, userId, provider, attachments) => ({
     role: "user",
@@ -51,13 +54,14 @@ const createUserMessage = (content, userId, provider, attachments) => ({
     attachments: attachments || [],
     type: attachments && attachments.length > 0 ? "image" : "text",
 });
-const createAssistantMessage = (content, userId, model, requestId, status = "completed") => ({
+const createAssistantMessage = (content, userId, model, requestId, status = "completed", metadata) => ({
     role: "assistant",
     userId,
     content,
     model,
     requestId,
     status,
+    metadata,
 });
 const createTitle = (message) => {
     return message ? message.slice(0, chat_constants_1.CHAT_TITLE_MAX_LENGTH) : chat_constants_1.DEFAULT_CHAT_TITLE;
@@ -97,25 +101,90 @@ const requireChat = (chatId) => __awaiter(void 0, void 0, void 0, function* () {
     return chat;
 });
 const getAssistantMessageByRequestId = (chat, requestId) => chat.messages.find((message) => message.role === "assistant" && message.requestId === requestId);
+const buildGroundingMetadata = (webGrounding) => {
+    if (!webGrounding)
+        return undefined;
+    return {
+        grounded: true,
+        debug: webGrounding.debug,
+        sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
+            id,
+            title,
+            url,
+            hostname,
+        })),
+    };
+};
+const finalizeGroundedResponse = (response, webGrounding) => {
+    if (!(webGrounding === null || webGrounding === void 0 ? void 0 : webGrounding.citationsMarkdown)) {
+        return { content: response, appendedCitations: "" };
+    }
+    const alreadyHasSources = webGrounding.sources.some((source) => response.includes(source.url));
+    if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
+        return { content: response, appendedCitations: "" };
+    }
+    const appendedCitations = webGrounding.citationsMarkdown;
+    return {
+        content: `${response.trimEnd()}${appendedCitations}`,
+        appendedCitations,
+    };
+};
+const buildPromptMessages = (userId_1, chatMessages_1, latestUserMessage_1, ...args_1) => __awaiter(void 0, [userId_1, chatMessages_1, latestUserMessage_1, ...args_1], void 0, function* (userId, chatMessages, latestUserMessage, webSearchEnabled = false) {
+    const promptMessages = (0, chatHistory_1.getLimitedMessages)(chatMessages);
+    const systemMessages = [
+        {
+            role: "system",
+            content: prompt_constants_1.BASE_SYSTEM_PROMPT,
+            userId,
+            status: "completed",
+        },
+    ];
+    const personalizationContext = yield user_service_1.userService.getPersonalizationContext(userId);
+    if (personalizationContext) {
+        systemMessages.push({
+            role: "system",
+            content: personalizationContext,
+            userId,
+            status: "completed",
+        });
+    }
+    const memoryContext = yield memory_service_1.memoryService.getMemoryContext(userId, latestUserMessage);
+    if (memoryContext) {
+        systemMessages.push({
+            role: "system",
+            content: memoryContext,
+            userId,
+            status: "completed",
+        });
+    }
+    let webGrounding = null;
+    if (webSearchEnabled && latestUserMessage) {
+        webGrounding = yield web_search_1.webSearchService.buildGroundingContext(latestUserMessage);
+    }
+    if (webGrounding) {
+        systemMessages.push({
+            role: "system",
+            content: webGrounding.systemPrompt,
+            userId,
+            status: "completed",
+        });
+    }
+    return {
+        promptMessages: [...systemMessages, ...promptMessages],
+        webGrounding,
+    };
+});
 function streamAssistantResponse(chat_1, requestId_1, provider_1) {
     return __asyncGenerator(this, arguments, function* streamAssistantResponse_1(chat, requestId, provider, includeChatId = false) {
         var _a, e_1, _b, _c;
-        var _d;
+        var _d, _e;
         const aiProvider = ai_service_1.aiService.getProvider(provider);
         const providerName = aiProvider.getProviderName();
         const chatId = getChatId(chat);
-        const promptMessages = (0, chatHistory_1.getLimitedMessages)(chat.messages);
-        // Inject long-term memory context
-        const lastUserMessage = chat.messages.filter(m => m.role === "user").pop();
-        const memoryContext = yield __await(memory_service_1.memoryService.getMemoryContext(chat.userId, lastUserMessage === null || lastUserMessage === void 0 ? void 0 : lastUserMessage.content));
-        if (memoryContext) {
-            promptMessages.unshift({
-                role: "system",
-                content: memoryContext,
-                userId: chat.userId,
-                status: "completed",
-            });
-        }
+        const lastUserMessage = chat.messages
+            .filter((m) => m.role === "user")
+            .pop();
+        const { promptMessages, webGrounding } = yield __await(buildPromptMessages(String(chat.userId), chat.messages, lastUserMessage === null || lastUserMessage === void 0 ? void 0 : lastUserMessage.content, Boolean((_d = lastUserMessage === null || lastUserMessage === void 0 ? void 0 : lastUserMessage.metadata) === null || _d === void 0 ? void 0 : _d.webSearchEnabled)));
         // Create assistant message in its own collection
         const assistantMessageDoc = yield __await(chat_repository_1.chatRepository.saveMessage(chatId, {
             role: "assistant",
@@ -124,38 +193,70 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
             model: providerName,
             requestId,
             status: "streaming",
+            metadata: buildGroundingMetadata(webGrounding),
         }));
         const activeStream = chatStreamRegistry_service_1.chatStreamRegistry.create({
             requestId,
             chatId,
-            messageId: ((_d = assistantMessageDoc._id) === null || _d === void 0 ? void 0 : _d.toString()) || "",
+            messageId: ((_e = assistantMessageDoc._id) === null || _e === void 0 ? void 0 : _e.toString()) || "",
             model: providerName,
         });
         yield yield __await(includeChatId
             ? { chatId, requestId, model: providerName, status: "streaming" }
             : { requestId, model: providerName, status: "streaming" });
+        let fullResponse = "";
+        let receivedFirstChunk = false;
+        let firstTokenTimedOut = false;
         try {
             const stream = aiProvider.generateStreamResponse(promptMessages, activeStream.abortController.signal);
-            let fullResponse = "";
+            // 30s timeout for first token
+            const timeout = setTimeout(() => {
+                if (!receivedFirstChunk) {
+                    console.error(`AI generation timed out for requestId: ${requestId}`);
+                    firstTokenTimedOut = true;
+                    activeStream.abortController.abort();
+                }
+            }, 30000);
             try {
-                for (var _e = true, stream_1 = __asyncValues(stream), stream_1_1; stream_1_1 = yield __await(stream_1.next()), _a = stream_1_1.done, !_a; _e = true) {
-                    _c = stream_1_1.value;
-                    _e = false;
-                    const chunk = _c;
-                    if (activeStream.abortController.signal.aborted) {
-                        break;
+                try {
+                    for (var _f = true, stream_1 = __asyncValues(stream), stream_1_1; stream_1_1 = yield __await(stream_1.next()), _a = stream_1_1.done, !_a; _f = true) {
+                        _c = stream_1_1.value;
+                        _f = false;
+                        const chunk = _c;
+                        if (activeStream.abortController.signal.aborted) {
+                            break;
+                        }
+                        if (!receivedFirstChunk) {
+                            receivedFirstChunk = true;
+                            firstTokenTimedOut = false;
+                            clearTimeout(timeout);
+                        }
+                        fullResponse += chunk;
+                        chatStreamRegistry_service_1.chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
+                        yield yield __await({ chunk, requestId, status: "streaming" });
                     }
-                    fullResponse += chunk;
-                    chatStreamRegistry_service_1.chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
-                    yield yield __await({ chunk, requestId, status: "streaming" });
+                }
+                catch (e_1_1) { e_1 = { error: e_1_1 }; }
+                finally {
+                    try {
+                        if (!_f && !_a && (_b = stream_1.return)) yield __await(_b.call(stream_1));
+                    }
+                    finally { if (e_1) throw e_1.error; }
                 }
             }
-            catch (e_1_1) { e_1 = { error: e_1_1 }; }
             finally {
-                try {
-                    if (!_e && !_a && (_b = stream_1.return)) yield __await(_b.call(stream_1));
-                }
-                finally { if (e_1) throw e_1.error; }
+                clearTimeout(timeout);
+            }
+            const groundedResponse = finalizeGroundedResponse(fullResponse, webGrounding);
+            if (groundedResponse.appendedCitations &&
+                !activeStream.abortController.signal.aborted) {
+                fullResponse = groundedResponse.content;
+                chatStreamRegistry_service_1.chatStreamRegistry.updateResponse(requestId, fullResponse, groundedResponse.appendedCitations);
+                yield yield __await({
+                    chunk: groundedResponse.appendedCitations,
+                    requestId,
+                    status: "streaming",
+                });
             }
             const finalStatus = activeStream.abortController.signal.aborted
                 ? "stopped"
@@ -169,6 +270,7 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
                 model: providerName,
                 attachments,
                 type: type,
+                metadata: buildGroundingMetadata(webGrounding),
             }));
             if (activeStream.abortController.signal.aborted) {
                 yield yield __await({ done: true, chatId, requestId, status: "stopped" });
@@ -177,15 +279,24 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
             chatStreamRegistry_service_1.chatStreamRegistry.complete(requestId);
             yield yield __await({ done: true, chatId, requestId, status: "completed" });
             // Extract new memories in the background
-            const lastUserMessage = chat.messages.filter(m => m.role === "user").pop();
+            const lastUserMessage = chat.messages
+                .filter((m) => m.role === "user")
+                .pop();
             if (lastUserMessage) {
-                memory_service_1.memoryService.extractMemoriesFromMessage(chat.userId, lastUserMessage.content).catch(err => {
+                memory_service_1.memoryService
+                    .extractMemoriesFromMessage(chat.userId, lastUserMessage.content)
+                    .catch((err) => {
                     console.error("Background memory extraction failed:", err);
                 });
             }
         }
         catch (aiError) {
-            if (activeStream.abortController.signal.aborted) {
+            const isTimeout = (aiError instanceof Error && aiError.message.includes("timed out")) ||
+                firstTokenTimedOut;
+            const errorMessage = isTimeout
+                ? "AI generation timed out. Please try again."
+                : "Server Error: AI failed to respond.";
+            if (activeStream.abortController.signal.aborted && !isTimeout) {
                 yield __await(chat_repository_1.chatRepository.updateMessage(assistantMessageDoc._id, {
                     content: activeStream.fullResponse,
                     status: "stopped",
@@ -197,14 +308,14 @@ function streamAssistantResponse(chat_1, requestId_1, provider_1) {
             yield __await(chat_repository_1.chatRepository.updateMessage(assistantMessageDoc._id, {
                 status: "failed",
             }));
-            chatStreamRegistry_service_1.chatStreamRegistry.fail(requestId, "AI failed to respond");
-            yield yield __await({ error: "AI failed to respond, but your message was saved." });
+            chatStreamRegistry_service_1.chatStreamRegistry.fail(requestId, errorMessage);
+            yield yield __await({ error: errorMessage, status: "failed" });
         }
     });
 }
 exports.chatService = {
     createChat(_a) {
-        return __awaiter(this, arguments, void 0, function* ({ userId, message, provider, attachments }) {
+        return __awaiter(this, arguments, void 0, function* ({ userId, message, provider, attachments, webSearchEnabled, }) {
             const resolvedUserId = requireUserId(userId);
             const trimmedMessage = (message === null || message === void 0 ? void 0 : message.trim()) || "";
             const chat = chat_repository_1.chatRepository.create({
@@ -216,30 +327,33 @@ exports.chatService = {
             if (trimmedMessage || (attachments && attachments.length > 0)) {
                 // Save User Message
                 const userMessage = createUserMessage(trimmedMessage || "", String(resolvedUserId), provider, attachments);
+                userMessage.metadata = {
+                    webSearchEnabled: Boolean(webSearchEnabled),
+                };
                 yield chat_repository_1.chatRepository.saveMessage(chatId, userMessage);
                 const aiProvider = ai_service_1.aiService.getProvider(provider);
                 const providerName = aiProvider.getProviderName();
                 // Get history for context
                 const messages = [userMessage];
-                // Inject long-term memory context
-                const memoryContext = yield memory_service_1.memoryService.getMemoryContext(resolvedUserId, trimmedMessage);
-                const promptMessages = (0, chatHistory_1.getLimitedMessages)(messages);
-                if (memoryContext) {
-                    promptMessages.unshift({
-                        role: "system",
-                        content: memoryContext,
-                        userId: resolvedUserId,
-                        status: "completed",
-                    });
+                const { promptMessages, webGrounding } = yield buildPromptMessages(String(resolvedUserId), messages, trimmedMessage, webSearchEnabled);
+                let reply = "";
+                try {
+                    reply = yield aiProvider.generateResponse(promptMessages);
                 }
-                const reply = yield aiProvider.generateResponse(promptMessages);
+                catch (err) {
+                    console.error("AI Error in createChat:", err);
+                    throw new Error("Server Error: AI failed to respond.");
+                }
+                reply = finalizeGroundedResponse(reply, webGrounding).content;
                 // Parse multimedia from reply
                 const { attachments: aiAttachments, type } = (0, chatHistory_1.parseMultimedia)(reply);
                 // Save Assistant Message
-                yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(resolvedUserId), providerName)), { attachments: aiAttachments, type: type }));
+                yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(resolvedUserId), providerName, undefined, "completed", buildGroundingMetadata(webGrounding))), { attachments: aiAttachments, type: type }));
                 // Extract new memories in the background
                 if (trimmedMessage) {
-                    memory_service_1.memoryService.extractMemoriesFromMessage(resolvedUserId, trimmedMessage).catch(err => {
+                    memory_service_1.memoryService
+                        .extractMemoriesFromMessage(resolvedUserId, trimmedMessage)
+                        .catch((err) => {
                         console.error("Background memory extraction failed:", err);
                     });
                 }
@@ -260,18 +374,22 @@ exports.chatService = {
             yield __await(chat.save());
             const chatId = chat._id.toString();
             // Save User Message
-            yield __await(chat_repository_1.chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(resolvedUserId), input.provider, input.attachments)));
+            yield __await(chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createUserMessage(trimmedMessage, String(resolvedUserId), input.provider, input.attachments)), { metadata: {
+                    webSearchEnabled: Boolean(input.webSearchEnabled),
+                } })));
             // Refetch to get messages for prompt
             const fullChat = yield __await(chat_repository_1.chatRepository.findById(chatId));
             yield __await(yield* __asyncDelegator(__asyncValues(streamAssistantResponse(fullChat, requestId, input.provider, true))));
         });
     },
     sendMessage(_a) {
-        return __awaiter(this, arguments, void 0, function* ({ chatId, message, provider, attachments }) {
+        return __awaiter(this, arguments, void 0, function* ({ chatId, message, provider, attachments, webSearchEnabled, }) {
             const trimmedMessage = (message === null || message === void 0 ? void 0 : message.trim()) || "";
             const chat = yield requireChat(chatId);
             // Save User Message
-            yield chat_repository_1.chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments));
+            yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments)), { metadata: {
+                    webSearchEnabled: Boolean(webSearchEnabled),
+                } }));
             if (!chat.title || chat.title === chat_constants_1.DEFAULT_CHAT_TITLE) {
                 chat.title = createTitle(trimmedMessage);
                 yield chat.save();
@@ -280,25 +398,25 @@ exports.chatService = {
             const providerName = aiProvider.getProviderName();
             // Fetch updated history
             const updatedChat = yield chat_repository_1.chatRepository.findById(chatId);
-            const promptMessages = (0, chatHistory_1.getLimitedMessages)(updatedChat === null || updatedChat === void 0 ? void 0 : updatedChat.messages);
-            // Inject long-term memory context
-            const memoryContext = yield memory_service_1.memoryService.getMemoryContext(String(chat.userId), trimmedMessage);
-            if (memoryContext) {
-                promptMessages.unshift({
-                    role: "system",
-                    content: memoryContext,
-                    userId: String(chat.userId),
-                    status: "completed",
-                });
+            const { promptMessages, webGrounding } = yield buildPromptMessages(String(chat.userId), updatedChat === null || updatedChat === void 0 ? void 0 : updatedChat.messages, trimmedMessage, webSearchEnabled);
+            let reply = "";
+            try {
+                reply = yield aiProvider.generateResponse(promptMessages);
             }
-            const reply = yield aiProvider.generateResponse(promptMessages);
+            catch (err) {
+                console.error("AI Error in sendMessage:", err);
+                throw new Error("Server Error: AI failed to respond.");
+            }
+            reply = finalizeGroundedResponse(reply, webGrounding).content;
             // Parse multimedia from reply
             const { attachments: aiAttachments, type } = (0, chatHistory_1.parseMultimedia)(reply);
             // Save Assistant Message
-            yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(chat.userId), providerName)), { attachments: aiAttachments, type: type }));
+            yield chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createAssistantMessage(reply, String(chat.userId), providerName, undefined, "completed", buildGroundingMetadata(webGrounding))), { attachments: aiAttachments, type: type }));
             // Extract new memories in the background
             if (trimmedMessage) {
-                memory_service_1.memoryService.extractMemoriesFromMessage(String(chat.userId), trimmedMessage).catch(err => {
+                memory_service_1.memoryService
+                    .extractMemoriesFromMessage(String(chat.userId), trimmedMessage)
+                    .catch((err) => {
                     console.error("Background memory extraction failed:", err);
                 });
             }
@@ -306,12 +424,14 @@ exports.chatService = {
         });
     },
     streamMessage(_a) {
-        return __asyncGenerator(this, arguments, function* streamMessage_1({ chatId, message, provider, requestId, attachments, }) {
+        return __asyncGenerator(this, arguments, function* streamMessage_1({ chatId, message, provider, requestId, attachments, webSearchEnabled, }) {
             const trimmedMessage = (message === null || message === void 0 ? void 0 : message.trim()) || "";
             const resolvedRequestId = requireRequestId(requestId);
             const chat = yield __await(requireChat(chatId));
             // Save User Message
-            yield __await(chat_repository_1.chatRepository.saveMessage(chatId, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments)));
+            yield __await(chat_repository_1.chatRepository.saveMessage(chatId, Object.assign(Object.assign({}, createUserMessage(trimmedMessage, String(chat.userId), provider, attachments)), { metadata: {
+                    webSearchEnabled: Boolean(webSearchEnabled),
+                } })));
             if (!chat.title || chat.title === chat_constants_1.DEFAULT_CHAT_TITLE) {
                 chat.title = createTitle(trimmedMessage);
                 yield __await(chat.save());
@@ -391,11 +511,11 @@ exports.chatService = {
                         size: att.size,
                         messageId: String(msg._id),
                         chatId: String(msg.chatId),
-                        createdAt: msg.createdAt
+                        createdAt: msg.createdAt,
                     });
                 }
             }
             return gallery;
         });
-    }
+    },
 };
