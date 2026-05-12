@@ -31,7 +31,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
     if (lang === "svg") {
       return (
         <div
-          className="flex min-h-[200px] items-center justify-center bg-white p-8 rounded-b-2xl"
+          className="flex min-h-50 items-center justify-center bg-white p-8 rounded-b-2xl"
           dangerouslySetInnerHTML={{ __html: code }}
         />
       );
@@ -57,7 +57,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
               <body>${code}</body>
             </html>
           `}
-          className="min-h-[300px] w-full border-none bg-white rounded-b-2xl"
+          className="min-h-75 w-full border-none bg-white rounded-b-2xl"
           sandbox="allow-scripts"
         />
       );
