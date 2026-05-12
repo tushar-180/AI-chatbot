@@ -2,6 +2,12 @@ import { Chat, Message } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
 
 export const chatRepository = {
+  async touchChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(chatId, {
+      $set: { updatedAt: new Date() },
+    });
+  },
+
   create(data: { userId: string; title: string }) {
     return new Chat(data);
   },
@@ -49,17 +55,23 @@ export const chatRepository = {
   },
 
   async saveMessage(chatId: string, messageData: Partial<ChatMessage>) {
-    return await Message.create({
+    const message = await Message.create({
       chatId,
       userId: messageData.userId,
       ...messageData,
     });
+    await this.touchChat(chatId);
+    return message;
   },
 
   async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    return await Message.findByIdAndUpdate(messageId, updateData, {
+    const message = await Message.findByIdAndUpdate(messageId, updateData, {
       returnDocument: "after",
     });
+    if (message?.chatId) {
+      await this.touchChat(String(message.chatId));
+    }
+    return message;
   },
 
   async findUserAttachments(userId: string) {
@@ -76,8 +88,14 @@ export const chatRepository = {
     requestId: string,
     updateData: Partial<ChatMessage>,
   ) {
-    return await Message.findOneAndUpdate({ chatId, requestId }, updateData, {
+    const message = await Message.findOneAndUpdate(
+      { chatId, requestId },
+      updateData,
+      {
       returnDocument: "after",
-    });
+      },
+    );
+    await this.touchChat(chatId);
+    return message;
   },
 };

@@ -51,6 +51,7 @@ interface MessageListProps {
   messages: Message[];
   loading: boolean;
   messagesLoading: boolean;
+  messagesError: string | null;
   hasLoadedCurrentChat: boolean;
   isStreaming: boolean;
   currentChatId: string | null;
@@ -62,6 +63,7 @@ const MessageList = ({
   messages,
   loading,
   messagesLoading,
+  messagesError,
   hasLoadedCurrentChat,
   isStreaming,
   currentChatId,
@@ -239,6 +241,15 @@ const MessageList = ({
                 </button>
               ))}
             </div>
+          </div>
+        ) : messagesError && currentChatId && messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-base font-medium text-slate-200">
+              Unable to load messages
+            </p>
+            <p className="mt-2 max-w-md text-sm text-slate-400">
+              {messagesError}
+            </p>
           </div>
         ) : (messagesLoading || (currentChatId && !hasLoadedCurrentChat)) &&
           messages.length === 0 ? (

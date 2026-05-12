@@ -36,15 +36,23 @@ function App() {
                 element={!isSignedIn ? <Landing /> : <Navigate to="/chat" replace />}
               />
 
-              {/* Protected Chat Route */}
-              <Route
-                path="/chat"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
+            {/* Protected Chat Routes */}
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <Chat />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat/:chatId"
+              element={
+                <ProtectedRoute>
+                  <Chat />
+                </ProtectedRoute>
+              }
+            />
 
               {/* Public Auth Route */}
               <Route

@@ -36,6 +36,8 @@ const TONE_OPTIONS = [
   "Friendly",
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+
 const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
   isOpen,
   onClose,
@@ -56,7 +58,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
     setIsLoading(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/user/profile/${user.id}`,
+        `${API_BASE_URL}/api/user/profile/${user.id}`
       );
       if (!response.ok) throw new Error("Failed to fetch profile");
       const userData = await response.json();
@@ -81,7 +83,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
     setIsSaving(true);
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/user/personalization/${user.id}`,
+        `${API_BASE_URL}/api/user/personalization/${user.id}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },

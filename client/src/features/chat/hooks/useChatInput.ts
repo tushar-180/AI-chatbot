@@ -14,6 +14,9 @@ interface UseChatInputProps {
     input: string,
     provider: string,
     attachments?: Attachment[],
+    options?: {
+      forceNewChat?: boolean;
+    },
   ) => Promise<void>;
   initialProvider?: string;
 }

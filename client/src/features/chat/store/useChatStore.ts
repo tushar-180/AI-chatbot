@@ -98,9 +98,13 @@ export const useChatStore = create<ChatState>()(
             return { chats: [chat, ...state.chats] };
           }
 
-          const chats = [...state.chats];
-          chats[existingIndex] = { ...chats[existingIndex], ...chat };
-          return { chats };
+          const existingChat = state.chats[existingIndex];
+          const updatedChat = { ...existingChat, ...chat };
+          const remainingChats = state.chats.filter(
+            (item) => item._id !== chat._id,
+          );
+
+          return { chats: [updatedChat, ...remainingChats] };
         }),
 
       removeChat: (id) =>

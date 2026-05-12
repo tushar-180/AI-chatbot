@@ -22,8 +22,8 @@ export const chatService = {
   /**
    * Fetches messages for a specific chat.
    */
-  async fetchMessages(chatId: string): Promise<Message[]> {
-    const res = await api.get(`/chat/${chatId}`);
+  async fetchMessages(chatId: string, userId: string): Promise<Message[]> {
+    const res = await api.get(`/chat/${chatId}`, { params: { userId } });
     return res.data.messages || [];
   },
 
