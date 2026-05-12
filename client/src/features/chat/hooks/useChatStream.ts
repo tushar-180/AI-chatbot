@@ -335,6 +335,7 @@ export const useChatStream = () => {
                     content: fullContent,
                     requestId: activeRequestId,
                     status: data.status ?? "streaming",
+                    isWebSearching: false,
                 });
             }
 
@@ -371,6 +372,7 @@ export const useChatStream = () => {
                         content: fullContent || next[next.length - 1].content,
                         requestId: activeRequestId,
                         status: data.status ?? "completed",
+                        isWebSearching: false,
                     };
                     if (resolvedChatId) {
                         const finalChatId = resolvedChatId;
@@ -568,6 +570,7 @@ export const useChatStream = () => {
             model: provider,
             requestId,
             status: "streaming",
+            isWebSearching: Boolean(options?.webSearchEnabled),
         };
         const isCreatingChat = !currentChatId;
         const activeKey = getActiveChatKey(currentChatId);
