@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
