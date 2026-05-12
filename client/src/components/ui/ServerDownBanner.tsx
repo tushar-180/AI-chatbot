@@ -3,13 +3,15 @@ import { RefreshCw, WifiOff } from "lucide-react";
 
 interface ServerDownBannerProps {
   isDown: boolean;
+  isRetrying: boolean;
+  onRetry: () => void;
 }
 
-const ServerDownBanner: React.FC<ServerDownBannerProps> = ({ isDown }) => {
+const ServerDownBanner: React.FC<ServerDownBannerProps> = ({ isDown, isRetrying, onRetry }) => {
   if (!isDown) return null;
 
   const handleRefresh = () => {
-    window.location.reload();
+    onRetry();
   };
 
   return (
@@ -32,10 +34,11 @@ const ServerDownBanner: React.FC<ServerDownBannerProps> = ({ isDown }) => {
         <div className="mt-12 w-full max-w-[240px]">
           <button
             onClick={handleRefresh}
-            className="group flex w-full items-center justify-center gap-3 rounded-full border border-white/20 bg-transparent px-6 py-4 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-white hover:text-black active:scale-[0.98]"
+            disabled={isRetrying}
+            className="group flex w-full items-center justify-center gap-3 rounded-full border border-white/20 bg-transparent px-6 py-4 text-[10px] font-bold uppercase tracking-[0.3em] text-white transition-all hover:bg-white hover:text-black active:scale-[0.98] disabled:opacity-50 disabled:cursor-wait"
           >
-            <RefreshCw size={14} className="transition-transform duration-700 group-hover:rotate-180" />
-            <span>Re-initialize</span>
+            <RefreshCw size={14} className={`transition-transform duration-700 ${isRetrying ? 'animate-spin' : 'group-hover:rotate-180'}`} />
+            <span>{isRetrying ? 'Checking...' : 'Re-initialize'}</span>
           </button>
         </div>
 

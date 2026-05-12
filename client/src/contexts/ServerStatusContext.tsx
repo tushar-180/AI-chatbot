@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { API_BASE_URL } from "../lib/api";
+import { API_BASE_URL, API_ORIGIN } from "../lib/api";
 
 interface ServerStatusContextType {
   isDown: boolean;
@@ -20,41 +20,45 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkStatus = useCallback(async () => {
     try {
-      const origin = API_BASE_URL.replace(/\/api$/, "");
-      await axios.get(origin, { timeout: 5000 });
+      await axios.get(`${API_ORIGIN}/health`, { timeout: 5000 });
       setIsDown(false);
       setIsDismissed(false); // Reset dismissal when server is back
     } catch (error) {
-      if (!axios.isAxiosError(error) || !error.response || error.response.status >= 500) {
+      if (
+        axios.isAxiosError(error) &&
+        (!error.response || error.code === "ECONNABORTED" || error.response.status >= 500)
+      ) {
         setIsDown(true);
       }
     }
   }, []);
 
   useEffect(() => {
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
+    let interval: ReturnType<typeof setInterval> | undefined;
+
+    if (isDown) {
+      interval = setInterval(checkStatus, 10000); // Poll every 10s when down
+    }
 
     const handleServerDown = () => {
       setIsDown(true);
       setIsDismissed(false);
     };
+
     window.addEventListener("server-down", handleServerDown);
 
     return () => {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       window.removeEventListener("server-down", handleServerDown);
     };
-  }, [checkStatus]);
+  }, [isDown, checkStatus]);
 
   const retry = async () => {
     setIsRetrying(true);
     try {
-      const origin = API_BASE_URL.replace(/\/api$/, "");
-      await axios.get(origin, { timeout: 5000 });
+      await axios.get(`${API_ORIGIN}/health`, { timeout: 5000 });
       setIsDown(false);
       setIsDismissed(false);
-      window.location.reload(); // Reload on success
     } catch (error) {
       // Still down
     } finally {
