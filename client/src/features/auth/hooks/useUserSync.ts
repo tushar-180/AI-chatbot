@@ -12,7 +12,7 @@ export const useUserSync = () => {
     const syncUser = async () => {
       if (isLoaded && isSignedIn && user) {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/user/sync`, {
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE_URL_DEV || 'http://localhost:5000'}/api/user/sync`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",

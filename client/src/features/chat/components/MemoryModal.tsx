@@ -38,6 +38,9 @@ const categoryIcons: Record<string, any> = {
 
 const LIMIT = 20;
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_BASE_URL_DEV || "http://localhost:5000";
+
+
 const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
   const { user } = useUser();
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -70,7 +73,7 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
       try {
         const currentSkip = isInitial ? 0 : skip + LIMIT;
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL}/api/memory?limit=${LIMIT}&skip=${currentSkip}`,
+          `${API_BASE_URL}/api/memory?limit=${LIMIT}&skip=${currentSkip}`,
           {
             headers: { "x-user-id": user.id },
           },
@@ -103,7 +106,7 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
     if (!user) return;
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/memory/${id}`,
+        `${API_BASE_URL}/api/memory/${id}`,
         {
           method: "DELETE",
           headers: { "x-user-id": user.id },

@@ -33,7 +33,7 @@ const Chat = () => {
   }, [chatId]);
 
   // 1. Manage Message Fetching & Sync
-  const { messagesLoading, loadedChatId } = useChatMessages();
+  const { messagesLoading, loadedChatId, messagesError } = useChatMessages();
 
   // 2. Manage Streaming Logic & Optimistic UI
   const {
@@ -54,7 +54,10 @@ const Chat = () => {
     setAttachments,
     handleFormSubmit,
   } = useChatInput({
-    onSubmit: streamMessage,
+    onSubmit: (input, provider, attachments) =>
+      streamMessage(input, provider, attachments, {
+        forceNewChat: Boolean(messagesError && currentChatId),
+      }),
   });
 
   // Determine which messages to display (prefer optimistic during streaming)
@@ -84,6 +87,7 @@ const Chat = () => {
               messages={displayMessages}
               loading={isCurrentChatLoading}
               messagesLoading={messagesLoading}
+              messagesError={messagesError}
               hasLoadedCurrentChat={
                 !currentChatId || loadedChatId === currentChatId
               }

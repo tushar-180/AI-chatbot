@@ -28,6 +28,8 @@ const getHttpStatus = (error) => {
         return 400;
     if (error.name === "NotFoundError")
         return 404;
+    if (error.name === "ForbiddenError")
+        return 403;
     return 500;
 };
 const getErrorMessage = (error, fallback) => {
@@ -125,7 +127,17 @@ exports.getAllChats = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(v
 }));
 exports.getChatById = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const chat = yield chat_service_1.chatService.getChatById(String(req.params.id));
+        const chatId = String(req.params.id);
+        const currentUserId = req.query.userId;
+        if (!currentUserId) {
+            return res.status(400).json({ error: "userId is required" });
+        }
+        const chat = yield chat_service_1.chatService.getChatById(chatId);
+        if (!(chat === null || chat === void 0 ? void 0 : chat.userId) || chat.userId !== currentUserId) {
+            return res
+                .status(403)
+                .json({ error: "You are not allowed to view messages for this chat." });
+        }
         return res.json(chat);
     }
     catch (error) {

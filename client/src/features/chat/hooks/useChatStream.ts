@@ -340,9 +340,19 @@ export const useChatStream = () => {
     input: string,
     provider: string,
     attachments: any[] = [],
+    options?: {
+      forceNewChat?: boolean;
+    },
   ) => {
     if (!input.trim() && attachments.length === 0) return;
     if (loading || !user?.id) return;
+
+    const forceNewChat = options?.forceNewChat === true;
+    const storeState = useChatStore.getState();
+    const effectiveCurrentChatId = forceNewChat
+      ? null
+      : storeState.currentChatId;
+    const effectiveMessages = forceNewChat ? [] : storeState.messages;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -361,13 +371,22 @@ export const useChatStream = () => {
       requestId,
       status: "streaming",
     };
-    const isCreatingChat = !currentChatId;
-    const currentChat = chats.find((chat) => chat._id === currentChatId);
-    const activeKey = getActiveChatKey(currentChatId);
+    const isCreatingChat = !effectiveCurrentChatId;
+    const currentChat = chats.find(
+      (chat) => chat._id === effectiveCurrentChatId,
+    );
+    const activeKey = getActiveChatKey(effectiveCurrentChatId);
     const optimisticTitle = createOptimisticTitle(input);
     const abortController = new AbortController();
 
-    if (currentChatId && currentChat) {
+    if (forceNewChat) {
+      setCurrentChat(null);
+      setMessages([]);
+      setIsNewChat(true);
+      navigate("/chat");
+    }
+
+    if (effectiveCurrentChatId && currentChat) {
       upsertChat({
         ...currentChat,
         updatedAt: new Date().toISOString(),
@@ -376,11 +395,11 @@ export const useChatStream = () => {
 
     activeAbortControllerRef.current = abortController;
     activeRequestIdRef.current = requestId;
-    activeResolvedChatIdRef.current = currentChatId;
+    activeResolvedChatIdRef.current = effectiveCurrentChatId;
 
     // Set optimistic UI
     setOptimisticMessagesForChat(activeKey, [
-      ...messages,
+      ...effectiveMessages,
       userMessage,
       assistantPlaceholder,
     ]);
@@ -390,7 +409,7 @@ export const useChatStream = () => {
     stopRequestedRef.current = false;
 
     try {
-      const url = chatService.getStreamUrl(currentChatId || undefined);
+      const url = chatService.getStreamUrl(effectiveCurrentChatId || undefined);
 
       // Client-side safety timeout for connection
       connectionTimeoutRef.current = setTimeout(() => {
@@ -456,13 +475,14 @@ export const useChatStream = () => {
       await processStream(
         response,
         isCreatingChat,
-        currentChatId,
+        effectiveCurrentChatId,
         requestId,
         optimisticTitle,
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const resolvedChatId =
+          activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
         const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
@@ -488,7 +508,8 @@ export const useChatStream = () => {
         stopRequestedRef.current &&
         activeRequestIdRef.current === requestId
       ) {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const resolvedChatId =
+          activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
         const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
@@ -511,7 +532,8 @@ export const useChatStream = () => {
       }
 
       console.error("Error streaming message", err);
-      const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+      const resolvedChatId =
+        activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
       const key = getActiveChatKey(resolvedChatId);
 
       setOptimisticMessagesByChatId((current) => {
