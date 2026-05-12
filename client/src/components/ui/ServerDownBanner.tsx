@@ -13,7 +13,7 @@ const ServerDownBanner: React.FC<ServerDownBannerProps> = ({ isDown }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black p-6">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black p-6">
       <div className="w-full max-w-sm flex flex-col items-center text-center">
         {/* Minimalist Icon */}
         <div className="mb-10 flex h-24 w-24 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/40">
@@ -41,7 +41,7 @@ const ServerDownBanner: React.FC<ServerDownBannerProps> = ({ isDown }) => {
 
         {/* Status indicator */}
         <div className="mt-16 flex flex-col items-center gap-2">
-          <div className="h-12 w-[1px] bg-gradient-to-b from-zinc-800 to-transparent" />
+          <div className="h-12 w-px bg-linear-to-b from-zinc-800 to-transparent" />
           <span className="text-[8px] font-bold uppercase tracking-[0.5em] text-zinc-800">
             Link Status: Terminated
           </span>

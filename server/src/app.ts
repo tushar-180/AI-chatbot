@@ -26,7 +26,8 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/", (req, res) => {
-  const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+  const serverUrl =
+    process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
   res.send(`API running... Server URL: ${serverUrl}`);
 });
 
