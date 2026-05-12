@@ -122,7 +122,7 @@ export const useChatStream = () => {
       ...current,
       [key]: next,
     }));
-  }, []);
+  };
 
   const isStreamingCurrentChat =
     isStreaming &&
@@ -224,14 +224,17 @@ export const useChatStream = () => {
   const buildResumeMessages = (
     baseMessages: Message[],
     assistantPlaceholder: Message,
-  ) => {
+  ): { nextMessages: Message[]; targetMessageId: string } => {
     const lastMessage = baseMessages[baseMessages.length - 1];
     const hasPersistedStreamingAssistant =
       lastMessage?.role === "assistant" &&
       (lastMessage.status === "streaming" || !lastMessage.content);
 
     if (!hasPersistedStreamingAssistant) {
-      return [...baseMessages, assistantPlaceholder];
+      return {
+        nextMessages: [...baseMessages, assistantPlaceholder],
+        targetMessageId: assistantPlaceholder.id!,
+      };
     }
 
     const nextMessages = [...baseMessages];
@@ -241,7 +244,10 @@ export const useChatStream = () => {
       requestId: lastMessage.requestId ?? assistantPlaceholder.requestId,
       status: "streaming",
     };
-    return nextMessages;
+    return {
+      nextMessages,
+      targetMessageId: lastMessage.id!,
+    };
   };
 
   const processStream = async (
@@ -405,6 +411,10 @@ export const useChatStream = () => {
   const resumeStream = async (chatId: string) => {
     stopRequestedRef.current = false;
     try {
+      // First fetch the latest messages from the server to ensure UI is up-to-date
+      // even if the stream has already completed on the server.
+      const baseMessages = await loadMessagesForResume(chatId);
+
       const url = chatService.getStreamUpdatesUrl(chatId);
       const abortController = new AbortController();
       activeAbortControllerRef.current = abortController;
@@ -435,6 +445,18 @@ export const useChatStream = () => {
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("text/event-stream")) {
+        // If stream is no longer active but we found a "streaming" message in the DB,
+        // it means the stream completed/failed while we were disconnected.
+        // We should fix the status of the stuck message.
+        const lastMessage = baseMessages[baseMessages.length - 1];
+        if (lastMessage?.role === "assistant" && lastMessage.status === "streaming") {
+           const nextMessages = [...baseMessages];
+           nextMessages[nextMessages.length - 1] = {
+             ...lastMessage,
+             status: "completed", // Fallback to completed since it's no longer streaming
+           };
+           commitMessagesForChat(chatId, nextMessages);
+        }
         return false;
       }
 
@@ -449,18 +471,20 @@ export const useChatStream = () => {
 
       setLoading(true);
       setIsStreaming(true, chatId);
-      const baseMessages = await loadMessagesForResume(chatId);
-      setOptimisticMessagesForChat(
-        chatId,
-        buildResumeMessages(baseMessages, assistantPlaceholder),
+
+      const { nextMessages, targetMessageId } = buildResumeMessages(
+        baseMessages,
+        assistantPlaceholder,
       );
+
+      setOptimisticMessagesForChat(chatId, nextMessages);
 
       await processStream(
         response,
         false,
         chatId,
         crypto.randomUUID(),
-        assistantPlaceholder.id!,
+        targetMessageId,
       );
       return true;
     } catch (err) {

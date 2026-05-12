@@ -79,18 +79,18 @@ const MessageList = ({
   const prevChatIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
 
-  // ─────────────────────────────────────────────
+  
   // GET REAL SCROLL CONTAINER
-  // ─────────────────────────────────────────────
+  
   const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
       ".overflow-y-auto",
     ) as HTMLDivElement | null;
   }, []);
 
-  // ─────────────────────────────────────────────
+  
   // CHECK IF USER IS NEAR BOTTOM
-  // ─────────────────────────────────────────────
+
   const isAtBottom = useCallback(() => {
     const container = getScrollContainer();
 
@@ -102,9 +102,8 @@ const MessageList = ({
     );
   }, [getScrollContainer]);
 
-  // ─────────────────────────────────────────────
+  
   // SCROLL TO BOTTOM
-  // ─────────────────────────────────────────────
   const scrollToBottom = useCallback(
     (smooth = false) => {
       const container = getScrollContainer();
@@ -119,9 +118,8 @@ const MessageList = ({
     [getScrollContainer],
   );
 
-  // ─────────────────────────────────────────────
   // HANDLE SCROLL
-  // ─────────────────────────────────────────────
+  
   const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
 
@@ -130,9 +128,7 @@ const MessageList = ({
     setShowScrollToBottom(!atBottom);
   }, [isAtBottom]);
 
-  // ─────────────────────────────────────────────
   // ATTACH SCROLL LISTENER
-  // ─────────────────────────────────────────────
   useEffect(() => {
     const container = getScrollContainer();
 
@@ -148,16 +144,12 @@ const MessageList = ({
     };
   }, [getScrollContainer, handleScroll]);
 
-  // ─────────────────────────────────────────────
   // AUTO SCROLL ON:
   // 1. NEW MESSAGE
-  // 2. STREAMING
-  // 3. CHAT SWITCH
-  // 4. PAGE REFRESH
-  // ─────────────────────────────────────────────
+  // 2. CHAT SWITCH
+  // 3. PAGE REFRESH
   useLayoutEffect(() => {
-    const messageCountChanged =
-      messages.length !== prevMessageCountRef.current;
+    const messageCountChanged = messages.length !== prevMessageCountRef.current;
 
     const chatChanged = currentChatId !== prevChatIdRef.current;
 
@@ -169,7 +161,7 @@ const MessageList = ({
       chatChanged ||
       (!messagesLoading &&
         shouldAutoScrollRef.current &&
-        (messageCountChanged || isStreaming))
+        messageCountChanged)
     ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
@@ -178,23 +170,11 @@ const MessageList = ({
 
     prevMessageCountRef.current = messages.length;
     prevChatIdRef.current = currentChatId;
-  }, [
-    messages,
-    isStreaming,
-    currentChatId,
-    messagesLoading,
-    scrollToBottom,
-  ]);
+  }, [messages, currentChatId, messagesLoading, scrollToBottom]);
 
-  // ─────────────────────────────────────────────
   // FORCE SCROLL AFTER CHAT LOAD
-  // ─────────────────────────────────────────────
   useEffect(() => {
-    if (
-      hasLoadedCurrentChat &&
-      messages.length > 0 &&
-      !messagesLoading
-    ) {
+    if (hasLoadedCurrentChat && messages.length > 0 && !messagesLoading) {
       const timeout = setTimeout(() => {
         scrollToBottom(false);
       }, 50);
