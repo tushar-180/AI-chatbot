@@ -11,7 +11,7 @@ export const API_BASE_URL = normalizedApiBaseUrl.endsWith("/api")
   ? normalizedApiBaseUrl
   : `${normalizedApiBaseUrl}/api`;
 
-export const API_ORIGIN = API_BASE_URL.replace(/\/api$/, "");
+export const API_ORIGIN = new URL(API_BASE_URL).origin;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -20,8 +20,11 @@ export const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Check if it's a network error or a 5xx error
-    if (!error.response || error.response.status >= 500) {
+    // Check if it's a network error, timeout, or a 5xx error
+    if (
+      axios.isAxiosError(error) &&
+      (!error.response || error.code === "ECONNABORTED" || error.response.status >= 500)
+    ) {
       window.dispatchEvent(new CustomEvent("server-down"));
     }
     return Promise.reject(error);

@@ -12,7 +12,7 @@ const Chat = lazy(() => import("./pages/Chat"));
 const Auth = lazy(() => import("./pages/Auth"));
 function App() {
   const { isSignedIn, isLoaded } = useUser();
-  const { isDown } = useServerStatus();
+  const { isDown, isRetrying, retry } = useServerStatus();
   
   // Sync user with DB whenever authenticated
   useUserSync();
@@ -25,7 +25,11 @@ function App() {
   return (
     <BrowserRouter>
       <div className="relative min-h-screen transition-colors duration-300 flex flex-col">
-        <ServerDownBanner isDown={isDown} />
+        <ServerDownBanner 
+          isDown={isDown} 
+          isRetrying={isRetrying}
+          onRetry={retry}
+        />
         
         <div className="flex-1 overflow-hidden relative">
           <Suspense fallback={<Loading />}>
