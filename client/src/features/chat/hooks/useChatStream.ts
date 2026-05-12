@@ -3,8 +3,8 @@ import { useUser } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
-  chatService,
-  type Message,
+    chatService,
+    type Message,
 } from "@/features/chat/services/chat.service";
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
@@ -335,6 +335,7 @@ export const useChatStream = () => {
           content: fullContent,
           requestId: activeRequestId,
           status: data.status ?? "streaming",
+          isWebSearching: false,
         });
       }
  
@@ -350,6 +351,7 @@ export const useChatStream = () => {
             ...next[next.length - 1],
             content: errorMessage,
             status: "failed",
+            isWebSearching: false,
             requestId: activeRequestId,
           };
           return { ...current, [key]: next };
@@ -371,6 +373,7 @@ export const useChatStream = () => {
             content: fullContent || next[next.length - 1].content,
             requestId: activeRequestId,
             status: data.status ?? "completed",
+            isWebSearching: false,
           };
           if (resolvedChatId) {
             const finalChatId = resolvedChatId;
@@ -544,12 +547,14 @@ export const useChatStream = () => {
     attachments: NonNullable<Message["attachments"]> = [],
     options?: {
       forceNewChat?: boolean;
+      webSearchEnabled?: boolean;
     },
   ) => {
     if (!input.trim() && attachments.length === 0) return;
     if (loading || !user?.id) return;
 
     const forceNewChat = options?.forceNewChat === true;
+    const webSearchEnabled = options?.webSearchEnabled === true;
     const storeState = useChatStore.getState();
     const effectiveCurrentChatId = forceNewChat
       ? null
@@ -571,6 +576,7 @@ export const useChatStream = () => {
       model: provider,
       requestId,
       status: "streaming",
+      isWebSearching: webSearchEnabled,
     };
     const isCreatingChat = !effectiveCurrentChatId;
     const activeKey = getActiveChatKey(effectiveCurrentChatId);
@@ -627,6 +633,7 @@ export const useChatStream = () => {
           provider,
           requestId,
           attachments,
+          webSearchEnabled,
         }),
       });
  

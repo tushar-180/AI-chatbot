@@ -15,6 +15,7 @@ const allowedOrigins = [
   "http://localhost:4173",
   "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
   process.env.CLIENT_URL,
+  "https://khz5bstr-5173.inc1.devtunnels.ms"
 ].filter(Boolean) as string[];
 
 app.use(

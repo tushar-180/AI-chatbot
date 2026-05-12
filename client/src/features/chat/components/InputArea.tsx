@@ -6,7 +6,16 @@ import {
   memo,
   useState,
 } from "react";
-import { ArrowUp, Loader2, ChevronDown, Square, Paperclip, X,Mic } from "lucide-react";
+import {
+  ArrowUp,
+  Loader2,
+  ChevronDown,
+  Square,
+  Paperclip,
+  X,
+  Mic,
+  Globe,
+} from "lucide-react";
 
 import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import {
@@ -37,6 +46,8 @@ interface InputAreaProps {
   onProviderChange: (value: string) => void;
   attachments?: Attachment[];
   onAttachmentsChange?: (attachments: Attachment[]) => void;
+  webSearchEnabled: boolean;
+  onWebSearchToggle: (enabled: boolean) => void;
 }
 
 /**
@@ -61,6 +72,28 @@ const getModelOnlyName = (fullName: string) => {
   return fullName.includes(" : ") ? fullName.split(" : ")[1] : fullName;
 };
 
+const WebSearchToggle = ({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void;
+}) => (
+  <button
+    type="button"
+    onClick={() => onToggle(!enabled)}
+    aria-pressed={enabled}
+    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
+      enabled
+        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-300/40 hover:bg-emerald-400/15"
+        : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+    }`}
+  >
+    <Globe size={12} />
+    <span>Web</span>
+  </button>
+);
+
 /**
  * Sub-component for selecting AI Model
  */
@@ -68,23 +101,26 @@ const ModelSelector = ({
   availableProviders,
   selectedProvider,
   onProviderChange,
+  webSearchEnabled,
+  onWebSearchToggle,
 }: {
   availableProviders: Provider[];
   selectedProvider: string;
   onProviderChange: (id: string) => void;
+  webSearchEnabled: boolean;
+  onWebSearchToggle: (enabled: boolean) => void;
 }) => {
   const currentProviderName =
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
 
-
   return (
-    <div className="flex items-center px-4 pt-3">
+    <div className="flex items-center gap-2 px-4 pt-3">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white group"
+            className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
             {getProviderIcon(selectedProvider, 12)}
             <span>{getModelOnlyName(currentProviderName)}</span>
@@ -97,13 +133,13 @@ const ModelSelector = ({
         <DropdownMenuContent
           align="start"
           side="top"
-          className="w-56 bg-slate-900 border-white/10 backdrop-blur-xl rounded-xl shadow-2xl p-1"
+          className="w-56 rounded-xl border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl"
         >
           {availableProviders.map((p) => (
             <DropdownMenuItem
               key={p.id}
               onClick={() => onProviderChange(p.id)}
-              className={`flex items-center gap-2 rounded-lg py-2 px-3 text-[11px] font-medium cursor-pointer transition-colors ${
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
                 selectedProvider === p.id
                   ? "bg-white text-black"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -115,6 +151,10 @@ const ModelSelector = ({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
+      <WebSearchToggle
+        enabled={webSearchEnabled}
+        onToggle={onWebSearchToggle}
+      />
     </div>
   );
 };
@@ -134,6 +174,8 @@ const InputArea = ({
   onProviderChange,
   attachments = [],
   onAttachmentsChange,
+  webSearchEnabled,
+  onWebSearchToggle,
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,14 +183,11 @@ const InputArea = ({
   const [isUploading, setIsUploading] = useState(false);
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
-  onResult: (text) => {
-    console.log("✍️ Injecting voice text into input:", text);
-    onInputChange(text);
-  },
-});
-
-
-
+    onResult: (text) => {
+      console.log("✍️ Injecting voice text into input:", text);
+      onInputChange(text);
+    },
+  });
 
   const { availableProviders } = useAvailableProviders(
     selectedProvider,
@@ -244,6 +283,8 @@ const InputArea = ({
             availableProviders={availableProviders}
             selectedProvider={selectedProvider}
             onProviderChange={onProviderChange}
+            webSearchEnabled={webSearchEnabled}
+            onWebSearchToggle={onWebSearchToggle}
           />
 
           {/* Attachment Previews */}
@@ -307,43 +348,41 @@ const InputArea = ({
               }
               className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
             />
-<button
-  type="button"
-  onClick={() => {
-    if (isListening) {
-      stop();
-    } else {
-      start();
-    }
-  }}
-  className={`relative flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 overflow-hidden ${
-    isListening
-      ? "bg-rose-500/20 text-rose-400"
-      : "text-slate-500 hover:text-white hover:bg-white/5"
-  }`}
-  aria-label="Voice input"
->
-  {/* Listening animation */}
-  {isListening && !isSpeaking && (
-    <span className="absolute inset-0 rounded-full border border-rose-400/40 animate-pulse" />
-  )}
+            <button
+              type="button"
+              onClick={() => {
+                if (isListening) {
+                  stop();
+                } else {
+                  start();
+                }
+              }}
+              className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
+                isListening
+                  ? "bg-rose-500/20 text-rose-400"
+                  : "text-slate-500 hover:bg-white/5 hover:text-white"
+              }`}
+              aria-label="Voice input"
+            >
+              {isListening && !isSpeaking && (
+                <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
+              )}
 
-  {/* Speaking animation */}
-  {isSpeaking && (
-    <>
-      <span className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping" />
-      <span className="absolute inset-1 rounded-full border border-rose-300 animate-pulse" />
-    </>
-  )}
+              {isSpeaking && (
+                <>
+                  <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
+                  <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
+                </>
+              )}
 
-  <span className="relative z-10 flex items-center justify-center">
-    {isListening ? (
-      <Square size={14} fill="currentColor" />
-    ) : (
-      <Mic size={18} />
-    )}
-  </span>
-</button>
+              <span className="relative z-10 flex items-center justify-center">
+                {isListening ? (
+                  <Square size={14} fill="currentColor" />
+                ) : (
+                  <Mic size={18} />
+                )}
+              </span>
+            </button>
             {isStreaming ? (
               <button
                 type="button"

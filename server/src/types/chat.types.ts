@@ -53,6 +53,7 @@ export type CreateChatInput = {
   provider?: string;
   requestId?: string;
   attachments?: Attachment[];
+  webSearchEnabled?: boolean;
 };
 
 export type SendMessageInput = {
@@ -61,6 +62,7 @@ export type SendMessageInput = {
   provider?: string;
   requestId?: string;
   attachments?: Attachment[];
+  webSearchEnabled?: boolean;
 };
 
 export type StopStreamInput = {

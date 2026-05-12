@@ -52,11 +52,14 @@ const Chat = () => {
     setSelectedProvider,
     attachments,
     setAttachments,
+    webSearchEnabled,
+    setWebSearchEnabled,
     handleFormSubmit,
   } = useChatInput({
-    onSubmit: (input, provider, attachments) =>
+    onSubmit: (input, provider, attachments, options) =>
       streamMessage(input, provider, attachments, {
         forceNewChat: Boolean(messagesError && currentChatId),
+        webSearchEnabled: options?.webSearchEnabled,
       }),
   });
 
@@ -113,6 +116,8 @@ const Chat = () => {
               onProviderChange={setSelectedProvider}
               attachments={attachments}
               onAttachmentsChange={setAttachments}
+              webSearchEnabled={webSearchEnabled}
+              onWebSearchToggle={setWebSearchEnabled}
             />
           </div>
         </div>
