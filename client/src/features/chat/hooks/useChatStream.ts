@@ -47,7 +47,73 @@ export const useChatStream = () => {
   );
   const stopRequestedRef = useRef(false);
 
-  const setOptimisticMessagesForChat = useCallback((
+  const pendingOptimisticUpdateRef = useRef<
+    Record<string, { messageId: string; partialMessage: Partial<Message> }>
+  >({});
+  const pendingOptimisticFrameRef = useRef<number | null>(null);
+
+  const flushOptimisticUpdates = () => {
+    pendingOptimisticFrameRef.current = null;
+
+    const pendingUpdates = pendingOptimisticUpdateRef.current;
+    if (!Object.keys(pendingUpdates).length) return;
+
+    setOptimisticMessagesByChatId((current) => {
+      let next = current;
+
+      for (const key of Object.keys(pendingUpdates)) {
+        const pending = pendingUpdates[key];
+        const messagesForChat = next[key];
+
+        if (!messagesForChat?.length) continue;
+
+        const lastMessage = messagesForChat[messagesForChat.length - 1];
+        if (!lastMessage || lastMessage.id !== pending.messageId) continue;
+
+        const updatedMessages = [...messagesForChat];
+        updatedMessages[updatedMessages.length - 1] = {
+          ...lastMessage,
+          ...pending.partialMessage,
+        };
+
+        next = {
+          ...next,
+          [key]: updatedMessages,
+        };
+      }
+
+      return next;
+    });
+
+    pendingOptimisticUpdateRef.current = {};
+  };
+
+  const scheduleOptimisticFlush = () => {
+    if (pendingOptimisticFrameRef.current !== null) return;
+    pendingOptimisticFrameRef.current = requestAnimationFrame(
+      flushOptimisticUpdates,
+    );
+  };
+
+  const queueOptimisticMessageUpdate = (
+    key: string,
+    messageId: string,
+    partialMessage: Partial<Message>,
+  ) => {
+    const existing = pendingOptimisticUpdateRef.current[key];
+
+    pendingOptimisticUpdateRef.current[key] = {
+      messageId,
+      partialMessage: {
+        ...existing?.partialMessage,
+        ...partialMessage,
+      },
+    };
+
+    scheduleOptimisticFlush();
+  };
+
+  const setOptimisticMessagesForChat = (
     chatId: string | null,
     next: Message[] | null,
   ) => {
@@ -56,7 +122,7 @@ export const useChatStream = () => {
       ...current,
       [key]: next,
     }));
-  }, []);
+  };
 
   const isStreamingCurrentChat =
     isStreaming &&
@@ -158,14 +224,17 @@ export const useChatStream = () => {
   const buildResumeMessages = (
     baseMessages: Message[],
     assistantPlaceholder: Message,
-  ) => {
+  ): { nextMessages: Message[]; targetMessageId: string } => {
     const lastMessage = baseMessages[baseMessages.length - 1];
     const hasPersistedStreamingAssistant =
       lastMessage?.role === "assistant" &&
       (lastMessage.status === "streaming" || !lastMessage.content);
 
     if (!hasPersistedStreamingAssistant) {
-      return [...baseMessages, assistantPlaceholder];
+      return {
+        nextMessages: [...baseMessages, assistantPlaceholder],
+        targetMessageId: assistantPlaceholder.id!,
+      };
     }
 
     const nextMessages = [...baseMessages];
@@ -175,7 +244,10 @@ export const useChatStream = () => {
       requestId: lastMessage.requestId ?? assistantPlaceholder.requestId,
       status: "streaming",
     };
-    return nextMessages;
+    return {
+      nextMessages,
+      targetMessageId: lastMessage.id!,
+    };
   };
 
   const processStream = async (
@@ -183,6 +255,7 @@ export const useChatStream = () => {
     isCreatingChat: boolean,
     initialChatId: string | null,
     requestId: string,
+    placeholderMessageId: string,
     optimisticTitle?: string,
   ) => {
     const reader = response.body?.getReader();
@@ -231,39 +304,31 @@ export const useChatStream = () => {
               [NEW_CHAT_STREAM_KEY]: null,
             };
           });
+
+          if (pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY]) {
+            pendingOptimisticUpdateRef.current[nextChatId] =
+              pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
+            delete pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
+          }
         }
         setIsStreaming(true, nextChatId);
       }
 
       if (data.model) {
         const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            model: data.model,
-            requestId: activeRequestId,
-          };
-          return { ...current, [key]: next };
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          model: data.model,
+          requestId: activeRequestId,
         });
       }
 
       if (data.chunk) {
         fullContent += data.chunk;
         const key = resolvedChatId ?? initialKey;
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
-          const next = [...messagesForChat];
-          next[next.length - 1] = {
-            ...next[next.length - 1],
-            content: fullContent,
-            requestId: activeRequestId,
-            status: data.status ?? "streaming",
-          };
-          return { ...current, [key]: next };
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          content: fullContent,
+          requestId: activeRequestId,
+          status: data.status ?? "streaming",
         });
       }
 
@@ -286,9 +351,10 @@ export const useChatStream = () => {
       }
 
       if (data.done) {
-        // if (user?.id) {
-        //   await refreshChats(user.id);
-        // }
+        if (pendingOptimisticFrameRef.current !== null) {
+          flushOptimisticUpdates();
+        }
+
         const key = resolvedChatId ?? initialKey;
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -345,6 +411,10 @@ export const useChatStream = () => {
   const resumeStream = async (chatId: string) => {
     stopRequestedRef.current = false;
     try {
+      // First fetch the latest messages from the server to ensure UI is up-to-date
+      // even if the stream has already completed on the server.
+      const baseMessages = await loadMessagesForResume(chatId);
+
       const url = chatService.getStreamUpdatesUrl(chatId);
       const abortController = new AbortController();
       activeAbortControllerRef.current = abortController;
@@ -375,6 +445,18 @@ export const useChatStream = () => {
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("text/event-stream")) {
+        // If stream is no longer active but we found a "streaming" message in the DB,
+        // it means the stream completed/failed while we were disconnected.
+        // We should fix the status of the stuck message.
+        const lastMessage = baseMessages[baseMessages.length - 1];
+        if (lastMessage?.role === "assistant" && lastMessage.status === "streaming") {
+           const nextMessages = [...baseMessages];
+           nextMessages[nextMessages.length - 1] = {
+             ...lastMessage,
+             status: "completed", // Fallback to completed since it's no longer streaming
+           };
+           commitMessagesForChat(chatId, nextMessages);
+        }
         return false;
       }
 
@@ -389,13 +471,21 @@ export const useChatStream = () => {
 
       setLoading(true);
       setIsStreaming(true, chatId);
-      const baseMessages = await loadMessagesForResume(chatId);
-      setOptimisticMessagesForChat(
-        chatId,
-        buildResumeMessages(baseMessages, assistantPlaceholder),
+
+      const { nextMessages, targetMessageId } = buildResumeMessages(
+        baseMessages,
+        assistantPlaceholder,
       );
 
-      await processStream(response, false, chatId, crypto.randomUUID());
+      setOptimisticMessagesForChat(chatId, nextMessages);
+
+      await processStream(
+        response,
+        false,
+        chatId,
+        crypto.randomUUID(),
+        targetMessageId,
+      );
       return true;
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
@@ -557,6 +647,7 @@ export const useChatStream = () => {
         isCreatingChat,
         currentChatId,
         requestId,
+        assistantPlaceholder.id!,
         optimisticTitle,
       );
     } catch (err) {

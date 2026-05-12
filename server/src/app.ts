@@ -18,7 +18,11 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: [
+      "http://localhost:5173",
+      "https://code-bot-1-z2qi.onrender.com",
+      "http://localhost:4173",
+    ],
     credentials: true,
   }),
 );
