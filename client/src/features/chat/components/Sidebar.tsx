@@ -43,12 +43,15 @@ const SidebarChatItem = memo(
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
-        if (itemRef.current && !itemRef.current.contains(event.target as Node)) {
+        if (
+          itemRef.current &&
+          !itemRef.current.contains(event.target as Node)
+        ) {
           if (showMenu) setShowMenu(false);
           if (isEditing) handleCancel();
         }
       };
-      
+
       if (showMenu || isEditing) {
         document.addEventListener("mousedown", handleClickOutside);
       }
@@ -119,7 +122,9 @@ const SidebarChatItem = memo(
                   handleSave();
                 }}
                 className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive ? "text-emerald-600 hover:bg-emerald-50" : "text-emerald-500 hover:bg-emerald-500/10"
+                  isActive
+                    ? "text-emerald-600 hover:bg-emerald-50"
+                    : "text-emerald-500 hover:bg-emerald-500/10"
                 }`}
               >
                 <Check size={14} />
@@ -130,7 +135,9 @@ const SidebarChatItem = memo(
                   handleCancel();
                 }}
                 className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive ? "text-rose-600 hover:bg-rose-50" : "text-rose-500 hover:bg-rose-500/10"
+                  isActive
+                    ? "text-rose-600 hover:bg-rose-50"
+                    : "text-rose-500 hover:bg-rose-500/10"
                 }`}
               >
                 <X size={14} />
@@ -144,7 +151,9 @@ const SidebarChatItem = memo(
                   setShowMenu(!showMenu);
                 }}
                 className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive ? "text-black/40 hover:text-black" : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
+                  isActive
+                    ? "text-black/40 hover:text-black"
+                    : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
                 }`}
               >
                 <MoreVertical size={14} />
@@ -214,7 +223,11 @@ const Sidebar = () => {
       >
         <div className="flex items-center justify-between px-2">
           <div className="flex items-center gap-3 group">
-            <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
+            <img
+              src="/logo.png"
+              alt="Velora Logo"
+              className="h-6 w-6 object-contain"
+            />
             <h2 className="font-display text-base font-bold tracking-tight text-white leading-none">
               Velora
             </h2>
@@ -272,11 +285,7 @@ const Sidebar = () => {
             </span>
 
             <span className="text-slate-700 text-xs group-hover:text-white transition">
-              {showRecent ? (
-                <ChevronUp size={14} />
-              ) : (
-                <ChevronDown size={14} />
-              )}
+              {showRecent ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             </span>
           </div>
 
@@ -323,10 +332,7 @@ const Sidebar = () => {
           onClose={() => setGalleryOpen(false)}
         />
 
-        <MemoryModal
-          isOpen={memoryOpen}
-          onClose={() => setMemoryOpen(false)}
-        />
+        <MemoryModal isOpen={memoryOpen} onClose={() => setMemoryOpen(false)} />
 
         <PersonalizationModal
           isOpen={personalizationOpen}

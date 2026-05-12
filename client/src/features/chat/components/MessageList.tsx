@@ -79,16 +79,14 @@ const MessageList = ({
   const prevChatIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
 
-  
   // GET REAL SCROLL CONTAINER
-  
+
   const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
       ".overflow-y-auto",
     ) as HTMLDivElement | null;
   }, []);
 
-  
   // CHECK IF USER IS NEAR BOTTOM
 
   const isAtBottom = useCallback(() => {
@@ -102,7 +100,6 @@ const MessageList = ({
     );
   }, [getScrollContainer]);
 
-  
   // SCROLL TO BOTTOM
   const scrollToBottom = useCallback(
     (smooth = false) => {
@@ -119,7 +116,7 @@ const MessageList = ({
   );
 
   // HANDLE SCROLL
-  
+
   const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
 
@@ -159,9 +156,7 @@ const MessageList = ({
     // - sending new message while already at bottom
     if (
       chatChanged ||
-      (!messagesLoading &&
-        shouldAutoScrollRef.current &&
-        messageCountChanged)
+      (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
     ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
