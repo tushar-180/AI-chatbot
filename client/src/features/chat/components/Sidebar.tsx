@@ -29,13 +29,25 @@ interface ChatItemProps {
   chat: Chat;
   currentChatId: string | null;
   isActive: boolean;
+  isSelectionMode: boolean;
+  isSelected: boolean;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => Promise<void>;
+  onToggleSelect: (id: string) => void;
 }
 
 const SidebarChatItem = memo(
-  ({ chat, isActive, onSelect, onDelete, onRename }: ChatItemProps) => {
+  ({
+    chat,
+    isActive,
+    isSelectionMode,
+    isSelected,
+    onSelect,
+    onDelete,
+    onRename,
+    onToggleSelect,
+  }: ChatItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
@@ -96,14 +108,33 @@ const SidebarChatItem = memo(
     return (
       <div
         ref={itemRef}
-        onClick={() => !isEditing && onSelect(chat._id)}
+        onClick={() => {
+          if (isSelectionMode) {
+            onToggleSelect(chat._id);
+          } else if (!isEditing) {
+            onSelect(chat._id);
+          }
+        }}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
             ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
             : "text-slate-400 border-white/3 hover:bg-white/5 hover:text-white"
-        } ${isEditing ? "cursor-default" : "cursor-pointer"}`}
+        } ${isSelected ? "!border-emerald-500/50 bg-emerald-500/5" : ""} ${
+          isEditing ? "cursor-default" : "cursor-pointer"
+        }`}
       >
         <div className="flex flex-1 items-center gap-3 min-w-0">
+          {isSelectionMode && (
+            <div
+              className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                isSelected
+                  ? "border-emerald-500 bg-emerald-500 text-white"
+                  : "border-slate-700 bg-transparent"
+              }`}
+            >
+              {isSelected && <Check size={10} strokeWidth={4} />}
+            </div>
+          )}
           {isEditing ? (
             <input
               autoFocus
@@ -123,83 +154,85 @@ const SidebarChatItem = memo(
           )}
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-1">
-          {isEditing ? (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive
-                    ? "text-emerald-600 hover:bg-emerald-50"
-                    : "text-emerald-500 hover:bg-emerald-500/10"
-                }`}
-              >
-                <Check size={14} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCancel();
-                }}
-                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive
-                    ? "text-rose-600 hover:bg-rose-50"
-                    : "text-rose-500 hover:bg-rose-500/10"
-                }`}
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ) : (
-            <div className="relative" ref={menuButtonRef}>
-              <div
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(!showMenu);
-                }}
-                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
-                  isActive
-                    ? "text-black/40 hover:text-black"
-                    : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
-                }`}
-              >
-                <MoreVertical size={14} />
-              </div>
-
-              {showMenu && (
-                <div
-                  className={`absolute right-0 z-50 w-36 rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 ${
-                    openUpwards
-                      ? "bottom-full mb-2 origin-bottom-right"
-                      : "top-full mt-2 origin-top-right"
+        {!isSelectionMode && (
+          <div className="flex flex-shrink-0 items-center gap-1">
+            {isEditing ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSave();
+                  }}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                    isActive
+                      ? "text-emerald-600 hover:bg-emerald-50"
+                      : "text-emerald-500 hover:bg-emerald-500/10"
                   }`}
                 >
-                  <button
-                    onClick={handleStartEdit}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
-                  >
-                    <Edit2 size={12} />
-                    <span>Rename</span>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMenu(false);
-                      onDelete(chat._id);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all"
-                  >
-                    <Trash2 size={12} />
-                    <span>Delete</span>
-                  </button>
+                  <Check size={14} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCancel();
+                  }}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                    isActive
+                      ? "text-rose-600 hover:bg-rose-50"
+                      : "text-rose-500 hover:bg-rose-500/10"
+                  }`}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative" ref={menuButtonRef}>
+                <div
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(!showMenu);
+                  }}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                    isActive
+                      ? "text-black/40 hover:text-black"
+                      : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
+                  }`}
+                >
+                  <MoreVertical size={14} />
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+
+                {showMenu && (
+                  <div
+                    className={`absolute right-0 z-50 w-36 rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 ${
+                      openUpwards
+                        ? "bottom-full mb-2 origin-bottom-right"
+                        : "top-full mt-2 origin-top-right"
+                    }`}
+                  >
+                    <button
+                      onClick={handleStartEdit}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                    >
+                      <Edit2 size={12} />
+                      <span>Rename</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        onDelete(chat._id);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all"
+                    >
+                      <Trash2 size={12} />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   },
@@ -212,6 +245,7 @@ const Sidebar = () => {
     currentChatId,
     createChat,
     deleteChat,
+    deleteChats,
     renameChat,
     selectChat,
     fetchMoreChats,
@@ -223,7 +257,42 @@ const Sidebar = () => {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [personalizationOpen, setPersonalizationOpen] = useState(false);
 
+  // Multi-select state
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === chats.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(chats.map((c) => c._id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    setShowBulkDeleteConfirm(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    await deleteChats(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setIsSelectionMode(false);
+    setShowBulkDeleteConfirm(false);
+  };
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -313,18 +382,71 @@ const Sidebar = () => {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2">
-          <div
-            onClick={() => setShowRecent((prev) => !prev)}
-            className="flex items-center justify-between px-2 pb-4 cursor-pointer group"
-          >
-            <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
-              Session History
-            </span>
+          <div className="flex items-center justify-between px-2 pb-4">
+            <div
+              onClick={() => setShowRecent((prev) => !prev)}
+              className="flex items-center gap-2 cursor-pointer group"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
+                Session History
+              </span>
+              <span className="text-slate-700 text-xs group-hover:text-white transition">
+                {showRecent ? (
+                  <ChevronUp size={14} />
+                ) : (
+                  <ChevronDown size={14} />
+                )}
+              </span>
+            </div>
 
-            <span className="text-slate-700 text-xs group-hover:text-white transition">
-              {showRecent ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            </span>
+            {chats.length > 0 && showRecent && (
+              <button
+                onClick={() => {
+                  setIsSelectionMode(!isSelectionMode);
+                  setSelectedIds(new Set());
+                }}
+                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                  isSelectionMode
+                    ? "text-emerald-400"
+                    : "text-slate-600 hover:text-slate-400"
+                }`}
+              >
+                {isSelectionMode ? "Done" : "Edit"}
+              </button>
+            )}
           </div>
+
+          {isSelectionMode && showRecent && (
+            <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-xl bg-white/5 border border-white/5 animate-in fade-in slide-in-from-top-1 duration-200">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+              >
+                <div
+                  className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                    selectedIds.size === chats.length && chats.length > 0
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-slate-700 bg-transparent"
+                  }`}
+                >
+                  {selectedIds.size === chats.length && chats.length > 0 && (
+                    <Check size={10} strokeWidth={4} />
+                  )}
+                </div>
+                <span>Select All</span>
+              </button>
+
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-400 transition-all"
+                >
+                  <Trash2 size={12} />
+                  <span>Delete ({selectedIds.size})</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {chats.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
@@ -342,9 +464,12 @@ const Sidebar = () => {
                       chat={chat}
                       currentChatId={currentChatId}
                       isActive={currentChatId === chat._id}
+                      isSelectionMode={isSelectionMode}
+                      isSelected={selectedIds.has(chat._id)}
                       onSelect={selectChat}
                       onDelete={(id) => setDeleteId(id)}
                       onRename={renameChat}
+                      onToggleSelect={toggleSelect}
                     />
                   ))}
                   {/* Intersection Observer Sentinel */}
@@ -363,12 +488,25 @@ const Sidebar = () => {
 
       <Suspense fallback={null}>
         <DeleteConfirmModal
-          isOpen={!!deleteId}
-          onClose={() => setDeleteId(null)}
-          onConfirm={() => {
-            if (deleteId) deleteChat(deleteId);
+          isOpen={!!deleteId || showBulkDeleteConfirm}
+          onClose={() => {
             setDeleteId(null);
+            setShowBulkDeleteConfirm(false);
           }}
+          onConfirm={() => {
+            if (deleteId) {
+              deleteChat(deleteId);
+              setDeleteId(null);
+            } else if (showBulkDeleteConfirm) {
+              confirmBulkDelete();
+            }
+          }}
+          title={showBulkDeleteConfirm ? "Delete Multiple Chats" : undefined}
+          message={
+            showBulkDeleteConfirm
+              ? `Are you sure you want to delete ${selectedIds.size} selected chats? This action cannot be undone.`
+              : undefined
+          }
         />
 
         <GalleryModal
