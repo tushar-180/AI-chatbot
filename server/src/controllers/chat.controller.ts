@@ -248,3 +248,38 @@ export const getStreamUpdates = async (req: Request, res: Response) => {
     activeStream.emitter.off("error", onError);
   });
 };
+
+export const editMessage = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.editMessage({
+      chatId: String(req.params.id),
+      messageId: String(req.params.messageId),
+      ...req.body,
+    });
+
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to edit message");
+  }
+});
+
+export const streamEditMessage = async (req: Request, res: Response) => {
+  try {
+    await pipeStreamResponse(
+      req,
+      res,
+      chatService.streamEditMessage({
+        chatId: String(req.params.id),
+        messageId: String(req.params.messageId),
+        ...req.body,
+      }),
+    );
+  } catch (error) {
+    console.log("Error in streamEditMessage:", error);
+    if (!res.headersSent) {
+      sendControllerError(res, error, "Failed to initiate stream edit");
+    } else {
+      res.end();
+    }
+  }
+};

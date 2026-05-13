@@ -98,4 +98,19 @@ export const chatRepository = {
     await this.touchChat(chatId);
     return message;
   },
+
+  async deleteMessagesAfter(chatId: string, messageId: string) {
+    const message = await Message.findById(messageId);
+    if (!message) return;
+
+    await Message.deleteMany({
+      chatId,
+      createdAt: { $gt: message.createdAt },
+    });
+    await this.touchChat(chatId);
+  },
+
+  async update(chatId: string, data: Partial<{ title: string }>) {
+    return await Chat.findByIdAndUpdate(chatId, data, { new: true });
+  },
 };

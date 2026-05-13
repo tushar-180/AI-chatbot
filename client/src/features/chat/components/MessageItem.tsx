@@ -1,6 +1,6 @@
-import { memo } from "react";
+import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { User, Globe } from "lucide-react";
+import { User, Globe, Pencil, Check, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -29,6 +29,9 @@ interface Message {
 interface MessageItemProps {
     message: Message;
     isStreaming?: boolean;
+    isAnyStreaming?: boolean;
+    onEdit?: (content: string) => void;
+    onEditStart?: () => void;
 }
 
 /**
@@ -169,14 +172,53 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, isAnyStreaming, onEdit, onEditStart }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";
 
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(msg.content);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        if (isEditing && textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [isEditing]);
+
+    const handleEditStart = () => {
+        setIsEditing(true);
+        setEditContent(msg.content);
+        onEditStart?.();
+    };
+
+    const handleEditCancel = () => {
+        setIsEditing(false);
+        setEditContent(msg.content);
+    };
+
+    const handleEditSave = () => {
+        if (editContent.trim() && editContent !== msg.content) {
+            onEdit?.(editContent);
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleEditSave();
+        } else if (e.key === "Escape") {
+            handleEditCancel();
+        }
+    };
+
     return (
         <div
-            className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+            className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
         >
             <div
                 className={`flex w-full gap-4 md:gap-6 ${
@@ -199,13 +241,25 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                     }`}
                 >
                     {!isFailed && (
-                        <MessageMetadata isUser={isUser} model={msg.model} />
+                        <div className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+                            <MessageMetadata isUser={isUser} model={msg.model} />
+                            
+                            {isUser && !isEditing && (
+                                <button
+                                    onClick={handleEditStart}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white"
+                                    title="Edit message"
+                                >
+                                    <Pencil size={12} />
+                                </button>
+                            )}
+                        </div>
                     )}
 
                     <div
-                        className={`transition-opacity duration-150 ease-out ${
+                        className={`transition-all duration-200 ease-out ${
                             isUser
-                                ? "max-w-full rounded-2xl border border-white/10 bg-white/3 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
+                                ? `max-w-full rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
                                 : isFailed
                                   ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
                                   : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
@@ -227,6 +281,38 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                                     <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
                                 </div>
                             )
+                        ) : isEditing ? (
+                            <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                                <textarea
+                                    ref={textareaRef}
+                                    value={editContent}
+                                    onChange={(e) => {
+                                        setEditContent(e.target.value);
+                                        e.target.style.height = "auto";
+                                        e.target.style.height = `${e.target.scrollHeight}px`;
+                                    }}
+                                    onKeyDown={handleKeyDown}
+                                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                                    rows={1}
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        onClick={handleEditCancel}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                                    >
+                                        <X size={14} />
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleEditSave}
+                                        disabled={!editContent.trim()}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                                    >
+                                        <Check size={14} />
+                                        Save 
+                                    </button>
+                                </div>
+                            </div>
                         ) : isFailed ? (
                             <div className="flex flex-col gap-1">
                                 <span className="font-semibold text-red-400/90">

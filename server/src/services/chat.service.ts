@@ -10,6 +10,7 @@ import type {
   ChatMessage,
   CreateChatInput,
   SendMessageInput,
+  EditMessageInput,
   StopStreamInput,
   StreamPayload,
 } from "../types/chat.types";
@@ -727,5 +728,114 @@ export const chatService = {
     }
 
     return gallery;
+  },
+
+  async editMessage({
+    chatId,
+    messageId,
+    content,
+    provider,
+    webSearchEnabled,
+  }: EditMessageInput) {
+    const trimmedMessage = requireMessage(content);
+    const chat = await requireChat(chatId);
+
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, messageId);
+
+    // Update the message itself
+    await chatRepository.updateMessage(messageId, {
+      content: trimmedMessage,
+      metadata: {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      },
+    });
+
+    const aiProvider = aiService.getProvider(provider);
+    const providerName = aiProvider.getProviderName();
+
+    // Fetch updated history
+    const updatedChat = await chatRepository.findById(chatId);
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
+      updatedChat?.messages as ChatMessage[],
+      trimmedMessage,
+      webSearchEnabled,
+      provider,
+    );
+
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in editMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
+
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
+    const { attachments: aiAttachments, type } = parseMultimedia(reply);
+
+    // Update Assistant Message
+    await chatRepository.saveMessage(chatId, {
+      ...createAssistantMessage(
+          reply,
+          String(chat.userId),
+          providerName,
+          undefined,
+          "completed",
+          buildGroundingMetadata(webGrounding),
+      ),
+      attachments: aiAttachments,
+      type: type as any,
+    });
+
+    // Check if it's the first message to update title
+    if (updatedChat?.messages?.[0]?.id === messageId) {
+      await chatRepository.update(chatId, {
+        title: createTitle(trimmedMessage)
+      });
+    }
+
+    return await chatRepository.findById(chatId);
+  },
+
+  async *streamEditMessage({
+    chatId,
+    messageId,
+    content,
+    provider,
+    requestId,
+    webSearchEnabled,
+  }: EditMessageInput) {
+    const trimmedMessage = requireMessage(content);
+    const resolvedRequestId = requireRequestId(requestId);
+    const chat = await requireChat(chatId);
+
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, messageId);
+
+    // Update the message itself
+    await chatRepository.updateMessage(messageId, {
+      content: trimmedMessage,
+      metadata: {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      },
+    });
+
+    // Refresh chat to include updated user message
+    const updatedChat = await chatRepository.findById(chatId);
+
+    // Check if it's the first message to update title
+    if (updatedChat?.messages?.[0]?.id === messageId) {
+      await chatRepository.update(chatId, {
+        title: createTitle(trimmedMessage)
+      });
+    }
+
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+    );
   },
 };
