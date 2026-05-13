@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { useServerStatus } from "@/contexts/ServerStatusContext";
 export const useChatList = () => {
   const { user } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const fetchedUserIdRef = useRef<string | null>(null);
   const {
     chats,
@@ -78,6 +79,7 @@ export const useChatList = () => {
   };
 
   const { isDown } = useServerStatus();
+  const isSharedChatRoute = location.pathname.startsWith("/shared/");
 
   useEffect(() => {
     if (
@@ -107,6 +109,7 @@ export const useChatList = () => {
         }
 
         const shouldAutoSelectFirstChat =
+          !isSharedChatRoute &&
           !currentChatId &&
           !isNewChat &&
           !loading &&
@@ -129,6 +132,7 @@ export const useChatList = () => {
   }, [
     user?.id,
     currentChatId,
+    isSharedChatRoute,
     isNewChat,
     loading,
     isStreaming,

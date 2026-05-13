@@ -1,5 +1,5 @@
-import { useParams } from "react-router-dom";
-import { useEffect } from "react";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
@@ -16,7 +16,29 @@ import { Spotlight } from "@/components/ui/spotlight";
  */
 const Chat = () => {
   const { chatId } = useParams<{ chatId?: string }>();
-  const { currentChatId, messages, isNewChat, setSidebarOpen, setCurrentChat, setMessages, setIsNewChat } = useChatStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const hasAutoStartedRef = useRef(false);
+  const {
+    currentChatId,
+    messages,
+    isNewChat,
+    setSidebarOpen,
+    setCurrentChat,
+    setMessages,
+    setIsNewChat,
+  } = useChatStore();
+  const pendingState = location.state as {
+    pendingInput?: string;
+    pendingProvider?: string;
+    pendingAttachments?: any[];
+    pendingWebSearch?: boolean;
+    prefetchedChatId?: string;
+    skipInitialFetch?: boolean;
+  } | null;
+  const canAutoStartFromSeededMessages =
+    pendingState?.skipInitialFetch === true &&
+    pendingState?.prefetchedChatId === currentChatId;
 
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
@@ -33,7 +55,9 @@ const Chat = () => {
   }, [chatId]);
 
   // 1. Manage Message Fetching & Sync
-  const { messagesLoading, loadedChatId, messagesError } = useChatMessages();
+  const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
+    skipFetch: canAutoStartFromSeededMessages,
+  });
 
   // 2. Manage Streaming Logic & Optimistic UI
   const {
@@ -62,6 +86,41 @@ const Chat = () => {
         webSearchEnabled: options?.webSearchEnabled,
       }),
   });
+
+  // 4. Handle auto-start message from SharedChatPage
+  useEffect(() => {
+    if (
+      pendingState?.pendingInput &&
+      (loadedChatId === currentChatId || canAutoStartFromSeededMessages) &&
+      currentChatId &&
+      !isStreaming &&
+      !hasAutoStartedRef.current
+    ) {
+      hasAutoStartedRef.current = true;
+
+      // Clear the state so it doesn't re-trigger on refresh
+      navigate(location.pathname, { replace: true, state: {} });
+
+      // Trigger message
+      streamMessage(
+        pendingState.pendingInput,
+        pendingState.pendingProvider || selectedProvider,
+        pendingState.pendingAttachments || [],
+        { webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled },
+      );
+    }
+  }, [
+    pendingState,
+    canAutoStartFromSeededMessages,
+    currentChatId,
+    loadedChatId,
+    isStreaming,
+    streamMessage,
+    selectedProvider,
+    webSearchEnabled,
+    navigate,
+    location.pathname,
+  ]);
 
   // Determine which messages to display (prefer optimistic during streaming)
   const displayMessages = optimisticMessages ?? messages;
@@ -92,7 +151,9 @@ const Chat = () => {
               messagesLoading={messagesLoading}
               messagesError={messagesError}
               hasLoadedCurrentChat={
-                !currentChatId || loadedChatId === currentChatId
+                !currentChatId ||
+                loadedChatId === currentChatId ||
+                canAutoStartFromSeededMessages
               }
               isStreaming={isStreaming}
               currentChatId={currentChatId}

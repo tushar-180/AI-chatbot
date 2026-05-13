@@ -5,6 +5,7 @@ import aiRoutes from "./routes/ai.routes";
 import userRoutes from "./routes/user.routes";
 import uploadRoutes from "./routes/upload.routes";
 import memoryRoutes from "./routes/memory.routes";
+import sharedChatRoutes from "./routes/sharedChat.routes";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 
@@ -42,6 +43,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/user", userRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/memory", memoryRoutes);
+app.use("/api/shared-chat", sharedChatRoutes);
 
 // Error Handler Middleware
 app.use(errorHandler);
