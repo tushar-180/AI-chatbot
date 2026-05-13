@@ -12,3 +12,33 @@ export const supportsVision = (modelId: string): boolean => {
   
   return visionKeywords.some(kw => mid.includes(kw));
 };
+/**
+ * Standardizes model names for display.
+ * Handles formats like 'gemini:model-name', 'gemini : model-name', and raw model IDs.
+ */
+export const formatModelName = (model?: string): string => {
+  if (!model) return "";
+  
+  // Normalize separators and trim
+  const normalized = model.replace(/\s*[:/]\s*/g, " : ");
+  const parts = normalized.split(" : ");
+  
+  // If we have provider:model, take the last part for a cleaner look or keep both
+  // For now, let's keep both but ensure consistent spacing: "Provider : Model"
+  if (parts.length > 1) {
+    const provider = parts[0].toLowerCase();
+    const modelName = parts[parts.length - 1];
+    
+    // Capitalize provider for better look
+    const displayProvider = provider.charAt(0).toUpperCase() + provider.slice(1);
+    
+    // If model name starts with provider, avoid redundancy
+    if (modelName.toLowerCase().startsWith(provider)) {
+      return `${displayProvider} : ${modelName.split('-').slice(1).join('-') || modelName}`;
+    }
+    
+    return `${displayProvider} : ${modelName}`;
+  }
+  
+  return model.charAt(0).toUpperCase() + model.slice(1);
+};

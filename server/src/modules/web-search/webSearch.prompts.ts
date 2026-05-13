@@ -26,5 +26,14 @@ Excerpt: ${source.excerpt}
     )
     .join("\n")}
 
-REMINDER: Use ONLY [number] format. No "source" prefix allowed.
+[IMAGE & MULTIMEDIA RULES]
+1. You CAN and SHOULD embed images directly in your response.
+2. Use Markdown syntax: ![description](url).
+3. NEVER say you cannot show images; the interface fully supports them.
+4. If a source provides an image URL, use it to enhance your answer.
+5. IMPORTANT: ONLY use absolute public URLs starting with http:// or https://.
+7. WIKIA/FANDOM IMAGES: If using a Wikia image, ensure the URL ends with the file extension (e.g., .png, .jpg). Strip everything after the extension (like "/revision/latest?cb=...") if the image fails to load.
+8. AMAZON/IMDb IMAGES: These often have "@@" in the URL. If a link appears broken, prefer a more stable public source like Wikipedia or official movie sites.
+
+REMINDER: Use ONLY [number] format for citations. Direct image embedding via Markdown is enabled and required for visual queries.
 `;

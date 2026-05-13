@@ -102,7 +102,13 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
 
 export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const chats = await chatService.getAllChats(req.query.userId as string);
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const chats = await chatService.getAllChats(
+      req.query.userId as string,
+      page,
+      limit
+    );
     return res.json(chats);
   } catch (error) {
     return sendControllerError(res, error, "Failed to fetch chats");
