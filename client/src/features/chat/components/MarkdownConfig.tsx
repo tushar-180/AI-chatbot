@@ -142,7 +142,11 @@ export const assistantMarkdownComponents = {
 
     if (match) {
       const codeString = String(children).replace(/\n$/, "");
-      return <CodeBlock code={codeString} language={match[1]} />;
+      return (
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <CodeBlock code={codeString} language={match[1]} />
+        </div>
+      );
     }
 
     return (

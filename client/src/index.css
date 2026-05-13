@@ -205,6 +205,15 @@
     }
   }
 
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
   /* Use will-change sparingly for performance */
   .animate-bounce {
     animation: smooth-bounce 1s infinite;
