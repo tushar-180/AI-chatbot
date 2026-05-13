@@ -1,18 +1,24 @@
 export { webSearchService } from "./webSearch.service";
+export { estimateConfidence, withEstimatedConfidence } from "./confidence";
 export {
-  estimateConfidence,
-  withEstimatedConfidence,
-} from "./confidence";
-export { deduplicateCandidates } from "./deduplication";
-export {
-  isLiveDataQuery,
-  normalizeQuery,
-  resolveSearchQuery,
+    isLiveDataQuery,
+    normalizeQuery,
+    resolveSearchQuery,
 } from "./queryResolver";
+export {
+    getExtractionCache,
+    getGroundingCache,
+    getSearchCache,
+    setExtractionCache,
+    setGroundingCache,
+    setSearchCache,
+} from "./cache";
 export type {
-  ConfidenceEstimate,
-  ResolvedSearchQuery,
-  SearchCandidate,
-  SearchSource,
-  WebGroundingContext,
+    ConfidenceEstimate,
+    ResolvedSearchQuery,
+    SearchCandidate,
+    SearchRejection,
+    SearchSource,
+    WebGroundingContext,
 } from "./webSearch.types";
+import { checkQuota, recordSearch } from "./quota";

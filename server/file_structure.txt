@@ -1,60 +1,4 @@
 .
-├── dist
-│   ├── app.js
-│   ├── config
-│   │   └── db.js
-│   ├── constants
-│   │   ├── chat.constants.js
-│   │   └── prompt.constants.js
-│   ├── controllers
-│   │   ├── ai.controller.js
-│   │   ├── chat.controller.js
-│   │   └── user.controller.js
-│   ├── middleware
-│   │   └── error.middleware.js
-│   ├── models
-│   │   ├── Chat.model.js
-│   │   ├── UserMemory.model.js
-│   │   └── User.model.js
-│   ├── modules
-│   │   └── web-search
-│   │       ├── index.js
-│   │       ├── webSearch.prompts.js
-│   │       ├── webSearch.service.js
-│   │       └── webSearch.types.js
-│   ├── repositories
-│   │   └── chat.repository.js
-│   ├── routes
-│   │   ├── ai.routes.js
-│   │   ├── chat.routes.js
-│   │   ├── memory.routes.js
-│   │   ├── upload.routes.js
-│   │   └── user.routes.js
-│   ├── server.js
-│   ├── services
-│   │   ├── ai
-│   │   │   ├── ai.factory.js
-│   │   │   ├── ai.interface.js
-│   │   │   ├── constants.js
-│   │   │   ├── providers
-│   │   │   │   ├── claude.adapter.js
-│   │   │   │   ├── gemini.adapter.js
-│   │   │   │   ├── nvidia.adapter.js
-│   │   │   │   └── openai.adapter.js
-│   │   │   └── types.js
-│   │   ├── ai.service.js
-│   │   ├── chat.service.js
-│   │   ├── chatStreamRegistry.service.js
-│   │   ├── cloudinary.service.js
-│   │   ├── memory.service.js
-│   │   ├── user.service.js
-│   │   └── webSearch.service.js
-│   ├── types
-│   │   └── chat.types.js
-│   └── utils
-│       ├── asyncHandler.js
-│       ├── chatHistory.js
-│       └── sse.js
 ├── file_structure.txt
 ├── migrate-messages.js
 ├── package.json
@@ -78,7 +22,13 @@
 │   │   └── User.model.ts
 │   ├── modules
 │   │   └── web-search
+│   │       ├── cache.ts
+│   │       ├── confidence.ts
+│   │       ├── deduplication.ts
 │   │       ├── index.ts
+│   │       ├── llamaindex.ts
+│   │       ├── queryResolver.ts
+│   │       ├── reranker.ts
 │   │       ├── webSearch.prompts.ts
 │   │       ├── webSearch.service.ts
 │   │       └── webSearch.types.ts
@@ -116,4 +66,4 @@
 │       └── sse.ts
 └── tsconfig.json
 
-30 directories, 86 files
+15 directories, 51 files

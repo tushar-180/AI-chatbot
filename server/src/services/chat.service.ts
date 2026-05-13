@@ -16,6 +16,7 @@ import type {
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import {
   type WebGroundingContext,
+  type SearchRejection,
   webSearchService,
 } from "../modules/web-search";
 import { aiService } from "./ai.service";
@@ -203,12 +204,20 @@ const buildPromptMessages = async (
     });
   }
 
-  let webGrounding = null;
+  let webGrounding: WebGroundingContext | null = null;
   if (webSearchEnabled && latestUserMessage) {
-    webGrounding = await webSearchService.buildGroundingContext(
+    const result = await webSearchService.buildGroundingContext(
       latestUserMessage,
       chatMessages,
+      userId,
     );
+
+    // Handle quota/cooldown rejections gracefully
+    if (result && "rejected" in result) {
+      console.warn(`[chat] Web search rejected: ${result.reason} — ${result.message}`);
+    } else {
+      webGrounding = result;
+    }
   }
   if (webGrounding) {
     systemMessages.push({

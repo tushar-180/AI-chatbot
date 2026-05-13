@@ -1,114 +1,459 @@
 import type { ExtractedPage } from "./cache";
 import type { SearchSource } from "./webSearch.types";
 
-const MAX_EXCERPT_CHARS = 900;
-const CHUNK_SIZE = 800;
-const CHUNK_OVERLAP = 150;
+const MAX_EXCERPT_CHARS = 1000;
 
-const tokenize = (text: string): string[] => {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter((token) => token.length > 2);
+const WINDOW_SIZE = 1800;
+const WINDOW_OVERLAP = 300;
+
+const TITLE_WEIGHT = 4.5;
+const SNIPPET_WEIGHT = 2.5;
+const WINDOW_WEIGHT = 5.5;
+
+const CONSTRAINT_MATCH_BONUS = 10;
+const CONSTRAINT_MISS_PENALTY = 8;
+
+const FRESHNESS_WEIGHT = 2.5;
+const STRUCTURED_WEIGHT = 1.5;
+
+const ENTITY_MATCH_WEIGHT = 3;
+const DENSITY_WEIGHT = 2;
+
+const ANSWERABILITY_WEIGHT = 5;
+const TITLE_MISMATCH_PENALTY = 12;
+
+const CROSS_SOURCE_WEIGHT = 2.5;
+
+const normalize = (text: string): string =>
+    text.toLowerCase().replace(/\s+/g, " ").trim();
+
+const tokenize = (text: string): string[] =>
+    normalize(text)
+        .split(/[^a-z0-9./:_-]+/)
+        .filter((t) => t.length > 1);
+
+const unique = <T>(arr: T[]): T[] => [...new Set(arr)];
+
+const STOPWORDS = new Set([
+    "what",
+    "which",
+    "when",
+    "where",
+    "who",
+    "why",
+    "how",
+    "the",
+    "and",
+    "for",
+    "with",
+    "from",
+    "into",
+    "that",
+    "this",
+    "about",
+    "have",
+    "has",
+    "had",
+    "will",
+    "would",
+    "could",
+    "should",
+    "your",
+    "their",
+    "there",
+    "than",
+    "then",
+    "them",
+    "they",
+    "you",
+    "are",
+    "was",
+    "were",
+    "been",
+    "being",
+    "after",
+    "before",
+]);
+
+const isImportantToken = (token: string): boolean => {
+    if (STOPWORDS.has(token)) return false;
+
+    if (token.length >= 4) return true;
+
+    if (/\d/.test(token)) return true;
+
+    if (/[/:.-]/.test(token)) return true;
+
+    return false;
 };
 
-const scoreText = (queryTokens: string[], text: string): number => {
-  const haystack = text.toLowerCase();
-  let score = 0;
-  for (const token of queryTokens) {
-    const regex = new RegExp(`\\b${token}\\b`, "gi");
-    const matches = haystack.match(regex);
-    if (matches) {
-      score += matches.length;
+const extractImportantTokens = (query: string): string[] =>
+    unique(tokenize(query).filter(isImportantToken));
+
+const extractConstraints = (query: string): string[] => {
+    const normalized = normalize(query);
+
+    const constraints = new Set<string>();
+
+    for (const match of normalized.match(/"([^"]+)"/g) || []) {
+        constraints.add(match.replace(/"/g, "").trim());
     }
-  }
-  return score;
+
+    for (const match of normalized.match(
+        /\b[a-z]*\d+(?:\.\d+)*(?:\/\d+)?\b/g,
+    ) || []) {
+        constraints.add(match);
+    }
+
+    const words = normalized.split(/\s+/);
+
+    for (let i = 0; i < words.length - 1; i++) {
+        const phrase = `${words[i]} ${words[i + 1]}`;
+
+        if (
+            phrase.length >= 10 &&
+            !STOPWORDS.has(words[i]) &&
+            !STOPWORDS.has(words[i + 1])
+        ) {
+            constraints.add(phrase);
+        }
+    }
+
+    return [...constraints];
 };
 
-const chunkText = (text: string): string[] => {
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + CHUNK_SIZE, text.length);
-    chunks.push(text.slice(start, end).trim());
-    start += CHUNK_SIZE - CHUNK_OVERLAP;
-  }
-  return chunks;
+const extractEntities = (query: string): string[] => {
+    return unique(
+        query
+            .split(/\s+/)
+            .filter((word) => {
+                if (word.length < 3) return false;
+
+                if (/\d/.test(word)) return true;
+
+                return /^[A-Z][a-zA-Z0-9]+/.test(word);
+            })
+            .map((w) => w.toLowerCase()),
+    );
+};
+
+const scoreTokenOverlap = (queryTokens: string[], text: string): number => {
+    const haystack = normalize(text);
+
+    let score = 0;
+
+    for (const token of queryTokens) {
+        if (haystack.includes(token)) {
+            score += 1;
+        }
+    }
+
+    return score;
+};
+
+const scoreConstraintMatches = (
+    constraints: string[],
+    text: string,
+): number => {
+    const haystack = normalize(text);
+
+    let score = 0;
+
+    for (const constraint of constraints) {
+        if (haystack.includes(constraint)) {
+            score += CONSTRAINT_MATCH_BONUS;
+        }
+    }
+
+    return score;
+};
+
+const scoreConstraintPenalty = (
+    constraints: string[],
+    text: string,
+): number => {
+    const haystack = normalize(text);
+
+    let penalty = 0;
+
+    for (const constraint of constraints) {
+        if (!haystack.includes(constraint)) {
+            penalty += CONSTRAINT_MISS_PENALTY;
+        }
+    }
+
+    return penalty;
+};
+
+const scoreEntityMatches = (entities: string[], text: string): number => {
+    const haystack = normalize(text);
+
+    let score = 0;
+
+    for (const entity of entities) {
+        if (haystack.includes(entity)) {
+            score += ENTITY_MATCH_WEIGHT;
+        }
+    }
+
+    return score;
+};
+
+const scoreSemanticDensity = (queryTokens: string[], text: string): number => {
+    const tokens = tokenize(text);
+
+    if (!tokens.length) return 0;
+
+    let matches = 0;
+
+    for (const token of tokens) {
+        if (queryTokens.includes(token)) {
+            matches += 1;
+        }
+    }
+
+    return (matches / tokens.length) * 100;
+};
+
+const scoreAnswerability = (query: string, text: string): number => {
+    const lowerQuery = normalize(query);
+    const lowerText = normalize(text);
+
+    let score = 0;
+
+    if (
+        /\b(most|best|top|highest|lowest|largest|smallest)\b/.test(lowerQuery)
+    ) {
+        if (/\b(top|rank|leader|highest|most|first)\b/.test(lowerText)) {
+            score += ANSWERABILITY_WEIGHT;
+        }
+    }
+
+    if (/\b(compare|difference|versus|vs)\b/.test(lowerQuery)) {
+        if (/\b(compare|comparison|whereas|while|however)\b/.test(lowerText)) {
+            score += ANSWERABILITY_WEIGHT;
+        }
+    }
+
+    if (/\b(how|why)\b/.test(lowerQuery)) {
+        if (
+            /\b(because|due to|therefore|caused by|results in)\b/.test(
+                lowerText,
+            )
+        ) {
+            score += ANSWERABILITY_WEIGHT;
+        }
+    }
+
+    return score;
+};
+
+const scoreTitleAlignment = (queryTokens: string[], title: string): number => {
+    const normalizedTitle = normalize(title);
+
+    let matched = 0;
+
+    for (const token of queryTokens) {
+        if (normalizedTitle.includes(token)) {
+            matched += 1;
+        }
+    }
+
+    const ratio = queryTokens.length > 0 ? matched / queryTokens.length : 0;
+
+    if (ratio >= 0.7) return 10;
+
+    if (ratio >= 0.4) return 4;
+
+    if (ratio <= 0.15) return -TITLE_MISMATCH_PENALTY;
+
+    return 0;
+};
+
+const splitIntoWindows = (text: string): string[] => {
+    const windows: string[] = [];
+
+    for (
+        let start = 0;
+        start < text.length;
+        start += WINDOW_SIZE - WINDOW_OVERLAP
+    ) {
+        windows.push(text.slice(start, start + WINDOW_SIZE));
+    }
+
+    return windows;
+};
+
+const findBestWindow = (
+    query: string,
+    queryTokens: string[],
+    constraints: string[],
+    entities: string[],
+    text: string,
+) => {
+    const windows = splitIntoWindows(text);
+
+    let bestScore = -Infinity;
+    let bestWindow = text.slice(0, WINDOW_SIZE);
+
+    for (const window of windows) {
+        const overlap = scoreTokenOverlap(queryTokens, window);
+
+        const constraintScore = scoreConstraintMatches(constraints, window);
+
+        const constraintPenalty = scoreConstraintPenalty(constraints, window);
+
+        const entityScore = scoreEntityMatches(entities, window);
+
+        const density = scoreSemanticDensity(queryTokens, window);
+
+        const answerability = scoreAnswerability(query, window);
+
+        const score =
+            overlap * WINDOW_WEIGHT +
+            constraintScore +
+            entityScore +
+            density * DENSITY_WEIGHT +
+            answerability -
+            constraintPenalty;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestWindow = window;
+        }
+    }
+
+    return {
+        score: bestScore,
+        excerpt: bestWindow.slice(0, MAX_EXCERPT_CHARS),
+    };
+};
+
+const scoreCrossSourceAgreement = (
+    currentPage: ExtractedPage,
+    allPages: ExtractedPage[],
+    queryTokens: string[],
+): number => {
+    let score = 0;
+
+    const currentCombined = normalize(
+        `${currentPage.title} ${currentPage.snippet}`,
+    );
+
+    for (const otherPage of allPages) {
+        if (otherPage.url === currentPage.url) continue;
+
+        const otherCombined = normalize(
+            `${otherPage.title} ${otherPage.snippet}`,
+        );
+
+        let overlap = 0;
+
+        for (const token of queryTokens) {
+            if (
+                currentCombined.includes(token) &&
+                otherCombined.includes(token)
+            ) {
+                overlap += 1;
+            }
+        }
+
+        if (overlap >= Math.max(2, queryTokens.length * 0.4)) {
+            score += CROSS_SOURCE_WEIGHT;
+        }
+    }
+
+    return score;
 };
 
 export const localRerank = (params: {
-  query: string;
-  pages: Array<
-    ExtractedPage & { freshnessScore: number; structuredScore: number }
-  >;
-  maxSourceCount: number;
+    query: string;
+    pages: Array<
+        ExtractedPage & {
+            freshnessScore: number;
+            structuredScore: number;
+        }
+    >;
+    maxSourceCount: number;
 }): SearchSource[] => {
-  const { query, pages, maxSourceCount } = params;
-  const queryTokens = tokenize(query);
+    const { query, pages, maxSourceCount } = params;
 
-  if (queryTokens.length === 0) {
-    return pages.slice(0, maxSourceCount).map((page, i) => ({
-      id: i + 1,
-      title: page.title,
-      url: page.url,
-      hostname: page.hostname,
-      snippet: page.snippet,
-      excerpt: page.text.slice(0, MAX_EXCERPT_CHARS),
-      score: 1,
-      freshnessScore: page.freshnessScore,
-      structuredScore: page.structuredScore,
-      publishedAt: page.publishedAt,
-      lastModified: page.lastModified,
-      cacheHit: true,
-    }));
-  }
+    const queryTokens = extractImportantTokens(query);
 
-  const allChunks = pages.flatMap((page) => {
-    const chunks = chunkText(page.text);
-    return chunks.map((chunk) => {
-      const keywordScore = scoreText(queryTokens, chunk);
-      const titleScore = scoreText(queryTokens, page.title) * 2;
-      const snippetScore = scoreText(queryTokens, page.snippet);
+    const constraints = extractConstraints(query);
 
-      const baseScore = keywordScore + titleScore + snippetScore;
-      const finalScore =
-        baseScore * 0.7 +
-        page.freshnessScore * 10 +
-        page.structuredScore * 5;
+    const entities = extractEntities(query);
 
-      return {
-        page,
-        chunk,
-        score: finalScore,
-      };
+    const scoredPages = pages.map((page) => {
+        const combined = `${page.title}\n${page.snippet}\n${page.text}`;
+
+        const titleScore =
+            scoreTokenOverlap(queryTokens, page.title) * TITLE_WEIGHT +
+            scoreConstraintMatches(constraints, page.title) +
+            scoreEntityMatches(entities, page.title) +
+            scoreTitleAlignment(queryTokens, page.title);
+
+        const snippetScore =
+            scoreTokenOverlap(queryTokens, page.snippet) * SNIPPET_WEIGHT +
+            scoreConstraintMatches(constraints, page.snippet) +
+            scoreEntityMatches(entities, page.snippet);
+
+        const bestWindow = findBestWindow(
+            query,
+            queryTokens,
+            constraints,
+            entities,
+            page.text,
+        );
+
+        const semanticDensity = scoreSemanticDensity(queryTokens, combined);
+
+        const answerability = scoreAnswerability(query, combined);
+
+        const crossSourceAgreement = scoreCrossSourceAgreement(
+            page,
+            pages,
+            queryTokens,
+        );
+
+        const constraintPenalty = scoreConstraintPenalty(
+            constraints,
+            `${page.title} ${page.snippet}`,
+        );
+
+        const finalScore =
+            titleScore +
+            snippetScore +
+            bestWindow.score +
+            semanticDensity * DENSITY_WEIGHT +
+            answerability +
+            crossSourceAgreement +
+            page.freshnessScore * FRESHNESS_WEIGHT +
+            page.structuredScore * STRUCTURED_WEIGHT -
+            constraintPenalty;
+
+        return {
+            page,
+            score: finalScore,
+            excerpt: bestWindow.excerpt,
+        };
     });
-  });
 
-  const sortedChunks = allChunks.sort((a, b) => b.score - a.score);
-  const seenUrls = new Set<string>();
-  const results: SearchSource[] = [];
-
-  for (const item of sortedChunks) {
-    if (seenUrls.has(item.page.url)) continue;
-    seenUrls.add(item.page.url);
-
-    results.push({
-      id: 0,
-      title: item.page.title,
-      url: item.page.url,
-      hostname: item.page.hostname,
-      snippet: item.page.snippet,
-      excerpt: item.chunk.slice(0, MAX_EXCERPT_CHARS),
-      score: Number(item.score.toFixed(2)),
-      freshnessScore: item.page.freshnessScore,
-      structuredScore: item.page.structuredScore,
-      publishedAt: item.page.publishedAt,
-      lastModified: item.page.lastModified,
-      cacheHit: true,
-    });
-
-    if (results.length >= maxSourceCount) break;
-  }
-
-  return results.map((s, i) => ({ ...s, id: i + 1 }));
+    return scoredPages
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxSourceCount)
+        .map((item, index) => ({
+            id: index + 1,
+            title: item.page.title,
+            url: item.page.url,
+            hostname: item.page.hostname,
+            snippet: item.page.snippet,
+            excerpt: item.excerpt,
+            score: Number(item.score.toFixed(2)),
+            freshnessScore: item.page.freshnessScore,
+            structuredScore: item.page.structuredScore,
+            publishedAt: item.page.publishedAt,
+            lastModified: item.page.lastModified,
+            cacheHit: true,
+        }));
 };
