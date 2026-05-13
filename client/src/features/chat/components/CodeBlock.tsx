@@ -271,19 +271,6 @@ const PreviewOverlay = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Copy */}
-          <button
-            onClick={copyToClipboard}
-            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-medium tracking-wide transition-all duration-200 ${
-              copied
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                : "border-white/[0.08] bg-white/[0.04] text-slate-400 hover:border-white/15 hover:bg-white/[0.08] hover:text-slate-200"
-            }`}
-          >
-            {copied ? <Check size={12} /> : <Copy size={12} />}
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </button>
-
           {/* Close */}
           <button
             onClick={onClose}
@@ -327,6 +314,17 @@ const PreviewOverlay = ({
                 }`}
               >
                 {isEditing ? "Done" : "Edit"}
+              </button>
+              <button
+                onClick={copyToClipboard}
+                className={`flex items-center gap-1 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all ${
+                  copied
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                }`}
+              >
+                {copied ? <Check size={10} /> : <Copy size={10} />}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
             </div>
           </div>
