@@ -183,7 +183,7 @@ const searchTavily = async (
       {
         api_key: apiKey,
         query,
-        search_depth: "basic",
+        search_depth: "advanced",
         max_results: MAX_SEARCH_RESULTS,
       },
       { timeout: REQUEST_TIMEOUT_MS },

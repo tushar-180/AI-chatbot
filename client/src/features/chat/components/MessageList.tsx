@@ -199,47 +199,47 @@ const MessageList = ({
         showSuggestions ? "scrollbar-hide" : ""
       }`}
     >
-      <div className="mx-auto flex max-w-5xl flex-col gap-7">
+      <div className="mx-auto flex max-w-5xl flex-col gap-8">
         {showSuggestions ? (
-          <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-10 duration-700 md:py-20">
-            <div className="mb-10 flex flex-col items-center text-center">
-              <div className="mb-6 flex items-center justify-center">
+          <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-12 duration-700 md:py-24">
+            <div className="mb-12 flex flex-col items-center text-center">
+              <div className="mb-7 flex items-center justify-center">
                 <img
                   src="/logo.png"
                   alt="Velora Logo"
-                  className="h-24 w-24 object-contain object-center"
+                  className="h-20 w-20 object-contain object-center drop-shadow-lg"
                 />
               </div>
 
-              <h2 className="mb-3 text-2xl font-bold tracking-tight text-white md:text-3xl">
+              <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
                 How can I help you today?
               </h2>
 
-              <p className="max-w-md leading-relaxed text-slate-400">
+              <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-500">
                 {isNewChat
                   ? "Your new conversation is ready. Choose a suggestion below or send a message to get started."
                   : "Select an existing chat from the sidebar or start a new one to begin brainstorming or asking questions."}
               </p>
             </div>
 
-            <div className="grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid w-full max-w-3xl grid-cols-1 gap-3.5 sm:grid-cols-2">
               {SUGGESTIONS.map((suggestion, idx) => (
                 <button
                   key={idx}
                   onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                  className="group flex flex-col items-start rounded-2xl border border-white/5 bg-white/2 p-6 text-left transition-all duration-300 hover:border-white/20 hover:bg-white/4"
+                  className="group flex flex-col items-start rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 text-left transition-all duration-300 hover:border-white/15 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-indigo-500/[0.03]"
                 >
-                  <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors group-hover:text-indigo-400">
-                    <div className="rounded-xl bg-slate-800/50 p-2 transition-colors group-hover:bg-indigo-500/10">
-                      <suggestion.icon size={20} />
+                  <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors duration-300 group-hover:text-indigo-400">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/60 transition-all duration-300 group-hover:bg-indigo-500/[0.12] group-hover:shadow-sm group-hover:shadow-indigo-500/20">
+                      <suggestion.icon size={18} strokeWidth={1.8} />
                     </div>
 
-                    <span className="font-medium text-slate-200">
+                    <span className="text-base font-semibold tracking-tight text-slate-200">
                       {suggestion.title}
                     </span>
                   </div>
 
-                  <p className="text-sm text-slate-500 transition-colors group-hover:text-slate-400">
+                  <p className="pl-12 text-sm leading-relaxed text-slate-500 transition-colors duration-300 group-hover:text-slate-400">
                     {suggestion.desc}
                   </p>
                 </button>
@@ -247,11 +247,11 @@ const MessageList = ({
             </div>
           </div>
         ) : messagesError && currentChatId && messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-base font-medium text-slate-200">
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <p className="text-base font-semibold tracking-tight text-slate-200">
               Unable to load messages
             </p>
-            <p className="mt-2 max-w-md text-sm text-slate-400">
+            <p className="mt-2.5 max-w-md text-sm leading-relaxed text-slate-500">
               {messagesError}
             </p>
           </div>
@@ -275,8 +275,8 @@ const MessageList = ({
             </div>
           </div>
         ) : messages.length === 0 && !loading && !isStreaming ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400">
-            <p>No messages yet. The stage is yours.</p>
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <p className="text-base tracking-wide text-slate-500">No messages yet. The stage is yours.</p>
           </div>
         ) : (
           <>

@@ -40,10 +40,13 @@ export const chatRepository = {
     };
   },
 
-  findAllByUserId(userId: string) {
+  findAllByUserId(userId: string, page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
     return Chat.find({ userId })
       .select("-messages -legacyMessages")
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit);
   },
 
   async deleteById(chatId: string) {
@@ -111,6 +114,14 @@ export const chatRepository = {
   },
 
   async update(chatId: string, data: Partial<{ title: string }>) {
-    return await Chat.findByIdAndUpdate(chatId, data, { new: true });
+    return await Chat.findByIdAndUpdate(chatId, data, { new: true })
+  },
+
+  async updateTitle(chatId: string, title: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { title } },
+      { new: true }
+    );
   },
 };
