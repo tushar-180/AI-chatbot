@@ -101,4 +101,12 @@ export const chatRepository = {
     await this.touchChat(chatId);
     return message;
   },
+
+  async updateTitle(chatId: string, title: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { title } },
+      { new: true }
+    );
+  },
 };

@@ -537,8 +537,9 @@ export const chatService = {
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-      chat.title = createTitle(trimmedMessage);
-      await (chat as any).save();
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
     }
 
     const aiProvider = aiService.getProvider(provider);
@@ -619,8 +620,9 @@ export const chatService = {
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-      chat.title = createTitle(trimmedMessage);
-      await (chat as any).save();
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
     }
 
     // Refresh chat to include new user message
@@ -690,9 +692,15 @@ export const chatService = {
   },
 
   async updateChatTitle(chatId: string, title: string) {
-    const chat = await requireChat(chatId);
-    chat.title = requireMessage(title, "Title is required");
-    await chat.save();
+    const validatedTitle = requireMessage(title, "Title is required");
+    const chat = await chatRepository.updateTitle(chatId, validatedTitle);
+    
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    
     return chat;
   },
 

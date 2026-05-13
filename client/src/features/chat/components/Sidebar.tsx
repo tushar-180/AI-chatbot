@@ -40,6 +40,8 @@ const SidebarChatItem = memo(
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
     const itemRef = useRef<HTMLDivElement>(null);
+    const [openUpwards, setOpenUpwards] = useState(false);
+    const menuButtonRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -59,6 +61,14 @@ const SidebarChatItem = memo(
         document.removeEventListener("mousedown", handleClickOutside);
       };
     }, [showMenu, isEditing]);
+
+    useEffect(() => {
+      if (showMenu && menuButtonRef.current) {
+        const rect = menuButtonRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setOpenUpwards(spaceBelow < 160);
+      }
+    }, [showMenu]);
 
     const handleStartEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -93,7 +103,7 @@ const SidebarChatItem = memo(
             : "text-slate-400 border-white/3 hover:bg-white/5 hover:text-white"
         } ${isEditing ? "cursor-default" : "cursor-pointer"}`}
       >
-        <div className="flex flex-1 items-center gap-3 truncate">
+        <div className="flex flex-1 items-center gap-3 min-w-0">
           {isEditing ? (
             <input
               autoFocus
@@ -107,13 +117,13 @@ const SidebarChatItem = memo(
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
-            <span className="truncate font-medium tracking-tight">
+            <span className="block truncate font-medium tracking-tight">
               {chat.title || "Untitled Session"}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex flex-shrink-0 items-center gap-1">
           {isEditing ? (
             <div className="flex items-center gap-1">
               <button
@@ -144,7 +154,7 @@ const SidebarChatItem = memo(
               </button>
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative" ref={menuButtonRef}>
               <div
                 onClick={(e) => {
                   e.stopPropagation();
@@ -160,7 +170,13 @@ const SidebarChatItem = memo(
               </div>
 
               {showMenu && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-36 origin-top-right rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl">
+                <div
+                  className={`absolute right-0 z-50 w-36 rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 ${
+                    openUpwards
+                      ? "bottom-full mb-2 origin-bottom-right"
+                      : "top-full mt-2 origin-top-right"
+                  }`}
+                >
                   <button
                     onClick={handleStartEdit}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
