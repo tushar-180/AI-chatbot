@@ -198,12 +198,33 @@ const Sidebar = () => {
     deleteChat,
     renameChat,
     selectChat,
+    fetchMoreChats,
+    hasMore,
   } = useChatList();
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [personalizationOpen, setPersonalizationOpen] = useState(false);
+
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          fetchMoreChats();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, fetchMoreChats]);
 
   return (
     <>
@@ -310,6 +331,13 @@ const Sidebar = () => {
                       onRename={renameChat}
                     />
                   ))}
+                  {/* Intersection Observer Sentinel */}
+                  <div ref={observerTarget} className="h-4 w-full" />
+                  {hasMore && (
+                    <div className="flex justify-center p-4">
+                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                    </div>
+                  )}
                 </div>
               </div>
             )

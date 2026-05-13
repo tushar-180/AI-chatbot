@@ -3,6 +3,7 @@ import { useUser } from "@clerk/react";
 import { User, Globe } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import {
     assistantMarkdownComponents,
     userMarkdownComponents,
@@ -242,6 +243,7 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                                 {msg.content && (
                                     <ReactMarkdown
                                         remarkPlugins={[remarkGfm]}
+                                        rehypePlugins={[rehypeRaw]}
                                         components={
                                             isUser
                                                 ? userMarkdownComponents

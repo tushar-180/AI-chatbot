@@ -40,10 +40,13 @@ export const chatRepository = {
     };
   },
 
-  findAllByUserId(userId: string) {
+  findAllByUserId(userId: string, page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
     return Chat.find({ userId })
       .select("-messages -legacyMessages")
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limit);
   },
 
   async deleteById(chatId: string) {

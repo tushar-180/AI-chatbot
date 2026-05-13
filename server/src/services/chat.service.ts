@@ -328,16 +328,13 @@ async function* streamAssistantResponse(
       ? "stopped"
       : "completed";
 
-    // Parse multimedia from the final response
-    const { attachments, type } = parseMultimedia(fullResponse);
-
     // Update message doc in collection
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       content: fullResponse,
       status: finalStatus,
       model: providerName,
-      attachments,
-      type: type as any,
+      attachments: [],
+      type: "text",
       metadata: buildGroundingMetadata(webGrounding),
     });
 
@@ -442,9 +439,6 @@ export const chatService = {
 
       reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-      // Parse multimedia from reply
-      const { attachments: aiAttachments, type } = parseMultimedia(reply);
-
       // Save Assistant Message
       await chatRepository.saveMessage(chatId, {
         ...createAssistantMessage(
@@ -455,8 +449,8 @@ export const chatService = {
           "completed",
           buildGroundingMetadata(webGrounding),
         ),
-        attachments: aiAttachments,
-        type: type as any,
+        attachments: [],
+        type: "text",
       });
 
       // Extract new memories in the background
@@ -570,9 +564,6 @@ export const chatService = {
 
     reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-    // Parse multimedia from reply
-    const { attachments: aiAttachments, type } = parseMultimedia(reply);
-
     // Save Assistant Message
     await chatRepository.saveMessage(chatId, {
       ...createAssistantMessage(
@@ -583,8 +574,8 @@ export const chatService = {
         "completed",
         buildGroundingMetadata(webGrounding),
       ),
-      attachments: aiAttachments,
-      type: type as any,
+      attachments: [],
+      type: "text",
     });
 
     // Extract new memories in the background
@@ -678,8 +669,8 @@ export const chatService = {
     };
   },
 
-  getAllChats(userId?: string) {
-    return chatRepository.findAllByUserId(requireUserId(userId));
+  getAllChats(userId?: string, page: number = 1, limit: number = 20) {
+    return chatRepository.findAllByUserId(requireUserId(userId), page, limit);
   },
 
   getChatById(chatId: string) {

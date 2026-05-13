@@ -47,14 +47,32 @@ export const assistantMarkdownComponents = {
       {...props}
     />
   ),
-  a: (props: React.ComponentPropsWithoutRef<"a">) => (
-    <a
-      className="font-medium text-sky-300 underline decoration-sky-500/40 underline-offset-4 transition-colors hover:text-sky-200"
-      target="_blank"
-      rel="noreferrer"
-      {...props}
-    />
-  ),
+  a: (props: React.ComponentPropsWithoutRef<"a">) => {
+    const isImage = props.href && /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i.test(props.href);
+    if (isImage) {
+      return (
+        <span className="my-4 block">
+          <img
+            src={props.href}
+            alt={props.title || "Image"}
+            className="h-auto max-w-full rounded-xl border border-white/10 shadow-md transition-transform hover:scale-[1.01]"
+            loading="lazy"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
+          />
+        </span>
+      );
+    }
+    return (
+      <a
+        className="font-medium text-sky-300 underline decoration-sky-500/40 underline-offset-4 transition-colors hover:text-sky-200"
+        target="_blank"
+        rel="noreferrer"
+        {...props}
+      />
+    );
+  },
   hr: () => <hr className="my-6 border-slate-800" />,
   strong: (props: React.ComponentPropsWithoutRef<"strong">) => (
     <strong className="font-semibold text-white" {...props} />
@@ -98,14 +116,25 @@ export const assistantMarkdownComponents = {
     );
   },
   img: (props: React.ComponentPropsWithoutRef<"img">) => (
-    <div className="my-6">
-      <img className="h-auto max-w-full rounded-lg" {...props} loading="lazy" />
+    <span className="my-6 block">
+      <img 
+        className="h-auto max-w-full rounded-lg" 
+        {...props} 
+        loading="lazy" 
+        onError={(e) => {
+          const target = e.target as HTMLImageElement;
+          target.style.display = 'none';
+          if (target.nextElementSibling) {
+            (target.nextElementSibling as HTMLElement).style.display = 'none';
+          }
+        }}
+      />
       {props.alt && (
         <span className="mt-2 block text-center text-[11px] font-medium text-slate-500 italic">
           {props.alt}
         </span>
       )}
-    </div>
+    </span>
   ),
 };
 
