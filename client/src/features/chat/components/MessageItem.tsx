@@ -90,7 +90,7 @@ const MessageAvatar = ({
     failed?: boolean;
 }) => (
     <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 ${isUser ? "border border-white/10 shadow-sm" : ""} ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl overflow-hidden transition-all duration-300 ${isUser ? "border border-white/[0.08] shadow-sm" : ""} ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
     >
         {isUser ? (
             imageUrl ? (
@@ -147,19 +147,19 @@ const MessageMetadata = ({
     model?: string;
 }) => (
     <div
-        className={`flex items-center gap-2 ${
+        className={`flex items-center gap-2.5 ${
             isUser ? "flex-row-reverse" : "flex-row"
         }`}
     >
         <span
-            className={`text-[9px] font-bold uppercase tracking-[0.3em] ${
-                isUser ? "text-slate-300" : "text-slate-600"
-            } ${isUser ? "mr-1" : "ml-1"}`}
+            className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
+                isUser ? "text-slate-400" : "text-slate-500"
+            } ${isUser ? "mr-0.5" : "ml-0.5"}`}
         >
             {isUser ? "You" : "Velora"}
         </span>
         {!isUser && model && (
-            <span className="flex items-center rounded-lg border border-white/5 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+            <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
                 {model}
             </span>
         )}
@@ -206,10 +206,10 @@ const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
                     <div
                         className={`transition-opacity duration-150 ease-out ${
                             isUser
-                                ? "max-w-full rounded-2xl border border-white/10 bg-white/3 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white"
+                                ? "max-w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white"
                                 : isFailed
-                                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
-                                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+                                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-400"
+                                  : "w-full py-1 text-base leading-[1.8] text-slate-200"
                         }`}
                     >
                         {isStreaming && !msg.content ? (
