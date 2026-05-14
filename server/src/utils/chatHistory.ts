@@ -10,26 +10,39 @@ export const getLimitedMessages = (messages: ChatMessage[]): ChatMessage[] => {
  * into structured attachments.
  */
 export const parseMultimedia = (content: string) => {
-  // Regex to find markdown images with base64 data
-  const imageRegex = /!\[.*?\]\((data:image\/.*?;base64,.*?)\)/g;
-  const attachments: any[] = [];
-  let cleanContent = content;
-  let match;
+  // Regex to find markdown images and HTML img tags
+  const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
+  const htmlImageRegex = /<img.*?src=["'](.*?)["'].*?>/g;
   
-  while ((match = imageRegex.exec(content)) !== null) {
-    attachments.push({
-      url: match[1],
-      name: 'Generated Image',
-      mimeType: match[1].split(';')[0].split(':')[1],
-    });
-    
-    // Optional: Remove the image from content to avoid duplicate rendering
-    // But for now, we keep it for backward compatibility if frontend doesn't use attachments
-    // cleanContent = cleanContent.replace(match[0], '');
+  const attachments: any[] = [];
+  let imgMatch;
+  
+  // Extract markdown images
+  while ((imgMatch = markdownImageRegex.exec(content)) !== null) {
+    const url = imgMatch[1];
+    if (url && (url.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i.test(url))) {
+      attachments.push({
+        url: url,
+        name: 'Image',
+        mimeType: url.startsWith('data:image') ? url.split(';')[0].split(':')[1] : 'image/remote',
+      });
+    }
+  }
+
+  // Extract HTML images
+  while ((imgMatch = htmlImageRegex.exec(content)) !== null) {
+    const url = imgMatch[1];
+    if (url) {
+      attachments.push({
+        url: url,
+        name: 'Image',
+        mimeType: url.startsWith('data:image') ? url.split(';')[0].split(':')[1] : 'image/remote',
+      });
+    }
   }
   
   return {
-    content: cleanContent.trim(),
+    content: content.trim(),
     attachments,
     type: attachments.length > 0 ? 'image' : 'text'
   };

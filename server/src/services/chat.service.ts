@@ -328,16 +328,13 @@ async function* streamAssistantResponse(
       ? "stopped"
       : "completed";
 
-    // Parse multimedia from the final response
-    const { attachments, type } = parseMultimedia(fullResponse);
-
     // Update message doc in collection
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       content: fullResponse,
       status: finalStatus,
       model: providerName,
-      attachments,
-      type: type as any,
+      attachments: [],
+      type: "text",
       metadata: buildGroundingMetadata(webGrounding),
     });
 
@@ -442,9 +439,6 @@ export const chatService = {
 
       reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-      // Parse multimedia from reply
-      const { attachments: aiAttachments, type } = parseMultimedia(reply);
-
       // Save Assistant Message
       await chatRepository.saveMessage(chatId, {
         ...createAssistantMessage(
@@ -455,8 +449,8 @@ export const chatService = {
           "completed",
           buildGroundingMetadata(webGrounding),
         ),
-        attachments: aiAttachments,
-        type: type as any,
+        attachments: [],
+        type: "text",
       });
 
       // Extract new memories in the background
@@ -543,8 +537,9 @@ export const chatService = {
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-      chat.title = createTitle(trimmedMessage);
-      await (chat as any).save();
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
     }
 
     const aiProvider = aiService.getProvider(provider);
@@ -570,9 +565,6 @@ export const chatService = {
 
     reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-    // Parse multimedia from reply
-    const { attachments: aiAttachments, type } = parseMultimedia(reply);
-
     // Save Assistant Message
     await chatRepository.saveMessage(chatId, {
       ...createAssistantMessage(
@@ -583,8 +575,8 @@ export const chatService = {
         "completed",
         buildGroundingMetadata(webGrounding),
       ),
-      attachments: aiAttachments,
-      type: type as any,
+      attachments: [],
+      type: "text",
     });
 
     // Extract new memories in the background
@@ -628,8 +620,9 @@ export const chatService = {
     );
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-      chat.title = createTitle(trimmedMessage);
-      await (chat as any).save();
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
     }
 
     // Refresh chat to include new user message
@@ -678,8 +671,8 @@ export const chatService = {
     };
   },
 
-  getAllChats(userId?: string) {
-    return chatRepository.findAllByUserId(requireUserId(userId));
+  getAllChats(userId?: string, page: number = 1, limit: number = 20) {
+    return chatRepository.findAllByUserId(requireUserId(userId), page, limit);
   },
 
   getChatById(chatId: string) {
@@ -699,9 +692,15 @@ export const chatService = {
   },
 
   async updateChatTitle(chatId: string, title: string) {
-    const chat = await requireChat(chatId);
-    chat.title = requireMessage(title, "Title is required");
-    await chat.save();
+    const validatedTitle = requireMessage(title, "Title is required");
+    const chat = await chatRepository.updateTitle(chatId, validatedTitle);
+    
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    
     return chat;
   },
 

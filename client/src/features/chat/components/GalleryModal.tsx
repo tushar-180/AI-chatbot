@@ -118,6 +118,9 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
                     src={item.url}
                     alt={item.name || "Gallery image"}
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).parentElement?.classList.add('hidden');
+                    }}
                   />
 
                   {/* Hover Overlay */}

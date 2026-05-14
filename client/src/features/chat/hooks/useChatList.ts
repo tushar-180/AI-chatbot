@@ -18,7 +18,12 @@ export const useChatList = () => {
     loading,
     isStreaming,
     isNewChat,
+    page,
+    hasMore,
     setChats,
+    appendChats,
+    setHasMore,
+    setPage,
     setCurrentChat,
     setMessages,
     setIsNewChat,
@@ -81,6 +86,27 @@ export const useChatList = () => {
   const { isDown } = useServerStatus();
   const isSharedChatRoute = location.pathname.startsWith("/shared/");
 
+  const fetchMoreChats = async () => {
+    if (!user?.id || loading || isStreaming || !hasMore) return;
+
+    try {
+      const nextPage = page + 1;
+      const res = await api.get("/chat", {
+        params: { userId: user.id, page: nextPage, limit: 20 },
+      });
+
+      const fetchedChats = res.data || [];
+      if (fetchedChats.length < 20) {
+        setHasMore(false);
+      }
+      
+      appendChats(fetchedChats);
+      setPage(nextPage);
+    } catch (err) {
+      console.error("Error fetching more chats", err);
+    }
+  };
+
   useEffect(() => {
     if (
       !user?.id ||
@@ -94,12 +120,14 @@ export const useChatList = () => {
     const fetchChats = async () => {
       try {
         const res = await api.get("/chat", {
-          params: { userId: user.id },
+          params: { userId: user.id, page: 1, limit: 20 },
         });
 
         const fetchedChats = res.data || [];
         fetchedUserIdRef.current = user.id;
         setChats(fetchedChats);
+        setPage(1);
+        setHasMore(fetchedChats.length === 20);
 
         if (fetchedChats.length === 0) {
           if (isNewChat || messages.length > 0) return;
@@ -140,14 +168,44 @@ export const useChatList = () => {
     setChats,
     setCurrentChat,
     setMessages,
+    setPage,
+    setHasMore,
   ]);
+
+  const deleteChats = async (chatIds: string[]) => {
+    try {
+      // For now, we delete sequentially to avoid overwhelming the server
+      // and because we don't have a bulk delete endpoint yet.
+      // We'll show a single toast for the entire operation.
+      const deletePromises = chatIds.map((id) => api.delete(`/chat/${id}`));
+      await Promise.all(deletePromises);
+      
+      chatIds.forEach((id) => removeChat(id));
+      
+      // If the current chat was among the deleted ones, reset state
+      if (currentChatId && chatIds.includes(currentChatId)) {
+        setCurrentChat(null);
+        setMessages([]);
+        setIsNewChat(true);
+        navigate("/chat");
+      }
+      
+      toast.success(`${chatIds.length} chats deleted successfully.`);
+    } catch (err) {
+      console.error("Error deleting chats", err);
+      toast.error("Could not delete some chats.");
+    }
+  };
 
   return {
     chats,
     currentChatId,
     createChat,
     deleteChat,
+    deleteChats,
     renameChat,
     selectChat,
+    fetchMoreChats,
+    hasMore,
   };
 };
