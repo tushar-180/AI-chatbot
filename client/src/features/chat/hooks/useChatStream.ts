@@ -913,6 +913,7 @@ export const useChatStream = () => {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
         body: JSON.stringify({

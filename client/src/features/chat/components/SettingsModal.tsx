@@ -25,8 +25,10 @@ import {
   XCircle,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatList } from "@/features/chat/hooks/useChatList";
+import { useChatStore } from "@/features/chat/store/useChatStore";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -54,12 +56,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   initialTab = "general",
 }) => {
   const { user } = useUser();
+  const navigate = useNavigate();
   const {
     deleteChat: globalDeleteChat,
     unarchiveChat: globalUnarchiveChat,
-    selectChat,
-    upsertChat,
   } = useChatList();
+  const {
+    setCurrentChat,
+    setMessages,
+    setIsNewChat,
+    setSidebarOpen,
+  } = useChatStore();
   const [activeTab, setActiveTab] = useState(initialTab);
 
   useEffect(() => {
@@ -197,6 +204,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     } catch (error) {
       console.error("Delete Error:", error);
     }
+  };
+
+  const openArchivedChat = (chat: any) => {
+    setIsNewChat(false);
+    setCurrentChat(chat._id, chat);
+    setMessages([]);
+    setSidebarOpen(false);
+    navigate(`/chat/${chat._id}`);
+    onClose();
   };
 
   useEffect(() => {
@@ -536,11 +552,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {localArchivedChats.map((chat) => (
                       <div 
                         key={chat._id} 
-                        onClick={() => {
-                          upsertChat(chat);
-                          selectChat(chat._id);
-                          onClose();
-                        }}
+                        onClick={() => openArchivedChat(chat)}
                         className="group flex items-center justify-between p-4 rounded-2xl bg-white/2 border border-white/5 hover:bg-white/5 transition-all cursor-pointer"
                       >
                         <div className="flex items-center gap-4">
@@ -554,14 +566,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                         <div className="flex items-center gap-2">
                            <button 
-                            onClick={() => handleUnarchive(chat._id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleUnarchive(chat._id);
+                            }}
                             className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
                            >
                              <ArrowLeft size={14} />
                              Restore
                            </button>
                            <button 
-                            onClick={() => handleDeleteArchived(chat._id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteArchived(chat._id);
+                            }}
                             className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
                            >
                              <Trash2 size={14} />

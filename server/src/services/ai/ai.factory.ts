@@ -40,7 +40,6 @@ export class AIServiceFactory {
      * Supports 'provider:model' format.
      */
     public static getProvider(name?: string): IAIService {
-        console.log("name", name);
         const fullId = (
             name ||
             process.env.AI_PROVIDER ||
