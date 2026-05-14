@@ -5,12 +5,16 @@ type DeleteConfirmModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  title?: string;
+  message?: string;
 };
 
 export default function DeleteConfirmModal({
   isOpen,
   onClose,
   onConfirm,
+  title = "Delete chat?",
+  message = "This will delete the chat.",
 }: DeleteConfirmModalProps) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -38,8 +42,8 @@ export default function DeleteConfirmModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
-          <h2 className="text-lg font-bold text-white mb-2">Delete chat?</h2>
-          <p className="text-sm text-slate-400">This will delete the chat.</p>
+          <h2 className="text-lg font-bold text-white mb-2">{title}</h2>
+          <p className="text-sm text-slate-400">{message}</p>
         </div>
 
         <div className="flex justify-end gap-3 px-6 pb-6 pt-2">

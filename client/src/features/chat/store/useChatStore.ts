@@ -11,9 +11,15 @@ type ChatState = {
   streamingChatId: string | null;
   isNewChat: boolean;
   sidebarOpen: boolean;
+  hasMore: boolean;
+  page: number;
 
   setSidebarOpen: (open: boolean) => void;
   setChats: (chats: Chat[]) => void;
+  appendChats: (chats: Chat[]) => void;
+  setHasMore: (hasMore: boolean) => void;
+  setPage: (page: number) => void;
+  resetPagination: () => void;
   setCurrentChat: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
@@ -38,10 +44,26 @@ export const useChatStore = create<ChatState>()(
       streamingChatId: null,
       isNewChat: false,
       sidebarOpen: false,
+      hasMore: true,
+      page: 1,
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
       setChats: (chats) => set({ chats }),
+
+      appendChats: (newChats) =>
+        set((state) => {
+          const uniqueNewChats = newChats.filter(
+            (newChat) => !state.chats.some((chat) => chat._id === newChat._id)
+          );
+          return { chats: [...state.chats, ...uniqueNewChats] };
+        }),
+
+      setHasMore: (hasMore) => set({ hasMore }),
+
+      setPage: (page) => set({ page }),
+
+      resetPagination: () => set({ page: 1, hasMore: true, chats: [] }),
 
       setCurrentChat: (id) =>
         set((state) => ({

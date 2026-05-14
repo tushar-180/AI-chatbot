@@ -56,6 +56,10 @@ export class GeminiAdapter implements IAIService {
                       return { inlineData: cached };
                     }
 
+                    if (!att.url.startsWith('http')) {
+                      throw new Error(`Invalid image URL: ${att.url}`);
+                    }
+
                     const response = await fetch(att.url);
                     if (!response.ok)
                       throw new Error(`Fetch failed: ${response.statusText}`);
@@ -96,6 +100,24 @@ export class GeminiAdapter implements IAIService {
     );
   }
 
+  private getSystemInstruction(combinedSystemPrompt?: string) {
+    const coreInstructions = `You are Velora, a powerful and sophisticated AI assistant.
+
+OUTPUT RULES (STRICTLY ENFORCED):
+1. Always format responses using clean, professional Markdown.
+2. For code: ALWAYS use triple backticks with the correct language; NEVER return raw code without code blocks.
+3. For images & visual content: You MUST embed images directly using Markdown \`![description](url)\` or HTML \`<img src="url">\`. ONLY use absolute public URLs starting with http:// or https://. NEVER use internal/local paths (e.g., "/v1/AUTH_mw/...") or relative paths. NEVER say "I cannot show images". YOU CAN. If your context contains a valid image URL, you are REQUIRED to display it visually.
+4. Structure: Use clear headings, bullet points, and consistent spacing.`;
+
+    const finalPrompt = combinedSystemPrompt
+      ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
+      : coreInstructions;
+
+    return {
+      parts: [{ text: finalPrompt }],
+    };
+  }
+
   async generateResponse(messages: AIMessage[]): Promise<string> {
     const contents = await this.formatContents(messages);
 
@@ -109,42 +131,7 @@ export class GeminiAdapter implements IAIService {
         model: this.model,
         contents,
         config: {
-          systemInstruction: combinedSystemPrompt
-            ? {
-                parts: [{ text: combinedSystemPrompt }],
-              }
-            : {
-                parts: [
-                  {
-                    text: `
-You are a professional AI developer assistant.
-
-OUTPUT RULES (VERY IMPORTANT):
-
-1. Always format responses using clean Markdown.
-
-2. For code:
-   - ALWAYS use triple backticks
-   - ALWAYS specify language
-   - Never return raw code without code blocks
-
-3. Supported languages: js, ts, json, bash, html, css.
-
-4. Inline code: Use single backticks.
-
-5. Structure responses: Use headings (##, ###), bullet points, and clean spacing.
-
-6. Code quality: Proper indentation and clean formatting.
-
-7. Do NOT: wrap full response in a code block or output broken markdown.
-
-8. When explaining code: Give explanation first, then the code block.
-
-9. Keep responses: Clean, developer-friendly, and easy to read.
-      `,
-                  },
-                ],
-              },
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
         },
       });
 
@@ -174,17 +161,7 @@ OUTPUT RULES (VERY IMPORTANT):
         model: this.model,
         contents,
         config: {
-          systemInstruction: combinedSystemPrompt
-            ? {
-                parts: [{ text: combinedSystemPrompt }],
-              }
-            : {
-                parts: [
-                  {
-                    text: "You are a professional AI developer assistant. Always format responses using clean Markdown and appropriate code blocks.",
-                  },
-                ],
-              },
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
         },
       } as any);
 
