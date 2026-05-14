@@ -29,6 +29,7 @@ export const checkQuota = async (userId?: string) => {
     const globalUsed = Number((await redis.get(k.global())) || 0);
 
     if (globalUsed >= maxGlobal) {
+        console.log("Global rate limit exceeded");
         return {
             allowed: false as const,
             reason: "GLOBAL_DAILY_LIMIT_EXCEEDED" as const,
@@ -41,6 +42,7 @@ export const checkQuota = async (userId?: string) => {
         const userUsed = Number((await redis.get(k.user(userId))) || 0);
 
         if (userUsed >= maxUser) {
+            console.log("USER ID: ", userId, " Rate limit exceeded");
             return {
                 allowed: false as const,
                 reason: "DAILY_USER_LIMIT_EXCEEDED" as const,

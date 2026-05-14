@@ -1,4 +1,4 @@
-import axios from "axios";
+import { tavily } from "@tavily/core";
 
 import type { ChatMessage } from "../../types/chat.types";
 
@@ -24,13 +24,7 @@ import type {
 
 const MAX_SEARCH_RESULTS = 10;
 const MAX_SOURCE_COUNT = 5;
-
-const MAX_EXCERPT_CHARS = 1000;
-const MAX_RAW_CONTENT_CHARS = 8000;
-
-const REQUEST_TIMEOUT_MS = 8_000;
-
-const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
+const MAX_RAW_CONTENT_CHARS = 80000;
 
 const LIVE_QUERY_TTL_MS = 10 * 60 * 1000;
 const STABLE_QUERY_TTL_MS = 12 * 60 * 60 * 1000;
@@ -95,25 +89,18 @@ const searchTavily = async (query: string, userId?: string) => {
     if (!apiKey) return [];
 
     try {
-        const response = await axios.post(
-            TAVILY_SEARCH_URL,
-            {
-                api_key: apiKey,
-                query,
-                search_depth: "basic",
-                max_results: MAX_SEARCH_RESULTS,
+        const tvly = tavily({ apiKey });
 
-                include_answer: false,
-                include_raw_content: true,
-            },
-            {
-                timeout: REQUEST_TIMEOUT_MS,
-            },
-        );
+        const response = await tvly.search(query, {
+            searchDepth: "basic",
+            maxResults: MAX_SEARCH_RESULTS,
+            includeAnswer: false,
+            includeRawContent: "markdown",
+        });
 
         await recordSearch(userId);
 
-        const results = response.data?.results || [];
+        const results = response.results || [];
 
         console.log("[web-search] Query:", query);
         console.log("Total Results:", results.length);
@@ -126,14 +113,14 @@ const searchTavily = async (query: string, userId?: string) => {
 
         console.log("");
 
-        return results.map((r: any) => ({
-            title: String(r.title || ""),
-            url: String(r.url || ""),
-            hostname: getHostname(r.url),
-            snippet: String(r.content || ""),
-            rawContent: cleanRawContent(String(r.raw_content || "")),
-            searchProviderScore: r.score,
-            publishedAt: r.published_date || null,
+        return results.map((result: any) => ({
+            title: String(result.title || ""),
+            url: String(result.url || ""),
+            hostname: getHostname(result.url),
+            snippet: String(result.content || ""),
+            rawContent: cleanRawContent(String(result.rawContent || "")),
+            searchProviderScore: result.score,
+            publishedAt: result.publishedDate || null,
             lastModified: null,
         }));
     } catch (error) {
@@ -214,9 +201,7 @@ export const webSearchService = {
                 url: candidate.url,
                 hostname: candidate.hostname,
                 snippet: candidate.snippet,
-                excerpt:
-                    candidate.rawContent ||
-                    candidate.snippet.slice(0, MAX_EXCERPT_CHARS),
+                excerpt: candidate.rawContent || candidate.snippet,
                 score: candidate.combinedScore || 0,
                 freshnessScore: candidate.freshnessScore,
                 structuredScore: candidate.structuredScore,

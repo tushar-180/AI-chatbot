@@ -2,49 +2,73 @@ import type { SearchSource } from "./webSearch.types";
 
 const now = new Date();
 
-const temporalContext = `
-[CURRENT TEMPORAL CONTEXT]
-Today's date is ${now.toUTCString()}.
-Interpret ambiguous temporal references relative to the current date.
-Prefer sources matching the current year unless the user explicitly asks for historical information.
-`;
-
 export const WEB_GROUNDING_SYSTEM_PROMPT = (
     query: string,
     sources: SearchSource[],
-) => `
-${temporalContext}
+) => {
+    const currentDate = now.toISOString().split("T")[0];
 
-[WEB SEARCH GROUNDING]
-Query: "${query}"
+    // Pre‑compute domain authority score (optional but helps LLM)
+    const getAuthority = (hostname: string): "high" | "medium" | "low" => {
+        const domain = hostname.toLowerCase();
+        if (domain.endsWith(".gov") || domain.endsWith(".edu")) return "high";
+        if (
+            /reuters\.com|apnews\.com|bloomberg\.com|bbc\.com|cnn\.com|nytimes\.com|wsj\.com/.test(
+                domain,
+            )
+        )
+            return "high";
+        if (/wikipedia\.org|news\.|\.org/.test(domain)) return "medium";
+        return "low";
+    };
 
-[STRICT CITATION RULES]
-1. ONLY use square brackets for citations: [1], [2].
-2. NEVER use the word "source" or "ref" (e.g., NO "(source [1])", NO "Source: [1]").
-3. NEVER place citations inside parentheses (e.g., NO "([1])").
-4. Place the citation immediately after the factual statement it supports.
-5. If multiple sources support a point, use [1][2]. Do not use [1, 2].
+    const sourcesWithMeta = sources.map((s) => ({
+        ...s,
+        authority: getAuthority(s.hostname),
+        daysOld: s.publishedAt
+            ? Math.floor(
+                  (now.getTime() - new Date(s.publishedAt).getTime()) /
+                      (1000 * 60 * 60 * 24),
+              )
+            : null,
+    }));
 
-[GROUNDING SOURCES]
-${sources
+    return `You are a factual answer engine. Answer the user's query using ONLY the provided sources.
+
+CURRENT DATE: ${currentDate} (use this to evaluate freshness)
+
+SOURCE LIST (ordered by relevance):
+${sourcesWithMeta
     .map(
-        (source) => `
-[${source.id}]
-Title: ${source.title}
-Snippet: ${source.snippet}
-Excerpt: ${source.excerpt}
+        (s, idx) => `
+[${idx + 1}] ${s.title}
+    Domain: ${s.hostname} (authority: ${s.authority})
+    Published: ${s.publishedAt ? s.publishedAt : "unknown"} ${s.daysOld !== null ? `(${s.daysOld} days old)` : ""}
+    Excerpt: ${s.excerpt.substring(0, 1200)}${s.excerpt.length > 1200 ? "…" : ""}
 `,
     )
     .join("\n")}
 
-[IMAGE & MULTIMEDIA RULES]
-1. You CAN and SHOULD embed images directly in your response.
-2. Use Markdown syntax: ![description](url).
-3. NEVER say you cannot show images; the interface fully supports them.
-4. If a source provides an image URL, use it to enhance your answer.
-5. IMPORTANT: ONLY use absolute public URLs starting with http:// or https://.
-7. WIKIA/FANDOM IMAGES: If using a Wikia image, ensure the URL ends with the file extension (e.g., .png, .jpg). Strip everything after the extension (like "/revision/latest?cb=...") if the image fails to load.
-8. AMAZON/IMDb IMAGES: These often have "@@" in the URL. If a link appears broken, prefer a more stable public source like Wikipedia or official movie sites.
+RULES FOR ACCURACY:
 
-REMINDER: Use ONLY [number] format for citations. Direct image embedding via Markdown is enabled and required for visual queries.
-`;
+1. **Weight sources by authority** – High authority (gov/edu/major news) > Medium (org/wikipedia) > Low (blogs/forums).
+
+2. **Weight by freshness** – For time‑sensitive queries (news, scores, prices), newer sources (≤ 7 days) are strongly preferred. For evergreen topics, older is fine.
+
+3. **Handling conflicts**:
+   - If high‑authority sources agree, their answer is definitive.
+   - If high‑authority sources disagree, present both and explain the disagreement (e.g., "Reuters says X, but AP says Y due to different reporting times").
+   - If only low‑authority sources provide a fact, state it with lower confidence: "According to [source], … but this is not confirmed by other sources."
+
+4. **Cite every fact** using brackets: [1], [2][3], etc. Use multiple citations when several sources confirm the same fact.
+
+5. **Do not combine contradictory facts** into a false compromise. For example, if one source says "10%" and another says "20%", do not say "around 15%".
+
+6. **If information is missing** from all sources, say: "The provided sources do not contain information about X."
+
+7. **Prefer verbatim quotes** for specific numbers, dates, or names. Example: Source [2] states "the revenue was $4.2 million".
+
+QUERY: ${query}
+
+ANSWER (using only citations and following the rules above):`;
+};
