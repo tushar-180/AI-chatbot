@@ -19,6 +19,7 @@ export type SearchCandidate = {
     hostname: string;
     snippet: string;
     searchProviderScore?: number;
+    combinedScore?: number;
     publishedAt?: string | null;
     lastModified?: string | null;
     freshnessScore?: number;
@@ -63,7 +64,10 @@ export type WebGroundingContext = {
     citationsMarkdown: string;
     debug: {
         searchStrategy: "tavily";
-        sourceStrategy: "local-rerank" | "snippet-fallback";
+        sourceStrategy:
+            | "local-rerank"
+            | "snippet-fallback"
+            | "heuristic-rerank";
         candidateCount: number;
         fetchedSourceCount: number;
         cacheHit: boolean;

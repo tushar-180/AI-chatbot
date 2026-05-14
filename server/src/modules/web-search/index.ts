@@ -21,4 +21,4 @@ export type {
     SearchSource,
     WebGroundingContext,
 } from "./webSearch.types";
-import { checkQuota, recordSearch } from "./quota";
+import { checkQuota, recordSearch } from "./rateLimiter";

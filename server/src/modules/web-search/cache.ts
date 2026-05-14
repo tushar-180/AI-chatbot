@@ -18,19 +18,38 @@ export type ExtractedPage = {
     publishedAt?: string | null;
     lastModified?: string | null;
     fetchedAt: number;
-};
 
+    failed?: boolean;
+    fallback?: boolean;
+    length?: number;
+};
 // ─────────────────────────────
-// Generic helpers
+// Safe serialization helpers
 // ─────────────────────────────
 
 const set = async (k: string, v: any, ttlMs: number) => {
+    // Upstash SET already stringifies objects internally, but we keep it explicit for consistency
     await redis.set(k, JSON.stringify(v), { px: ttlMs });
 };
 
+const safeParse = <T>(value: unknown): T => {
+    if (value == null) return value as T;
+
+    if (typeof value === "string") {
+        try {
+            return JSON.parse(value) as T;
+        } catch {
+            return value as T;
+        }
+    }
+
+    // Already an object (Upstash may auto-parse or return JSON mode result)
+    return value as T;
+};
+
 const get = async <T>(k: string): Promise<T | null> => {
-    const data = await redis.get<string>(k);
-    return data ? (JSON.parse(data) as T) : null;
+    const data = await redis.get(k);
+    return data ? safeParse<T>(data) : null;
 };
 
 // ─────────────────────────────

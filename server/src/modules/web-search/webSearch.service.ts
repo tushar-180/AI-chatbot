@@ -1,7 +1,5 @@
 import axios from "axios";
-import * as cheerio from "cheerio";
-import { Readability } from "@mozilla/readability";
-import { JSDOM } from "jsdom";
+import { extractPage } from "./extractor";
 
 import type { ChatMessage } from "../../types/chat.types";
 
@@ -16,10 +14,11 @@ import {
 } from "./cache";
 
 import { withEstimatedConfidence } from "./confidence";
-import { localRerank } from "./reranker";
 import { resolveSearchQuery } from "./queryResolver";
-import { checkQuota, recordSearch } from "./quota";
+import { checkQuota, recordSearch } from "./rateLimiter";
+import { heuristicRerank } from "./reranker";
 import { WEB_GROUNDING_SYSTEM_PROMPT } from "./webSearch.prompts";
+import pLimit from "p-limit";
 
 import type {
     SearchCandidate,
@@ -29,74 +28,44 @@ import type {
 } from "./webSearch.types";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Suppress parse-srcset warnings from extractus/article-extractor
+// ─────────────────────────────────────────────────────────────────────────────
+const originalConsoleLog = console.log;
+console.log = function (...args) {
+    const stack = new Error().stack || "";
+    if (
+        stack.includes("node_modules/parse-srcset") ||
+        stack.includes("node_modules/sanitize-html") ||
+        stack.includes("node_modules/@extractus")
+    ) {
+        return;
+    }
+    originalConsoleLog.apply(console, args);
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MAX_SEARCH_RESULTS = 10;
-const MAX_FETCHED_RESULTS = 10;
-const MAX_SOURCE_COUNT = 3;
+const MAX_SOURCE_COUNT = 5;
 
 const MAX_EXCERPT_CHARS = 1000;
 const MAX_TEXT_CHARS = 12_000;
 
 const REQUEST_TIMEOUT_MS = 8_000;
 
-const EXTRACTION_CONCURRENCY = 2;
-
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 
 const LIVE_QUERY_TTL_MS = 10 * 60 * 1000;
 const STABLE_QUERY_TTL_MS = 12 * 60 * 60 * 1000;
 
-const DEFAULT_HEADERS = {
-    "User-Agent":
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
-};
-
 const logPrefix = "[web-search]";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Concurrency Limiter
-// ─────────────────────────────────────────────────────────────────────────────
-
-const createLimiter = (concurrency: number) => {
-    let active = 0;
-
-    const queue: Array<() => void> = [];
-
-    const next = () => {
-        if (active >= concurrency) return;
-        const task = queue.shift();
-        if (!task) return;
-        active += 1;
-        task();
-    };
-
-    return async <T>(fn: () => Promise<T>): Promise<T> => {
-        await new Promise<void>((resolve) => {
-            queue.push(resolve);
-            next();
-        });
-        try {
-            return await fn();
-        } finally {
-            active -= 1;
-            next();
-        }
-    };
-};
-
-const extractionLimiter = createLimiter(EXTRACTION_CONCURRENCY);
+const extractionLimit = pLimit(2);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utility Functions
 // ─────────────────────────────────────────────────────────────────────────────
-
-const stripHtml = (value?: string) => {
-    if (!value) return "";
-    return cheerio.load(value).text().replace(/\s+/g, " ").trim();
-};
 
 const getHostname = (value: string) => {
     try {
@@ -121,111 +90,6 @@ const normalizeRootDomain = (hostname: string) => {
         return hostname.toLowerCase();
     }
     return parts.slice(-2).join(".");
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Source Quality Scoring
-// ─────────────────────────────────────────────────────────────────────────────
-
-const detectStructuredPageScore = (candidate: SearchCandidate) => {
-    const hostname = candidate.hostname.toLowerCase();
-
-    // Institutional / highly structured
-    if (
-        /(gov|edu|org)$/.test(hostname) ||
-        /(wikipedia\.org|reuters\.com|apnews\.com|bloomberg\.com|worldbank\.org)/.test(
-            hostname,
-        )
-    ) {
-        return 0.95;
-    }
-
-    // Strong editorial
-    if (
-        /(nytimes\.com|wsj\.com|bbc\.com|theguardian\.com|ft\.com|forbes\.com)/.test(
-            hostname,
-        )
-    ) {
-        return 0.8;
-    }
-
-    // Community / weak authority
-    if (
-        /(reddit\.com|quora\.com|medium\.com|blog|forum)/.test(
-            hostname + candidate.url,
-        )
-    ) {
-        return 0.25;
-    }
-
-    return 0.55;
-};
-
-const detectFreshnessScore = (params: {
-    publishedAt?: string | null;
-    lastModified?: string | null;
-    liveDataQuery: boolean;
-}) => {
-    const dateStr = params.publishedAt || params.lastModified;
-
-    if (!dateStr) {
-        return params.liveDataQuery ? 0.35 : 0.55;
-    }
-    const timestamp = new Date(dateStr).getTime();
-    if (!Number.isFinite(timestamp)) {
-        return 0.5;
-    }
-    const ageDays = (Date.now() - timestamp) / (24 * 60 * 60 * 1000);
-
-    if (ageDays <= 1) return 1.0;
-    if (ageDays <= 7) return 0.92;
-    if (ageDays <= 30) return 0.8;
-    if (ageDays <= 180) return 0.6;
-    if (ageDays <= 365) return 0.45;
-
-    return 0.25;
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Smart Extraction Heuristic
-// ─────────────────────────────────────────────────────────────────────────────
-
-const shouldExtractPages = (
-    query: string,
-    candidates: SearchCandidate[],
-): boolean => {
-    const normalized = query.toLowerCase();
-
-    const simplePatterns = [
-        /^(who|what|when|where) (is|was|are|were)\b/i,
-        /^(how old|how tall|how many|how much)\b/i,
-        /\b(capital of|population of|birthday|born|died)\b/i,
-    ];
-
-    const complexPatterns = [
-        /\b(compare|analysis|analyze|why|explain|guide|tutorial)\b/i,
-        /\b(pros and cons|advantages|disadvantages)\b/i,
-        /\b(best|top|most|highest|lowest|ranking|leader)\b/i,
-        /\b(statistics|stats|contributions|performance)\b/i,
-    ];
-
-    const isSimple = simplePatterns.some((p) => p.test(normalized));
-
-    const isComplex = complexPatterns.some((p) => p.test(normalized));
-
-    const avgSnippetLength =
-        candidates.reduce((sum, c) => sum + c.snippet.length, 0) /
-        Math.max(candidates.length, 1);
-
-    const snippetsAreRich = avgSnippetLength > 220;
-
-    if (isSimple && snippetsAreRich && !isComplex) {
-        console.log(`${logPrefix} Skipping extraction: rich snippet coverage`);
-
-        return false;
-    }
-
-    return true;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -263,61 +127,66 @@ const deduplicateByHostname = (
 // Extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
-const extractArticleText = (html: string, url: string) => {
-    const dom = new JSDOM(html, { url });
-
-    const reader = new Readability(dom.window.document);
-
-    const parsed = reader.parse();
-
-    const text = sanitizeExtractedText(parsed?.textContent || "");
-
-    dom.window.close();
-
-    return text;
-};
-
 const fetchExtractedPage = async (candidate: SearchCandidate) => {
     const cached = await getExtractionCache(candidate.url);
-
     if (cached) return cached;
 
-    return extractionLimiter(async () => {
+    return extractionLimit(async () => {
         try {
-            const response = await axios.get<string>(candidate.url, {
-                timeout: REQUEST_TIMEOUT_MS,
-                headers: DEFAULT_HEADERS,
-                validateStatus: (s) => s === 200,
+            const article = await extractPage(candidate.url, {
+                score: candidate.combinedScore,
             });
 
-            const text = extractArticleText(response.data, candidate.url);
+            if (article?.text) {
+                const text = sanitizeExtractedText(article.text);
 
-            if (!text || text.length < 200) return null;
+                if (text && text.length >= 200) {
+                    const page: ExtractedPage = {
+                        title: article.title || candidate.title,
+                        url: candidate.url,
+                        hostname: candidate.hostname,
+                        snippet: candidate.snippet,
+                        text,
+                        publishedAt: article.published || candidate.publishedAt,
+                        lastModified:
+                            (article as any).modified || candidate.lastModified,
+                        fetchedAt: Date.now(),
+                    };
 
-            const page = {
-                title: candidate.title,
-                url: candidate.url,
-                hostname: candidate.hostname,
-                snippet: candidate.snippet,
-                text,
-                publishedAt: candidate.publishedAt,
-                lastModified: candidate.lastModified,
-                fetchedAt: Date.now(),
-            };
+                    await setExtractionCache(
+                        candidate.url,
+                        page,
+                        STABLE_QUERY_TTL_MS,
+                    );
 
-            await setExtractionCache(candidate.url, page, STABLE_QUERY_TTL_MS);
-
-            return page;
+                    return page;
+                }
+            }
         } catch (error: any) {
-            const errMsg = axios.isAxiosError(error)
-                ? `${error.message} (status=${error.response?.status})`
-                : String(error);
-
             console.warn(
-                `${logPrefix} Extraction failed: ${candidate.url} ${errMsg}`,
+                `${logPrefix} Extraction failed: ${candidate.url}`,
+                String(error),
             );
-            return null;
         }
+
+        // ─────────────────────────────────────────────
+        // FALLBACK: use Tavily result instead of dropping
+        // ─────────────────────────────────────────────
+
+        const fallback: ExtractedPage = {
+            title: candidate.title,
+            url: candidate.url,
+            hostname: candidate.hostname,
+            snippet: candidate.snippet,
+            text: candidate.snippet, // Tavily content fallback
+            publishedAt: candidate.publishedAt,
+            lastModified: candidate.lastModified,
+            fetchedAt: Date.now(),
+        };
+
+        await setExtractionCache(candidate.url, fallback, STABLE_QUERY_TTL_MS);
+
+        return fallback;
     });
 };
 
@@ -346,10 +215,10 @@ const searchTavily = async (query: string, userId?: string) => {
         await recordSearch(userId);
 
         return (response.data?.results || []).map((r: any) => ({
-            title: stripHtml(r.title),
+            title: String(r.title || ""),
             url: String(r.url || ""),
             hostname: getHostname(r.url),
-            snippet: stripHtml(r.content),
+            snippet: String(r.content || ""),
             searchProviderScore: r.score,
             publishedAt: r.published_date || null,
             lastModified: null,
@@ -358,28 +227,6 @@ const searchTavily = async (query: string, userId?: string) => {
         console.warn(`${logPrefix} Tavily search failed: ${String(error)}`);
         return [];
     }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fallback Sources
-// ─────────────────────────────────────────────────────────────────────────────
-
-const buildFallbackSources = (
-    candidates: SearchCandidate[],
-): SearchSource[] => {
-    return candidates.slice(0, MAX_SOURCE_COUNT).map((candidate, index) => ({
-        id: index + 1,
-        title: candidate.title,
-        url: candidate.url,
-        hostname: candidate.hostname,
-        snippet: candidate.snippet,
-        excerpt: candidate.snippet.slice(0, MAX_EXCERPT_CHARS),
-        score: candidate.searchProviderScore || 0,
-        freshnessScore: candidate.freshnessScore,
-        structuredScore: candidate.structuredScore,
-        publishedAt: candidate.publishedAt,
-        lastModified: candidate.lastModified,
-    }));
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -436,54 +283,49 @@ export const webSearchService = {
 
         if (!candidates?.length) return null;
 
-        // ─────────────── Extraction
+        // ─────────────── Rerank Candidates
         const diverseCandidates = deduplicateByHostname(candidates);
 
-        const needsExtraction = shouldExtractPages(
-            resolved.resolvedQuery,
+        const topCandidates = heuristicRerank(
             diverseCandidates,
+            resolved.liveDataQuery,
+            MAX_SOURCE_COUNT,
         );
 
-        let fetchedPages: ExtractedPage[] = [];
+        // ─────────────── Extraction
+        // We only extract the top candidates that we actually plan to use
+        const extracted = await Promise.all(
+            topCandidates.map(fetchExtractedPage),
+        );
+        const fetchedPages = extracted.filter(Boolean) as ExtractedPage[];
 
-        if (needsExtraction) {
-            const extracted = await Promise.all(
-                diverseCandidates
-                    .slice(0, MAX_FETCHED_RESULTS)
-                    .map(fetchExtractedPage),
-            );
+        const finalSources: SearchSource[] = topCandidates.map(
+            (candidate, index) => {
+                const extractedPage = fetchedPages.find(
+                    (p) => p.url === candidate.url,
+                );
 
-            fetchedPages = extracted.filter(Boolean) as ExtractedPage[];
-        }
+                return {
+                    id: index + 1,
+                    title: extractedPage?.title || candidate.title,
+                    url: candidate.url,
+                    hostname: candidate.hostname,
+                    snippet: candidate.snippet,
+                    excerpt:
+                        extractedPage?.text ||
+                        candidate.snippet.slice(0, MAX_EXCERPT_CHARS),
+                    score: candidate.combinedScore,
+                    freshnessScore: candidate.freshnessScore,
+                    structuredScore: candidate.structuredScore,
+                    publishedAt:
+                        extractedPage?.publishedAt || candidate.publishedAt,
+                    lastModified:
+                        extractedPage?.lastModified || candidate.lastModified,
+                };
+            },
+        );
 
-        // ─────────────── Rerank
-        const scoredPages = fetchedPages.map((page) => ({
-            ...page,
-            freshnessScore: detectFreshnessScore({
-                publishedAt: page.publishedAt,
-                lastModified: page.lastModified,
-                liveDataQuery: resolved.liveDataQuery,
-            }),
-            structuredScore: detectStructuredPageScore(page),
-        }));
-
-        let sources: SearchSource[] = [];
-
-        if (scoredPages.length > 0) {
-            sources = localRerank({
-                query: resolved.resolvedQuery,
-                pages: scoredPages,
-                maxSourceCount: MAX_SOURCE_COUNT,
-            });
-        }
-
-        const finalSources =
-            sources.length > 0
-                ? sources
-                : buildFallbackSources(diverseCandidates);
-
-        const sourceStrategy =
-            sources.length > 0 ? "local-rerank" : "snippet-fallback";
+        const sourceStrategy = "heuristic-rerank";
 
         const context = withEstimatedConfidence({
             query: resolved.rawQuery,
@@ -505,11 +347,11 @@ export const webSearchService = {
                 searchStrategy: "tavily",
                 sourceStrategy,
                 candidateCount: candidates.length,
-                fetchedSourceCount: scoredPages.length,
+                fetchedSourceCount: fetchedPages.length,
                 cacheHit: cacheTier !== "none",
                 cacheTier,
                 liveDataQuery: resolved.liveDataQuery,
-                skippedExtraction: !needsExtraction,
+                skippedExtraction: false,
             },
         });
 
