@@ -73,6 +73,16 @@ const chatSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
+    isArchived: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isPinned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   { timestamps: true },
 );

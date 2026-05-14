@@ -28,4 +28,16 @@ router.delete("/:id", ChatController.deleteChat);
 // Update chat title
 router.patch("/:id", ChatController.updateChatTitle);
 
+// Archive chat
+router.post("/:id/archive", ChatController.archiveChat);
+
+// Unarchive chat
+router.post("/:id/unarchive", ChatController.unarchiveChat);
+
+// Pin chat
+router.post("/:id/pin", ChatController.pinChat);
+
+// Unpin chat
+router.post("/:id/unpin", ChatController.unpinChat);
+
 export default router;

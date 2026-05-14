@@ -49,5 +49,16 @@ export const userController = {
       console.error("Error updating personalization:", error);
       res.status(500).json({ error: "Failed to update personalization" });
     }
+  },
+
+  async exportData(req: Request, res: Response) {
+    try {
+      const clerkId = req.params.clerkId as string;
+      const summary = await userService.exportData(clerkId);
+      res.status(200).json({ summary });
+    } catch (error) {
+      console.error("Error exporting data:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
   }
 };

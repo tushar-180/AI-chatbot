@@ -12,9 +12,9 @@ export const chatService = {
   /**
    * Fetches all chats for a given user.
    */
-  async fetchChats(userId: string): Promise<Chat[]> {
+  async fetchChats(userId: string, isArchived: boolean = false): Promise<Chat[]> {
     const res = await api.get("/chat", {
-      params: { userId },
+      params: { userId, isArchived },
     });
     return res.data || [];
   },
@@ -107,5 +107,21 @@ export const chatService = {
     }
 
     return "Server Error: Something went wrong while sending your message.";
+  },
+
+  async archiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/archive`);
+  },
+
+  async unarchiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unarchive`);
+  },
+
+  async pinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/pin`);
+  },
+
+  async unpinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unpin`);
   },
 };

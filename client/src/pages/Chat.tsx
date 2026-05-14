@@ -8,6 +8,7 @@ import InputArea from "@/features/chat/components/InputArea";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
+import { useChatList } from "@/features/chat/hooks/useChatList";
 import { Spotlight } from "@/components/ui/spotlight";
 
 /**
@@ -16,7 +17,11 @@ import { Spotlight } from "@/components/ui/spotlight";
  */
 const Chat = () => {
   const { chatId } = useParams<{ chatId?: string }>();
-  const { currentChatId, messages, isNewChat, setSidebarOpen, setCurrentChat, setMessages, setIsNewChat } = useChatStore();
+  const { chats, currentChatId, currentChat, messages, isNewChat, setSidebarOpen, setCurrentChat, setMessages, setIsNewChat } = useChatStore();
+  const { unarchiveChat } = useChatList();
+
+  // Determine archive status from currentChat object
+  const isArchived = currentChat?.isArchived || false;
 
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
@@ -118,6 +123,8 @@ const Chat = () => {
               onAttachmentsChange={setAttachments}
               webSearchEnabled={webSearchEnabled}
               onWebSearchToggle={setWebSearchEnabled}
+              isArchived={isArchived}
+              onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
             />
           </div>
         </div>

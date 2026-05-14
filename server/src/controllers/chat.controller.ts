@@ -104,10 +104,12 @@ export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const isArchived = req.query.isArchived === "true";
     const chats = await chatService.getAllChats(
       req.query.userId as string,
       page,
-      limit
+      limit,
+      isArchived,
     );
     return res.json(chats);
   } catch (error) {
@@ -185,6 +187,42 @@ export const updateChatTitle = asyncHandler(async (req: Request, res: Response) 
     return res.json(chat);
   } catch (error) {
     return sendControllerError(res, error, "Failed to update chat title");
+  }
+});
+
+export const archiveChat = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.archiveChat(String(req.params.id));
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to archive chat");
+  }
+});
+
+export const unarchiveChat = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.unarchiveChat(String(req.params.id));
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to unarchive chat");
+  }
+});
+
+export const pinChat = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.pinChat(String(req.params.id));
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to pin chat");
+  }
+});
+
+export const unpinChat = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.unpinChat(String(req.params.id));
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to unpin chat");
   }
 });
 
