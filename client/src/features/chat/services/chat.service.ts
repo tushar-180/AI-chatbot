@@ -12,9 +12,9 @@ export const chatService = {
   /**
    * Fetches all chats for a given user.
    */
-  async fetchChats(userId: string, isArchived: boolean = false): Promise<Chat[]> {
+  async fetchChats(isArchived: boolean = false): Promise<Chat[]> {
     const res = await api.get("/chat", {
-      params: { userId, isArchived },
+      params: { isArchived },
     });
     return res.data || [];
   },
@@ -22,8 +22,8 @@ export const chatService = {
   /**
    * Fetches messages for a specific chat.
    */
-  async fetchMessages(chatId: string, userId: string): Promise<Message[]> {
-    const res = await api.get(`/chat/${chatId}`, { params: { userId } });
+  async fetchMessages(chatId: string): Promise<Message[]> {
+    const res = await api.get(`/chat/${chatId}`);
     return res.data.messages || [];
   },
 

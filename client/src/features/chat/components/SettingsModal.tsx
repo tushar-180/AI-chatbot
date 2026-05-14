@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { api } from "@/lib/api";
 import {
   X,
   User,
@@ -34,10 +35,7 @@ interface SettingsModalProps {
   initialTab?: string;
 }
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_SERVER_URL ||
-  "http://localhost:5000";
+
 
 const TONE_OPTIONS = [
   "Default",
@@ -114,11 +112,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!user) return;
     setIsPersonalizationLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/user/profile/${user.id}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch profile");
-      const userData = await response.json();
+      const { data: userData } = await api.get("/user/profile");
       if (userData.personalization) {
         setPersonalizationData({
           nickname: userData.personalization.nickname || "",
@@ -149,16 +143,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
       try {
         const currentSkip = isInitial ? 0 : memorySkip + LIMIT;
-        const response = await fetch(
-          `${API_BASE_URL}/api/memory?limit=${LIMIT}&skip=${currentSkip}`,
-          {
-            headers: { "x-user-id": user.id },
-          }
-        );
-
-        if (!response.ok) throw new Error("Failed to fetch memories");
-
-        const data = await response.json();
+        const { data } = await api.get("/memory", {
+          params: { limit: LIMIT, skip: currentSkip },
+        });
 
         if (isInitial) {
           setMemories(data);
@@ -184,15 +171,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!user) return;
     setIsArchiveLoading(true);
     try {
-      // Direct API call to fetch archived chats without touching global state
-      const response = await fetch(
-        `${API_BASE_URL}/api/chat?userId=${user.id}&isArchived=true&page=1&limit=50`,
-        {
-          headers: { "x-user-id": user.id },
-        }
-      );
-      if (!response.ok) throw new Error("Failed to fetch archive");
-      const data = await response.json();
+      const { data } = await api.get("/chat", {
+        params: { isArchived: true, page: 1, limit: 50 },
+      });
       setLocalArchivedChats(data);
     } catch (error) {
       console.error("Archive Fetch Error:", error);
@@ -261,17 +242,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!user) return;
     setIsSavingPersonalization(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/user/personalization/${user.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(personalizationData),
-        }
-      );
-
-      if (!response.ok) throw new Error("Update failed");
-
+      await api.put("/user/personalization", personalizationData);
       toast.success("Identity updated successfully");
     } catch (error) {
       console.error("Save Error:", error);
@@ -284,21 +255,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const deleteMemory = async (id: string) => {
     if (!user) return;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/memory/${id}`, {
-        method: "DELETE",
-        headers: { "x-user-id": user.id },
-      });
-
-      if (response.status === 404) {
+      await api.delete(`/memory/${id}`);
+      setMemories((prev) => prev.filter((m) => m._id !== id));
+      toast.success("Memory purged successfully");
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
         setMemories((prev) => prev.filter((m) => m._id !== id));
         return;
       }
-
-      if (!response.ok) throw new Error("Deletion failed");
-
-      setMemories((prev) => prev.filter((m) => m._id !== id));
-      toast.success("Memory purged successfully");
-    } catch (error) {
       console.error("Delete Error:", error);
       toast.error("Failed to purge memory fragment");
     }
@@ -643,11 +607,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         abortControllerRef.current = controller;
 
                         try {
-                          const response = await fetch(`${API_BASE_URL}/api/user/export/${user.id}`, {
-                            signal: controller.signal
+                          const { data } = await api.get("/user/export", {
+                            signal: controller.signal,
                           });
-                          if (!response.ok) throw new Error("Export failed");
-                          const data = await response.json();
                           setExportSummary(data.summary);
                           toast.success("Identity summary generated");
                         } catch (error: any) {

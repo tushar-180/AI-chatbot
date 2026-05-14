@@ -67,7 +67,7 @@ export const useChatMessages = () => {
       setMessagesError(null);
 
       try {
-        const messages = await chatService.fetchMessages(currentChatId, user.id);
+        const messages = await chatService.fetchMessages(currentChatId);
 
         if (!cancelled) {
           setMessages(messages);

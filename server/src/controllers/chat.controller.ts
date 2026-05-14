@@ -67,7 +67,10 @@ const pipeStreamResponse = async (
 
 export const createChat = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const chat = await chatService.createChat(req.body);
+    const chat = await chatService.createChat({
+      ...req.body,
+      userId: req.clerkId!,
+    });
     return res.json(chat);
   } catch (error) {
     return sendControllerError(res, error, "Failed to create chat");
@@ -76,7 +79,14 @@ export const createChat = asyncHandler(async (req: Request, res: Response) => {
 
 export const createChatStream = async (req: Request, res: Response) => {
   try {
-    await pipeStreamResponse(req, res, chatService.createChatStream(req.body));
+    await pipeStreamResponse(
+      req,
+      res,
+      chatService.createChatStream({
+        ...req.body,
+        userId: req.clerkId!,
+      }),
+    );
   } catch (error) {
     console.log("Error in createChatStream:", error);
     if (!res.headersSent) {
@@ -106,7 +116,7 @@ export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 20;
     const isArchived = req.query.isArchived === "true";
     const chats = await chatService.getAllChats(
-      req.query.userId as string,
+      req.clerkId!,
       page,
       limit,
       isArchived,
@@ -120,11 +130,7 @@ export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
 export const getChatById = asyncHandler(async (req: Request, res: Response) => {
   try {
     const chatId = String(req.params.id);
-    const currentUserId = req.query.userId as string;
-
-    if (!currentUserId) {
-      return res.status(400).json({ error: "userId is required" });
-    }
+    const currentUserId = req.clerkId!;
 
     const chat = await chatService.getChatById(chatId);
 
@@ -228,7 +234,7 @@ export const unpinChat = asyncHandler(async (req: Request, res: Response) => {
 
 export const getGallery = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const gallery = await chatService.getGallery(String(req.params.id || req.params.userId));
+    const gallery = await chatService.getGallery(req.clerkId!);
     return res.json(gallery);
   } catch (error) {
     return sendControllerError(res, error, "Failed to fetch gallery");

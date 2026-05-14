@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
@@ -19,6 +19,7 @@ const createOptimisticTitle = (input: string) =>
  
 export const useChatStream = () => {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const navigate = useNavigate();
   const currentChatId = useChatStore((state) => state.currentChatId);
   const loading = useChatStore((state) => state.loading);
@@ -150,8 +151,8 @@ export const useChatStream = () => {
     });
   }, [currentChatId, setOptimisticMessagesForChat]);
  
-  const refreshChats = async (userId: string) => {
-    const chats = await chatService.fetchChats(userId);
+  const refreshChats = async () => {
+    const chats = await chatService.fetchChats();
     setChats(chats);
   };
  
@@ -215,7 +216,7 @@ export const useChatStream = () => {
         return fallbackMessages;
       }
 
-      const fetchedMessages = await chatService.fetchMessages(chatId, user.id);
+      const fetchedMessages = await chatService.fetchMessages(chatId);
       if (useChatStore.getState().currentChatId === chatId) {
         setMessages(fetchedMessages);
       }
@@ -441,6 +442,7 @@ export const useChatStream = () => {
         headers: {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
       });
@@ -625,10 +627,10 @@ export const useChatStream = () => {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
         body: JSON.stringify({
-          userId: user.id,
           message: input,
           provider,
           requestId,
@@ -786,7 +788,7 @@ export const useChatStream = () => {
     try {
       await chatService.stopStream(requestId, chatId);
       if (user?.id) {
-        await refreshChats(user.id);
+        await refreshChats();
       }
     } catch (err) {
       console.error("Error stopping stream", err);

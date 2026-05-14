@@ -33,24 +33,32 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+  // Register event listeners once on mount — stable, no re-registration on state changes
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | undefined;
-
-    if (isDown) {
-      interval = setInterval(checkStatus, 10000); // Poll every 10s when down
-    }
-
     const handleServerDown = () => {
       setIsDown(true);
       setIsDismissed(false);
     };
 
+    const handleServerUp = () => {
+      setIsDown(false);
+      setIsDismissed(false);
+    };
+
     window.addEventListener("server-down", handleServerDown);
+    window.addEventListener("server-up", handleServerUp);
 
     return () => {
-      if (interval) clearInterval(interval);
       window.removeEventListener("server-down", handleServerDown);
+      window.removeEventListener("server-up", handleServerUp);
     };
+  }, []); // Empty deps: only register once
+
+  // Poll the health endpoint every 10s while the server is down
+  useEffect(() => {
+    if (!isDown) return;
+    const interval = setInterval(checkStatus, 10000);
+    return () => clearInterval(interval);
   }, [isDown, checkStatus]);
 
   const retry = async () => {

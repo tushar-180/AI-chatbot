@@ -3,9 +3,9 @@ import { userController } from "../controllers/user.controller";
 
 const router = Router();
 
-router.post("/sync", userController.syncUser);
-router.get("/profile/:clerkId", userController.getProfile);
-router.put("/personalization/:clerkId", userController.updatePersonalization);
-router.get("/export/:clerkId", userController.exportData);
+// clerkId is no longer in the URL — it comes from the verified JWT (req.clerkId)
+router.get("/profile", userController.getProfile);
+router.put("/personalization", userController.updatePersonalization);
+router.get("/export", userController.exportData);
 
 export default router;

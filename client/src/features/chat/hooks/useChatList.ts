@@ -180,7 +180,7 @@ export const useChatList = () => {
     try {
       const nextPage = page + 1;
       const res = await api.get("/chat", {
-        params: { userId: user.id, page: nextPage, limit: 20, isArchived: viewingArchived },
+        params: { page: nextPage, limit: 20, isArchived: viewingArchived },
       });
 
       const fetchedChats = res.data || [];
@@ -209,7 +209,7 @@ export const useChatList = () => {
     const fetchChats = async () => {
       try {
         const res = await api.get("/chat", {
-          params: { userId: user.id, page: 1, limit: 20, isArchived: viewingArchived },
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
         });
 
         const fetchedChats = res.data || [];
