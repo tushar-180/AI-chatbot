@@ -18,6 +18,7 @@ export type SearchCandidate = {
     url: string;
     hostname: string;
     snippet: string;
+    rawContent?: string;
     searchProviderScore?: number;
     combinedScore?: number;
     publishedAt?: string | null;

@@ -28,32 +28,16 @@ export const estimateConfidence = (params: {
     }
 
     const structuredScores = sources.map((s) => s.structuredScore || 0.5);
-
     const freshnessScores = sources.map((s) => s.freshnessScore || 0.5);
-
     const rerankScores = sources.map((s) => s.score || 0);
-
     const avgStructured = average(structuredScores);
-
     const avgFreshness = average(freshnessScores);
-
     const avgRerank = average(rerankScores);
-
     const sourceCountBonus = Math.min(0.15, sources.length * 0.04);
-
     const extractionBonus = usedSnippetFallback ? 0 : 0.12;
-
     const structureWeight = avgStructured * 0.28;
-
     const freshnessWeight = avgFreshness * 0.18;
-
-    /**
-     * Normalize rerank scores.
-     *
-     * Your reranker scores can vary widely
-     * depending on token overlap and constraints.
-     */
-    const rerankWeight = clamp(avgRerank / 60, 0, 1) * 0.32;
+    const rerankWeight = clamp(avgRerank, 0, 1) * 0.32;
 
     let confidenceScore =
         structureWeight +

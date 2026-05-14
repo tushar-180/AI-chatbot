@@ -23,12 +23,8 @@ export type ExtractedPage = {
     fallback?: boolean;
     length?: number;
 };
-// ─────────────────────────────
-// Safe serialization helpers
-// ─────────────────────────────
 
 const set = async (k: string, v: any, ttlMs: number) => {
-    // Upstash SET already stringifies objects internally, but we keep it explicit for consistency
     await redis.set(k, JSON.stringify(v), { px: ttlMs });
 };
 
@@ -42,8 +38,6 @@ const safeParse = <T>(value: unknown): T => {
             return value as T;
         }
     }
-
-    // Already an object (Upstash may auto-parse or return JSON mode result)
     return value as T;
 };
 
@@ -51,10 +45,6 @@ const get = async <T>(k: string): Promise<T | null> => {
     const data = await redis.get(k);
     return data ? safeParse<T>(data) : null;
 };
-
-// ─────────────────────────────
-// Grounding cache
-// ─────────────────────────────
 
 export const getGroundingCache = async (keyStr: string) => {
     return get<WebGroundingContext>(key.grounding(keyStr));
@@ -68,10 +58,6 @@ export const setGroundingCache = async (
     await set(key.grounding(keyStr), value, ttlMs);
 };
 
-// ─────────────────────────────
-// Search cache
-// ─────────────────────────────
-
 export const getSearchCache = async (keyStr: string) => {
     return get<SearchCandidate[]>(key.search(keyStr));
 };
@@ -82,20 +68,4 @@ export const setSearchCache = async (
     ttlMs: number,
 ) => {
     await set(key.search(keyStr), value, ttlMs);
-};
-
-// ─────────────────────────────
-// Extraction cache
-// ─────────────────────────────
-
-export const getExtractionCache = async (url: string) => {
-    return get<ExtractedPage>(key.extraction(url));
-};
-
-export const setExtractionCache = async (
-    url: string,
-    value: ExtractedPage,
-    ttlMs: number,
-) => {
-    await set(key.extraction(url), value, ttlMs);
 };

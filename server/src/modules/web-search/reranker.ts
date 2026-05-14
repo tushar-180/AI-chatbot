@@ -1,9 +1,6 @@
+import MiniSearch from "minisearch";
 import { differenceInDays, parseISO, isValid } from "date-fns";
 import type { SearchCandidate } from "./webSearch.types";
-
-// ─────────────────────────────────────────────
-// Freshness
-// ─────────────────────────────────────────────
 
 export const detectFreshnessScore = (params: {
     publishedAt?: string | null;
@@ -31,16 +28,11 @@ export const detectFreshnessScore = (params: {
     return 0.25;
 };
 
-// ─────────────────────────────────────────────
-// URL structure signal (domain-agnostic)
-// ─────────────────────────────────────────────
-
 const urlSignal = (url: string): number => {
     try {
         const u = new URL(url);
         const path = u.pathname.toLowerCase();
 
-        // low-signal interactive/social endpoints
         if (
             /(share|photo|video|post|status|comment|like)\.php/.test(path) ||
             /(share|photo|video|post|status)/.test(path)
@@ -48,21 +40,15 @@ const urlSignal = (url: string): number => {
             return 0.25;
         }
 
-        // high-signal content structures
         if (/(article|news|blog|story|report|202\d|20\d{2})/.test(path)) {
             return 0.9;
         }
 
-        // neutral
         return 0.6;
     } catch {
         return 0.5;
     }
 };
-
-// ─────────────────────────────────────────────
-// Snippet quality signal
-// ─────────────────────────────────────────────
 
 const snippetSignal = (snippet: string): number => {
     if (!snippet) return 0.2;
@@ -85,10 +71,6 @@ const snippetSignal = (snippet: string): number => {
     );
 };
 
-// ─────────────────────────────────────────────
-// Extractability proxy (pre-extraction filter)
-// ─────────────────────────────────────────────
-
 const extractabilityScore = (c: SearchCandidate): number => {
     const urlScore = urlSignal(c.url);
     const snippetScore = snippetSignal(c.snippet);
@@ -98,14 +80,9 @@ const extractabilityScore = (c: SearchCandidate): number => {
     return urlScore * 0.4 + snippetScore * 0.5 + textHint;
 };
 
-// ─────────────────────────────────────────────
-// Structured authority heuristic (kept minimal)
-// ─────────────────────────────────────────────
-
 export const detectStructuredPageScore = (candidate: SearchCandidate) => {
     const hostname = candidate.hostname.toLowerCase();
 
-    // generic authoritative signals only (no domain lists)
     if (/(gov|edu|org)$/.test(hostname)) return 0.9;
 
     if (
@@ -119,16 +96,46 @@ export const detectStructuredPageScore = (candidate: SearchCandidate) => {
     return 0.6;
 };
 
-// ─────────────────────────────────────────────
-// Main reranker
-// ─────────────────────────────────────────────
+const computeBM25Scores = (candidates: SearchCandidate[], query: string) => {
+    const miniSearch = new MiniSearch({
+        fields: ["title", "snippet"],
+        storeFields: ["url"],
+        searchOptions: {
+            boost: {
+                title: 2,
+                snippet: 1,
+            },
+            fuzzy: 0.1,
+            prefix: true,
+        },
+    });
+
+    const documents = candidates.map((candidate, index) => ({
+        id: index,
+        title: candidate.title || "",
+        snippet: candidate.snippet || "",
+        url: candidate.url,
+    }));
+
+    miniSearch.addAll(documents);
+    const results = miniSearch.search(query);
+    const maxScore = results[0]?.score || 1;
+    const scoreMap = new Map<number, number>();
+    for (const result of results) {
+        scoreMap.set(Number(result.id), Number(result.score) / maxScore);
+    }
+    return candidates.map((_, index) => scoreMap.get(index) || 0);
+};
 
 export const heuristicRerank = (
     candidates: SearchCandidate[],
+    query: string,
     liveDataQuery: boolean,
     maxResults: number,
 ) => {
-    const scored = candidates.map((candidate) => {
+    const bm25Scores = computeBM25Scores(candidates, query);
+
+    const scored = candidates.map((candidate, index) => {
         const freshnessScore = detectFreshnessScore({
             publishedAt: candidate.publishedAt,
             lastModified: candidate.lastModified,
@@ -137,13 +144,13 @@ export const heuristicRerank = (
 
         const structuredScore = detectStructuredPageScore(candidate);
         const providerScore = candidate.searchProviderScore || 0;
-
         const extractScore = extractabilityScore(candidate);
-
+        const bm25Score = bm25Scores[index] || 0;
         const combinedScore =
-            providerScore * 0.45 +
-            extractScore * 0.25 +
-            freshnessScore * 0.2 +
+            providerScore * 0.35 +
+            bm25Score * 0.3 +
+            extractScore * 0.15 +
+            freshnessScore * 0.1 +
             structuredScore * 0.1;
 
         return {
@@ -151,37 +158,35 @@ export const heuristicRerank = (
             freshnessScore,
             structuredScore,
             extractabilityScore: extractScore,
+            bm25Score,
             combinedScore,
         };
     });
 
-    // Sort by score
     scored.sort((a, b) => b.combinedScore - a.combinedScore);
 
-    // Lightweight diversity penalty (avoid near-duplicate URLs)
     const final: typeof scored = [];
     const seenPatterns = new Set<string>();
 
     for (const item of scored) {
         try {
             const u = new URL(item.url);
-
-            // normalize path signature
             const signature = u.pathname.split("/").slice(0, 3).join("/");
-
             if (seenPatterns.has(signature)) {
                 continue;
             }
-
             seenPatterns.add(signature);
             final.push(item);
 
-            if (final.length >= maxResults) break;
+            if (final.length >= maxResults) {
+                break;
+            }
         } catch {
             final.push(item);
-            if (final.length >= maxResults) break;
+            if (final.length >= maxResults) {
+                break;
+            }
         }
     }
-
     return final;
 };

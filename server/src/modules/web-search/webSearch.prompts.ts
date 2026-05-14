@@ -1,9 +1,20 @@
 import type { SearchSource } from "./webSearch.types";
 
+const now = new Date();
+
+const temporalContext = `
+[CURRENT TEMPORAL CONTEXT]
+Today's date is ${now.toUTCString()}.
+Interpret ambiguous temporal references relative to the current date.
+Prefer sources matching the current year unless the user explicitly asks for historical information.
+`;
+
 export const WEB_GROUNDING_SYSTEM_PROMPT = (
     query: string,
     sources: SearchSource[],
 ) => `
+${temporalContext}
+
 [WEB SEARCH GROUNDING]
 Query: "${query}"
 

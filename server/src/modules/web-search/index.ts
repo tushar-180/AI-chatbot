@@ -6,10 +6,8 @@ export {
     resolveSearchQuery,
 } from "./queryResolver";
 export {
-    getExtractionCache,
     getGroundingCache,
     getSearchCache,
-    setExtractionCache,
     setGroundingCache,
     setSearchCache,
 } from "./cache";

@@ -1,12 +1,13 @@
 import type { ChatMessage } from "../../types/chat.types";
 import type { ResolvedSearchQuery } from "./webSearch.types";
 
+const CURRENT_YEAR = new Date().getUTCFullYear();
+
 const REUSE_PREVIOUS_QUERY_PATTERN =
     /^(search again|try again|refresh|search once more|run that again|rerun)\W*$/i;
 
 /**
- * Queries that genuinely require fresh/live web data.
- * Keep this strict so caches are reused aggressively.
+ * Queries that genuinely require live/fresh data.
  */
 const LIVE_DATA_PATTERNS = [
     /\b(latest|current|today|live|now|breaking)\b/i,
@@ -19,19 +20,71 @@ const LIVE_DATA_PATTERNS = [
 ];
 
 /**
- * Messages that are NOT new search intents.
- * These are conversational follow-ups reacting to the previous answer.
+ * Queries likely needing current-year expansion.
  */
-const FEEDBACK_PATTERNS = [
+const CURRENT_YEAR_QUERY_PATTERNS = [
+    /\belection/i,
+    /\belections/i,
+    /\bresults/i,
+    /\bnews/i,
+    /\bscore/i,
+    /\bscores/i,
+    /\bstandings/i,
+    /\branking/i,
+    /\brankings/i,
+    /\btable/i,
+    /\bfixture/i,
+    /\bfixtures/i,
+    /\btransfers/i,
+    /\btransfer/i,
+];
+
+/**
+ * Conversational replies depending on previous context.
+ */
+const CONTEXTUAL_REPLY_PATTERNS = [
     /\b(wrong|incorrect|bad answer|not correct|fake|hallucinated)\b/i,
     /\b(this list|that list|this answer|your answer)\b/i,
     /\b(doesnt make sense|doesn't make sense)\b/i,
     /\b(you missed|missing|thats wrong|that's wrong)\b/i,
     /\b(recheck|verify|double check)\b/i,
+
+    /\b(why not)\b/i,
+    /\b(are you sure)\b/i,
+    /\b(check again)\b/i,
+    /\b(search properly)\b/i,
+    /\b(search again)\b/i,
+    /\b(use reliable sources)\b/i,
+    /\b(look again)\b/i,
+    /\b(it happened today)\b/i,
+
+    /\b(but he)\b/i,
+    /\b(but she)\b/i,
+    /\b(but they)\b/i,
+    /\b(he just)\b/i,
+    /\b(she just)\b/i,
+    /\b(they just)\b/i,
 ];
 
 /**
- * Requests that should inherit/search using previous context.
+ * Temporal correction / repair messages.
+ *
+ * Example:
+ * "this is may 2026"
+ * "i meant 2025"
+ * "not 2024"
+ */
+const TEMPORAL_REPAIR_PATTERNS = [
+    /\b(this is)\b/i,
+    /\b(i meant)\b/i,
+    /\b(not 20\d{2})\b/i,
+    /\b(in 20\d{2})\b/i,
+    /\b(for 20\d{2})\b/i,
+    /\b(may|june|july|august|september|october|november|december|january|february|march|april)\s+20\d{2}\b/i,
+];
+
+/**
+ * Structured follow-up instructions.
  */
 const FOLLOW_UP_PATTERNS = [
     /\b(include .+)\b/i,
@@ -39,8 +92,8 @@ const FOLLOW_UP_PATTERNS = [
     /\b(show top \d+)\b/i,
     /\b(sort by .+)\b/i,
     /\b(only .+)\b/i,
-    /\b(with assists|with goals|with stats)\b/i,
     /\b(filter .+)\b/i,
+    /\b(with .+)\b/i,
 ];
 
 const STOPWORDS = new Set([
@@ -136,7 +189,6 @@ const findPreviousResolvedQuery = (
     for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
         const message = chatMessages[index];
 
-        // Skip current user message
         if (
             message.role === "user" &&
             message.content.trim() === latestUserMessage.trim() &&
@@ -145,7 +197,6 @@ const findPreviousResolvedQuery = (
             continue;
         }
 
-        // Prefer assistant grounded metadata
         if (message.role === "assistant") {
             const resolvedQuery = readResolvedQueryFromMetadata(
                 message.metadata,
@@ -156,7 +207,6 @@ const findPreviousResolvedQuery = (
             }
         }
 
-        // Fallback to previous user query
         if (
             message.role === "user" &&
             typeof message.content === "string" &&
@@ -183,11 +233,47 @@ export const normalizeQuery = (query: string) => normalizeReusableValue(query);
 export const isLiveDataQuery = (query: string) =>
     LIVE_DATA_PATTERNS.some((pattern) => pattern.test(query));
 
-const isFeedbackMessage = (message: string) =>
-    FEEDBACK_PATTERNS.some((pattern) => pattern.test(message));
+const queryContainsYear = (query: string) => /\b20\d{2}\b/.test(query);
+
+const isContextualReply = (message: string) =>
+    CONTEXTUAL_REPLY_PATTERNS.some((pattern) => pattern.test(message));
 
 const isFollowUpMessage = (message: string) =>
     FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(message));
+
+const isTemporalRepairMessage = (message: string) =>
+    TEMPORAL_REPAIR_PATTERNS.some((pattern) => pattern.test(message));
+
+const shouldAppendCurrentYear = (query: string) => {
+    if (queryContainsYear(query)) {
+        return false;
+    }
+
+    return CURRENT_YEAR_QUERY_PATTERNS.some((pattern) => pattern.test(query));
+};
+
+const applyTemporalRepair = (previousQuery: string, currentMessage: string) => {
+    const yearMatch = currentMessage.match(/\b20\d{2}\b/);
+
+    const monthMatch = currentMessage.match(
+        /\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+    );
+
+    let repaired = previousQuery;
+
+    // remove old years
+    repaired = repaired.replace(/\b20\d{2}\b/g, "");
+
+    if (monthMatch) {
+        repaired += ` ${monthMatch[1]}`;
+    }
+
+    if (yearMatch) {
+        repaired += ` ${yearMatch[0]}`;
+    }
+
+    return repaired.replace(/\s+/g, " ").trim();
+};
 
 const shouldReusePreviousContext = (
     latestMessage: string,
@@ -199,27 +285,17 @@ const shouldReusePreviousContext = (
 
     if (
         REUSE_PREVIOUS_QUERY_PATTERN.test(latestMessage) ||
-        isFeedbackMessage(latestMessage) ||
-        isFollowUpMessage(latestMessage)
+        isContextualReply(latestMessage) ||
+        isFollowUpMessage(latestMessage) ||
+        isTemporalRepairMessage(latestMessage)
     ) {
         return true;
     }
-
-    /**
-     * Semantic overlap detection:
-     *
-     * Example:
-     * Previous: "top ai startups 2026"
-     * Current: "which one raised most funding"
-     *
-     * Current message lacks standalone search meaning.
-     */
 
     const overlap = computeSemanticOverlap(latestMessage, previousQuery);
 
     const currentTokenCount = tokenize(latestMessage).length;
 
-    // Short ambiguous follow-ups inherit context
     if (currentTokenCount <= 6 && overlap < 0.35) {
         const ambiguousPatterns = [
             /\b(which one|which ones|who|what about|how about)\b/i,
@@ -235,7 +311,7 @@ const shouldReusePreviousContext = (
         }
     }
 
-    return false;
+    return overlap >= 0.45;
 };
 
 export const resolveSearchQuery = (
@@ -254,10 +330,18 @@ export const resolveSearchQuery = (
         previousQuery,
     );
 
-    const resolvedQuery =
+    let resolvedQuery =
         reusePrevious && previousQuery
-            ? `${previousQuery} ${trimmedMessage}`
+            ? isTemporalRepairMessage(trimmedMessage)
+                ? applyTemporalRepair(previousQuery, trimmedMessage)
+                : `${previousQuery} ${trimmedMessage}`
             : trimmedMessage;
+
+    resolvedQuery = resolvedQuery.replace(/\s+/g, " ").trim();
+
+    if (shouldAppendCurrentYear(resolvedQuery)) {
+        resolvedQuery += ` ${CURRENT_YEAR}`;
+    }
 
     const normalizedQuery = normalizeQuery(resolvedQuery);
 
@@ -265,12 +349,17 @@ export const resolveSearchQuery = (
 
     return {
         rawQuery: trimmedMessage,
+
         resolvedQuery,
+
         normalizedQuery,
+
         cacheKey: liveDataQuery
             ? `live:${normalizedQuery}`
             : `stable:${normalizedQuery}`,
+
         reusedPreviousQuery: reusePrevious,
+
         liveDataQuery,
     };
 };
