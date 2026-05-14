@@ -8,16 +8,17 @@ import ShareModal from "./ShareModal";
 interface ChatHeaderProps {
   currentChatId: string | null;
   onMenuClick: () => void;
+  chatTitle?: string;
 }
 
-const ChatHeader = ({ currentChatId, onMenuClick }: ChatHeaderProps) => {
+const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) => {
   const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
   const streamingChatId = useChatStore((state) => state.streamingChatId);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const currentChat = chats.find((chat) => chat._id === currentChatId);
-  const chatTitle = currentChat?.title || "New Conversation";
+   chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 

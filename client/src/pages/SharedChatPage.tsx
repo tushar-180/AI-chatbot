@@ -155,6 +155,7 @@ export default function SharedChatPage() {
         <div className="relative flex flex-1 flex-col overflow-y-auto scroll-smooth pb-[15vh]">
           <ChatHeader
             currentChatId={null}
+            chatTitle="Shared Chat"
             onMenuClick={() => setSidebarOpen(true)}
           />
 

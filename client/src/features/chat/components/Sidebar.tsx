@@ -14,8 +14,10 @@ import {
   Image as ImageIcon,
   Brain,
   Sparkles,
+  Share,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
+import ShareModal from "./ShareModal";
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const MemoryModal = lazy(() => import("./MemoryModal"));
@@ -39,6 +41,8 @@ const SidebarChatItem = memo(
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
     const itemRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -160,7 +164,24 @@ const SidebarChatItem = memo(
               </div>
 
               {showMenu && (
-                <div className="absolute right-0 top-full z-50 mt-2 w-36 origin-top-right rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl">
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full z-50 mt-2 w-36 origin-top-right rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl"
+                >
+                  
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsShareModalOpen(true);
+                      setShowMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                  >
+                    <Share size={16} />
+                    <span>Share</span>
+                  </button>
+
                   <button
                     onClick={handleStartEdit}
                     className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
@@ -184,6 +205,14 @@ const SidebarChatItem = memo(
             </div>
           )}
         </div>
+
+        {chat._id && (
+          <ShareModal
+            isOpen={isShareModalOpen}
+            onClose={() => setIsShareModalOpen(false)}
+            chatId={chat._id}
+          />
+        )}
       </div>
     );
   },

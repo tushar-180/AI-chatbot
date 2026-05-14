@@ -67,7 +67,10 @@ const ShareModal: React.FC<ShareModalProps> = ({ isOpen, onClose, chatId }) => {
   const modalContent = (
     <div 
       className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-      onClick={onClose}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
