@@ -62,6 +62,7 @@ const Chat = () => {
   // 2. Manage Streaming Logic & Optimistic UI
   const {
     streamMessage,
+    editMessage,
     stopGeneration,
     optimisticMessages,
     isStreaming,
@@ -159,6 +160,12 @@ const Chat = () => {
               currentChatId={currentChatId}
               isNewChat={isNewChat}
               onSuggestionClick={setInput}
+              onEditMessage={(messageId, content) =>
+                editMessage(messageId, content, selectedProvider, {
+                  webSearchEnabled,
+                })
+              }
+              onEditStart={stopGeneration}
             />
           </div>
         </div>

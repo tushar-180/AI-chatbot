@@ -36,6 +36,13 @@ export const chatService = {
   },
 
   /**
+   * Generates the streaming endpoint URL for editing a message.
+   */
+  getEditStreamUrl(chatId: string, messageId: string): string {
+    return `${API_ORIGIN}/api/chat/${chatId}/messages/${messageId}/stream`;
+  },
+
+  /**
    * Generates the stream updates endpoint URL for recovery.
    */
   getStreamUpdatesUrl(chatId: string): string {
