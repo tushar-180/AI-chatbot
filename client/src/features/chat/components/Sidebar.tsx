@@ -14,8 +14,10 @@ import {
   Image as ImageIcon,
   Brain,
   Sparkles,
+  Share,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
+import ShareModal from "./ShareModal";
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const MemoryModal = lazy(() => import("./MemoryModal"));
@@ -51,6 +53,8 @@ const SidebarChatItem = memo(
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
     const [showMenu, setShowMenu] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
     const itemRef = useRef<HTMLDivElement>(null);
     const [openUpwards, setOpenUpwards] = useState(false);
     const menuButtonRef = useRef<HTMLDivElement>(null);
@@ -126,7 +130,7 @@ const SidebarChatItem = memo(
         <div className="flex flex-1 items-center gap-3 min-w-0">
           {isSelectionMode && (
             <div
-              className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
                   ? "border-emerald-500 bg-emerald-500 text-white"
                   : "border-slate-700 bg-transparent"
@@ -203,6 +207,7 @@ const SidebarChatItem = memo(
 
                 {showMenu && (
                   <div
+                    onClick={(e) => e.stopPropagation()}
                     className={`absolute right-0 z-50 w-36 rounded-2xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in duration-200 ${
                       openUpwards
                         ? "bottom-full mb-2 origin-bottom-right"
@@ -210,12 +215,25 @@ const SidebarChatItem = memo(
                     }`}
                   >
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsShareModalOpen(true);
+                        setShowMenu(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                    >
+                      <Share size={16} />
+                      <span>Share</span>
+                    </button>
+
+                    <button
                       onClick={handleStartEdit}
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
                     >
                       <Edit2 size={12} />
                       <span>Rename</span>
                     </button>
+                    
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -232,6 +250,14 @@ const SidebarChatItem = memo(
               </div>
             )}
           </div>
+        )}
+
+        {chat._id && (
+          <ShareModal
+            isOpen={isShareModalOpen}
+            onClose={() => setIsShareModalOpen(false)}
+            chatId={chat._id}
+          />
         )}
       </div>
     );
