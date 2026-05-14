@@ -16,7 +16,6 @@ import {
   Save,
   Loader2,
   Trash2,
-  ChevronDown,
   History,
   ArrowLeft,
   FileText,
@@ -56,7 +55,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const { user } = useUser();
   const {
-    chats,
     deleteChat: globalDeleteChat,
     unarchiveChat: globalUnarchiveChat,
     selectChat,

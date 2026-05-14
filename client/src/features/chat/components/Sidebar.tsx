@@ -12,16 +12,15 @@ import {
   ChevronDown,
   ChevronUp,
   Image as ImageIcon,
-  Brain,
   Sparkles,
   Archive,
   ArchiveRestore,
-  History,
   Pin,
   PinOff,
   User,
   Settings,
   LogOut,
+  Share,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -32,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ShareModal from "./ShareModal";
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
@@ -73,6 +73,8 @@ const SidebarChatItem = memo(
   }: ChatItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editValue, setEditValue] = useState(chat.title || "");
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
     const itemRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -136,7 +138,7 @@ const SidebarChatItem = memo(
         <div className="flex flex-1 items-center gap-3 min-w-0">
           {isSelectionMode && (
             <div
-              className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
                   ? "border-emerald-500 bg-emerald-500 text-white"
                   : "border-slate-700 bg-transparent"
@@ -228,6 +230,17 @@ const SidebarChatItem = memo(
                     <span>Rename</span>
                   </DropdownMenuItem>
 
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsShareModalOpen(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
+                  >
+                    <Share size={12} />
+                    <span>Share</span>
+                  </DropdownMenuItem>
+
                   {chat.isArchived ? (
                     <DropdownMenuItem
                       onClick={(e) => {
@@ -291,6 +304,14 @@ const SidebarChatItem = memo(
             )}
           </div>
         )}
+
+        {chat._id && (
+          <ShareModal
+            isOpen={isShareModalOpen}
+            onClose={() => setIsShareModalOpen(false)}
+            chatId={chat._id}
+          />
+        )}
       </div>
     );
   },
@@ -313,7 +334,6 @@ const Sidebar = () => {
     fetchMoreChats,
     hasMore,
     viewingArchived,
-    setViewingArchived,
   } = useChatList();
   const [showRecent, setShowRecent] = useState(true);
   const [deleteId, setDeleteId] = useState<string | null>(null);

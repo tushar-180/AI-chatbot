@@ -40,4 +40,8 @@ router.post("/:id/pin", ChatController.pinChat);
 // Unpin chat
 router.post("/:id/unpin", ChatController.unpinChat);
 
+// Edit message
+router.patch("/:id/messages/:messageId", ChatController.editMessage);
+router.patch("/:id/messages/:messageId/stream", ChatController.streamEditMessage);
+
 export default router;
