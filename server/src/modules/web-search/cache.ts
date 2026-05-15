@@ -6,7 +6,6 @@ const redis = Redis.fromEnv();
 const key = {
     grounding: (k: string) => `grounding:${k}`,
     search: (k: string) => `search:${k}`,
-    extraction: (url: string) => `extract:${url}`,
 };
 
 export type ExtractedPage = {

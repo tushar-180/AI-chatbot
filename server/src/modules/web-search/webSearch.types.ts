@@ -45,10 +45,7 @@ export type ConfidenceEstimate = {
 
 export type SearchRejection = {
     rejected: true;
-    reason:
-        | "GLOBAL_DAILY_LIMIT_EXCEEDED"
-        | "DAILY_USER_LIMIT_EXCEEDED"
-        | "USER_COOLDOWN_ACTIVE";
+    reason: "global_quota_exceeded" | "user_quota_exceeded" | "cooldown_active";
     message: string;
     retryAfterMs?: number;
 };

@@ -11,7 +11,7 @@ import {
 
 import { withEstimatedConfidence } from "./confidence";
 import { resolveSearchQuery } from "./queryResolver";
-import { checkQuota, recordSearch } from "./rateLimiter";
+import { checkQuota, recordSearch, setCooldown } from "./rateLimiter";
 import { heuristicRerank } from "./reranker";
 import { WEB_GROUNDING_SYSTEM_PROMPT } from "./webSearch.prompts";
 
@@ -49,22 +49,15 @@ const cleanRawContent = (text: string) => {
 
 const normalizeRootDomain = (hostname: string) => {
     const parts = hostname.toLowerCase().split(".");
-
-    if (parts.length < 2) {
-        return hostname.toLowerCase();
-    }
-
+    if (parts.length < 2) return hostname.toLowerCase();
     return parts.slice(-2).join(".");
 };
 
-const deduplicateByHostname = (
-    candidates: SearchCandidate[],
-): SearchCandidate[] => {
+const deduplicateByHostname = (candidates: SearchCandidate[]) => {
     const seen = new Map<string, SearchCandidate>();
 
     for (const candidate of candidates) {
         const rootDomain = normalizeRootDomain(candidate.hostname);
-
         const existing = seen.get(rootDomain);
 
         if (!existing) {
@@ -83,9 +76,8 @@ const deduplicateByHostname = (
     return [...seen.values()];
 };
 
-const searchTavily = async (query: string, userId?: string) => {
+const searchTavily = async (query: string) => {
     const apiKey = process.env.TAVILY_API_KEY;
-
     if (!apiKey) return [];
 
     try {
@@ -98,20 +90,13 @@ const searchTavily = async (query: string, userId?: string) => {
             includeRawContent: "markdown",
         });
 
-        await recordSearch(userId);
-
         const results = response.results || [];
 
-        console.log("[web-search] Query:", query);
-        console.log("Total Results:", results.length);
-
-        results.forEach((r: any, index: number) => {
-            console.log(`[${index + 1}]`);
-            console.log("Title :", r.title || "N/A");
-            console.log("URL   :", r.url || "N/A");
+        console.log(`${logPrefix} query: ${query}`);
+        results.forEach((result: any, index: number) => {
+            console.log(`[${index + 1}] : title: ${result.title}`);
+            console.log(`      ${result.url}`);
         });
-
-        console.log("");
 
         return results.map((result: any) => ({
             title: String(result.title || ""),
@@ -145,32 +130,32 @@ export const webSearchService = {
     ): Promise<WebGroundingContext | SearchRejection | null> {
         const trimmedQuery = query?.trim();
         if (!trimmedQuery) return null;
+
         const resolved = resolveSearchQuery(trimmedQuery, chatMessages);
+
         const cachedGrounding = await getGroundingCache(resolved.cacheKey);
-        if (cachedGrounding) {
-            return cachedGrounding;
-        }
-        const cachedSearch = await getSearchCache(resolved.cacheKey);
-        let candidates = cachedSearch;
-        let cacheTier: "grounding" | "search" | "none" = cachedSearch
+        if (cachedGrounding) return cachedGrounding;
+
+        let candidates = await getSearchCache(resolved.cacheKey);
+        let cacheTier: "grounding" | "search" | "none" = candidates
             ? "search"
             : "none";
 
         if (!candidates) {
-            const quotaCheck = await checkQuota(userId);
+            const quota = await checkQuota(userId);
 
-            if (!quotaCheck.allowed) {
+            if (!quota.allowed) {
                 return {
                     rejected: true,
-                    reason: quotaCheck.reason,
-                    message: quotaCheck.message,
-                    retryAfterMs: quotaCheck.retryAfterMs,
+                    reason: quota.reason,
+                    message: quota.message,
+                    retryAfterMs: quota.retryAfterMs,
                 };
             }
 
-            candidates = await searchTavily(resolved.resolvedQuery, userId);
+            candidates = await searchTavily(resolved.resolvedQuery);
 
-            if (candidates && candidates.length > 0) {
+            if (candidates.length > 0) {
                 await setSearchCache(
                     resolved.cacheKey,
                     candidates,
@@ -181,14 +166,12 @@ export const webSearchService = {
             }
         }
 
-        if (!candidates?.length) {
-            return null;
-        }
+        if (!candidates?.length) return null;
 
-        const diverseCandidates = deduplicateByHostname(candidates);
+        const diverse = deduplicateByHostname(candidates);
 
         const topCandidates = heuristicRerank(
-            diverseCandidates,
+            diverse,
             resolved.resolvedQuery,
             resolved.liveDataQuery,
             MAX_SOURCE_COUNT,
@@ -239,10 +222,20 @@ export const webSearchService = {
             },
         });
 
+        await recordSearch(userId);
+
+        if (userId) {
+            await setCooldown(userId);
+        }
+
         await setGroundingCache(
             resolved.cacheKey,
             context,
             resolved.liveDataQuery ? LIVE_QUERY_TTL_MS : STABLE_QUERY_TTL_MS,
+        );
+
+        console.log(
+            `${logPrefix} Grounding built for "${resolved.resolvedQuery}" (sources: ${finalSources.length}, strategy: ${cacheTier})`,
         );
 
         return context;

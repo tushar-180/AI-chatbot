@@ -25,6 +25,12 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
     useAvailableProviders,
     type Provider,
 } from "@/features/chat/hooks/useAvailableProviders";
@@ -34,7 +40,7 @@ import { toast } from "sonner";
 import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
 
-interface InputAreaProps {
+export interface InputAreaProps {
     input: string;
     onInputChange: (value: string) => void;
     onSubmit: (e: SyntheticEvent<HTMLFormElement>) => void;
@@ -47,6 +53,17 @@ interface InputAreaProps {
     attachments?: Attachment[];
     onAttachmentsChange?: (attachments: Attachment[]) => void;
     webSearchEnabled: boolean;
+    quotaStatus?: {
+        allowed: boolean;
+        scope: "ok" | "global" | "user" | "cooldown";
+        reason?:
+            | "global_quota_exceeded"
+            | "user_quota_exceeded"
+            | "cooldown_active";
+        message?: string;
+        retryAfterMs?: number;
+    } | null;
+    isQuotaLoading?: boolean;
     onWebSearchToggle: (enabled: boolean) => void;
 }
 
@@ -75,40 +92,73 @@ const getModelOnlyName = (fullName: string) => {
 const WebSearchToggle = ({
     enabled,
     onToggle,
+    disabled,
+    reason,
 }: {
     enabled: boolean;
     onToggle: (enabled: boolean) => void;
-}) => (
-    <button
-        type="button"
-        onClick={() => onToggle(!enabled)}
-        aria-pressed={enabled}
-        className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
-            enabled
-                ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-300/40 hover:bg-emerald-400/15"
-                : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-        }`}
-    >
-        <Globe size={12} />
-        <span>Web Search</span>
-    </button>
-);
+    disabled?: boolean;
+    reason?: string;
+}) => {
+    const button = (
+        <button
+            type="button"
+            onClick={() => {
+                if (disabled) return;
+                onToggle(!enabled);
+            }}
+            aria-pressed={enabled}
+            className={`
+                flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all
+                ${
+                    enabled
+                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
+                        : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                }
+                ${disabled ? "opacity-40 cursor-not-allowed" : ""}
+            `}
+        >
+            {disabled && reason === "Loading..." ? (
+                <Loader2 size={12} className="animate-spin" />
+            ) : (
+                <Globe size={12} />
+            )}
+            <span>Web Search</span>
+        </button>
+    );
 
-/**
- * Sub-component for selecting AI Model
- */
+    if (disabled && reason && reason !== "Loading...") {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>{button}</TooltipTrigger>
+                    <TooltipContent>
+                        <p>{reason}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
+
+    return button;
+};
+
 const ModelSelector = ({
     availableProviders,
     selectedProvider,
     onProviderChange,
     webSearchEnabled,
     onWebSearchToggle,
+    quotaStatus,
+    isQuotaLoading,
 }: {
     availableProviders: Provider[];
     selectedProvider: string;
     onProviderChange: (id: string) => void;
     webSearchEnabled: boolean;
     onWebSearchToggle: (enabled: boolean) => void;
+    quotaStatus?: InputAreaProps["quotaStatus"];
+    isQuotaLoading?: boolean;
 }) => {
     const currentProviderName =
         availableProviders.find((p) => p.id === selectedProvider)?.name ||
@@ -156,6 +206,20 @@ const ModelSelector = ({
             <WebSearchToggle
                 enabled={webSearchEnabled}
                 onToggle={onWebSearchToggle}
+                disabled={
+                    isQuotaLoading || (quotaStatus && !quotaStatus.allowed)
+                }
+                reason={
+                    isQuotaLoading
+                        ? "Loading..."
+                        : quotaStatus?.allowed === false
+                          ? quotaStatus.scope === "global"
+                              ? "Global limit reached"
+                              : quotaStatus.scope === "user"
+                                ? "Daily limit reached"
+                                : "Cooldown active"
+                          : undefined
+                }
             />
         </div>
     );
@@ -178,6 +242,8 @@ const InputArea = ({
     onAttachmentsChange,
     webSearchEnabled,
     onWebSearchToggle,
+    quotaStatus,
+    isQuotaLoading,
 }: InputAreaProps) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -286,6 +352,8 @@ const InputArea = ({
                         onProviderChange={onProviderChange}
                         webSearchEnabled={webSearchEnabled}
                         onWebSearchToggle={onWebSearchToggle}
+                        quotaStatus={quotaStatus}
+                        isQuotaLoading={isQuotaLoading}
                     />
 
                     {/* Attachment Previews */}
