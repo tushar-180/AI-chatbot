@@ -4,20 +4,13 @@ jspm_packages/
 
 # Build artifacts
 dist/
-dist-ssr/
 build/
 out/
-.next/
-.vite/
 *.tsbuildinfo
 
 # Environment variables
 .env
 .env.*
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 !.env.example
 
 # Logs
