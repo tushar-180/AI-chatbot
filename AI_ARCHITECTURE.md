@@ -75,4 +75,19 @@ llama: new LlamaAdapter(),
 ### Step 3: Configure Environment
 Add your API keys for the new provider in your `.env` file.
 
-**Done!** The new model will automatically appear in the frontend dropdown and be ready for streaming.
+---
+
+## 5. Advanced Features
+
+### Identity Export (Data Portability)
+- **Purpose**: Allows users to export a structured summary of their "AI Identity" (memories, preferences, demographics) to be used in other AI systems.
+- **Logic**: A dedicated prompt in `userService.exportData` instructs a model (Gemini 3.1 Flash Lite) to synthesize stored `UserMemory` documents into a categorized report.
+- **Privacy**: Refer to the individual as "the user" in the third person to ensure neutral, portable phrasing.
+
+### Agent Workspace (`.agent/`)
+- **Purpose**: Persistent memory for the AI coding assistant (Antigravity).
+- **Structure**:
+  - `memory.md`: Core project purpose and architectural decisions.
+  - `tasks.md`: Active roadmap and completed milestones.
+  - `knowledge.md`: Technical quirks and repository-specific patterns.
+- **Sync**: This folder is checked at the start of every session to restore state and context.

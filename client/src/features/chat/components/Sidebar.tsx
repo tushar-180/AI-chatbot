@@ -147,61 +147,73 @@ const SidebarChatItem = memo(
               {isSelected && <Check size={10} strokeWidth={4} />}
             </div>
           )}
-          {isEditing ? (
-            <input
-              autoFocus
-              className="flex-1 bg-transparent text-inherit border-none outline-none py-0 text-[13px]"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-                if (e.key === "Escape") handleCancel();
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <span className="block truncate font-medium tracking-tight">
-              {chat.title || "Untitled Session"}
-            </span>
-          )}
           {chat.isPinned && !isEditing && (
-            <Pin size={10} className="text-emerald-500 fill-emerald-500" />
+            <Pin 
+              size={12} 
+              strokeWidth={2.5} 
+              className={`flex-shrink-0 transition-all rotate-[-35deg] ${
+                isActive ? "text-black/30" : "text-slate-500/60"
+              }`} 
+            />
           )}
-        </div>
-
-        {!isSelectionMode && (
-          <div className="flex flex-shrink-0 items-center gap-1">
-            {isEditing ? (
-              <div className="flex items-center gap-1">
+          {isEditing ? (
+            <div className="flex-1 flex items-center gap-3 min-w-0">
+              <input
+                autoFocus
+                className={`flex-1 max-w-[180px] bg-transparent border-b-2 outline-none py-1 text-[13px] min-w-0 transition-all font-medium ${
+                  isActive 
+                    ? "border-black/10 focus:border-black/30 text-black" 
+                    : "border-white/10 focus:border-white/30 text-white"
+                }`}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSave();
+                  if (e.key === "Escape") handleCancel();
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleSave();
                   }}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
                     isActive
-                      ? "text-emerald-600 hover:bg-emerald-50"
-                      : "text-emerald-500 hover:bg-emerald-500/10"
+                      ? "text-black/70 hover:bg-black/5"
+                      : "text-slate-300 hover:bg-white/10"
                   }`}
+                  title="Save"
                 >
-                  <Check size={14} />
+                  <Check size={14} strokeWidth={3} />
                 </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCancel();
                   }}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${
+                  className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
                     isActive
-                      ? "text-rose-600 hover:bg-rose-50"
-                      : "text-rose-500 hover:bg-rose-500/10"
+                      ? "text-black/40 hover:bg-black/5"
+                      : "text-slate-500 hover:bg-white/10"
                   }`}
+                  title="Cancel"
                 >
-                  <X size={14} />
+                  <X size={14} strokeWidth={3} />
                 </button>
               </div>
-            ) : (
-              <DropdownMenu>
+            </div>
+          ) : (
+            <span className="block truncate font-medium tracking-tight">
+              {chat.title || "Untitled Session"}
+            </span>
+          )}
+        </div>
+
+        {!isSelectionMode && !isEditing && (
+          <div className="flex flex-shrink-0 items-center gap-1">
+            <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
@@ -247,7 +259,7 @@ const SidebarChatItem = memo(
                         e.stopPropagation();
                         onUnarchive(chat._id);
                       }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-emerald-400 transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-emerald-400"
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
                     >
                       <ArchiveRestore size={12} />
                       <span>Unarchive</span>
@@ -260,9 +272,9 @@ const SidebarChatItem = memo(
                             e.stopPropagation();
                             onUnpin(chat._id);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-emerald-400 transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-emerald-400"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
                         >
-                          <PinOff size={12} />
+                          <PinOff size={12} className="rotate-[-35deg]" />
                           <span>Unpin</span>
                         </DropdownMenuItem>
                       ) : (
@@ -271,9 +283,9 @@ const SidebarChatItem = memo(
                             e.stopPropagation();
                             onPin(chat._id);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-emerald-400 transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-emerald-400"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
                         >
-                          <Pin size={12} />
+                          <Pin size={12} className="rotate-[-35deg]" />
                           <span>Pin</span>
                         </DropdownMenuItem>
                       )}
@@ -301,7 +313,6 @@ const SidebarChatItem = memo(
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
           </div>
         )}
 

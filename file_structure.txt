@@ -1,0 +1,18 @@
+.
+├── AI_ARCHITECTURE.md
+├── CODE_FLOW.md
+├── README.md
+├── .agents/                 # AI Agent Workspace & Workflows
+│   └── workflows/
+│       ├── memory.md        # Architectural context and key decisions
+│       ├── knowledge.md     # Technical patterns and codebase quirks
+│       ├── tasks.md         # Project roadmap and active tracking
+│       ├── velora.md        # Core project development workflow
+│       └── add-provider.md  # Guide for expanding AI model support
+├── client/                  # Frontend React application (Vite)
+│   ├── src/
+│   └── package.json
+├── server/                  # Backend Express application (TypeScript)
+│   ├── src/
+│   └── package.json
+└── render.yaml              # Deployment configuration
