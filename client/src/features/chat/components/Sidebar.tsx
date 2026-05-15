@@ -131,14 +131,14 @@ const SidebarChatItem = memo(
           isActive
             ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
             : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
-        } ${isSelected ? "!border-emerald-500/50 bg-emerald-500/5" : ""} ${
+        } ${isSelected ? "border-emerald-500/50! bg-emerald-500/5" : ""} ${
           isEditing ? "cursor-default" : "cursor-pointer"
         }`}
       >
         <div className="flex flex-1 items-center gap-3 min-w-0">
           {isSelectionMode && (
             <div
-              className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all ${
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
                   ? "border-emerald-500 bg-emerald-500 text-white"
                   : "border-slate-700 bg-transparent"
@@ -151,7 +151,7 @@ const SidebarChatItem = memo(
             <Pin 
               size={12} 
               strokeWidth={2.5} 
-              className={`flex-shrink-0 transition-all rotate-[-35deg] ${
+              className={`shrink-0 transition-all rotate-[-35deg] ${
                 isActive ? "text-black/30" : "text-slate-500/60"
               }`} 
             />
@@ -173,7 +173,7 @@ const SidebarChatItem = memo(
                 }}
                 onClick={(e) => e.stopPropagation()}
               />
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -212,7 +212,7 @@ const SidebarChatItem = memo(
         </div>
 
         {!isSelectionMode && !isEditing && (
-          <div className="flex flex-shrink-0 items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -229,7 +229,7 @@ const SidebarChatItem = memo(
                 <DropdownMenuContent
                   align="end"
                   sideOffset={8}
-                  className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 z-[100] outline-none focus:ring-0"
+                  className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 z-100 outline-none focus:ring-0"
                 >
                   <DropdownMenuItem
                     onClick={(e) => {
