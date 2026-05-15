@@ -18,6 +18,8 @@ export type Message = {
 export type Chat = {
     _id: string;
     title: string;
+    isArchived?: boolean;
+    isPinned?: boolean;
     updatedAt?: string;
 };
 

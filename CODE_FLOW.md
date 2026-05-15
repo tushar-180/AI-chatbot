@@ -115,3 +115,26 @@ Stopping a response mid-way requires synchronization across three layers:
 4. **Optimistic UI**: Client instantly displays the user message and a loading spinner.
 5. **Stream**: Server starts the AI stream; client updates the UI character-by-character.
 6. **Completion**: Server saves the final text to the database; client "commits" the message.
+
+---
+
+## 🎨 UI Logic: Media Gallery & Sidebar
+The sidebar is partitioned into **Chats** and **Media** views using a custom `Tab` state.
+- **Media Fetching**: The client queries `/api/user/media` to fetch all Cloudinary URLs associated with the user's messages.
+- **Interaction**: Clicking an image in the gallery triggers `onSelectChat`, which finds the parent conversation and navigates the user to that specific session.
+
+## 📁 Agentic Logic: Persistent Memory (`.agent/`)
+To ensure the AI developer (Antigravity) maintains context across different sessions:
+1. **Bootstrap**: Upon starting, the agent reads `.agent/memory.md` and `.agent/tasks.md`.
+2. **State Updates**: After major code changes, the agent updates these files to reflect the new state of the repository.
+3. **Task Tracking**: All ongoing developments are recorded in `tasks.md` to prevent redundancy.
+
+## 📝 Utility Logic: Identity Export
+- **Route**: `POST /api/user/export`
+- **Controller**: `userController.exportData`
+- **Service**: `userService.exportData`
+- **Workflow**:
+  1. Fetches all `UserMemory` entries for the user.
+  2. Aggregates profile data (nickname, occupation, tone).
+  3. Uses a specific "Export Prompt" with Gemini to generate a portable markdown summary.
+  4. Returns the summary to the client for download or display.

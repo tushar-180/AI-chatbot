@@ -170,7 +170,7 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, isAnyStreaming, onEdit, onEditStart }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { clerkMiddleware } from "@clerk/express";
 import chatRoutes from "./routes/chat.routes";
 import aiRoutes from "./routes/ai.routes";
 import userRoutes from "./routes/user.routes";
@@ -8,6 +9,7 @@ import memoryRoutes from "./routes/memory.routes";
 import sharedChatRoutes from "./routes/sharedChat.routes";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
+import { requireAuth } from "./middleware/auth.middleware";
 
 const app = express();
 
@@ -28,6 +30,9 @@ app.use(
 app.use(express.json());
 app.use(morgan("dev"));
 
+// Parse Clerk auth state on every request (does not enforce auth by itself)
+app.use(clerkMiddleware());
+
 app.get("/", (req, res) => {
   const serverUrl =
     process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
@@ -38,11 +43,11 @@ app.get("/health", (req, res) => {
   res.status(200).json({ ok: true });
 });
 
-app.use("/api/chat", chatRoutes);
-app.use("/api/ai", aiRoutes);
-app.use("/api/user", userRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/memory", memoryRoutes);
+app.use("/api/chat", requireAuth, chatRoutes);
+app.use("/api/ai", requireAuth, aiRoutes);
+app.use("/api/user", requireAuth, userRoutes);
+app.use("/api/upload", requireAuth, uploadRoutes);
+app.use("/api/memory", requireAuth, memoryRoutes);
 app.use("/api/shared-chat", sharedChatRoutes);
 
 // Error Handler Middleware

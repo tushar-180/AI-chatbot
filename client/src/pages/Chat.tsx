@@ -8,6 +8,7 @@ import InputArea from "@/features/chat/components/InputArea";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
+import { useChatList } from "@/features/chat/hooks/useChatList";
 import { Spotlight } from "@/components/ui/spotlight";
 
 /**
@@ -21,6 +22,7 @@ const Chat = () => {
   const hasAutoStartedRef = useRef(false);
   const {
     currentChatId,
+    currentChat,
     messages,
     isNewChat,
     setSidebarOpen,
@@ -36,9 +38,11 @@ const Chat = () => {
     prefetchedChatId?: string;
     skipInitialFetch?: boolean;
   } | null;
+  const { unarchiveChat } = useChatList();
   const canAutoStartFromSeededMessages =
     pendingState?.skipInitialFetch === true &&
     pendingState?.prefetchedChatId === currentChatId;
+  const isArchived = currentChat?.isArchived || false;
 
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
@@ -186,6 +190,8 @@ const Chat = () => {
               onAttachmentsChange={setAttachments}
               webSearchEnabled={webSearchEnabled}
               onWebSearchToggle={setWebSearchEnabled}
+              isArchived={isArchived}
+              onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
             />
           </div>
         </div>

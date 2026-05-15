@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useUser } from "@clerk/react";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 
 interface Memory {
   _id: string;
@@ -37,7 +38,7 @@ const categoryIcons: Record<string, any> = {
 
 const LIMIT = 20;
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+
 
 
 const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
@@ -72,16 +73,9 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
 
       try {
         const currentSkip = isInitial ? 0 : skip + LIMIT;
-        const response = await fetch(
-          `${API_BASE_URL}/api/memory?limit=${LIMIT}&skip=${currentSkip}`,
-          {
-            headers: { "x-user-id": user.id },
-          },
-        );
-
-        if (!response.ok) throw new Error("Failed to fetch memories");
-
-        const data = await response.json();
+        const { data } = await api.get("/memory", {
+          params: { limit: LIMIT, skip: currentSkip },
+        });
 
         if (isInitial) {
           setMemories(data);
@@ -105,25 +99,15 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
   const deleteMemory = async (id: string) => {
     if (!user) return;
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/memory/${id}`,
-        {
-          method: "DELETE",
-          headers: { "x-user-id": user.id },
-        },
-      );
-
-      if (response.status === 404) {
+      await api.delete(`/memory/${id}`);
+      setMemories((prev) => prev.filter((m) => m._id !== id));
+      toast.success("Memory purged successfully");
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
         toast.error("Memory fragment already purged");
         setMemories((prev) => prev.filter((m) => m._id !== id));
         return;
       }
-
-      if (!response.ok) throw new Error("Deletion failed");
-
-      setMemories((prev) => prev.filter((m) => m._id !== id));
-      toast.success("Memory purged successfully");
-    } catch (error) {
       console.error("Delete Error:", error);
       toast.error("Failed to purge memory fragment");
     }

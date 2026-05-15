@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useUser } from "@clerk/react";
+import { useUser, useAuth } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
@@ -19,6 +19,7 @@ const createOptimisticTitle = (input: string) =>
  
 export const useChatStream = () => {
   const { user } = useUser();
+  const { getToken } = useAuth();
   const navigate = useNavigate();
   const currentChatId = useChatStore((state) => state.currentChatId);
   const loading = useChatStore((state) => state.loading);
@@ -150,8 +151,8 @@ export const useChatStream = () => {
     });
   }, [currentChatId, setOptimisticMessagesForChat]);
  
-  const refreshChats = async (userId: string) => {
-    const chats = await chatService.fetchChats(userId);
+  const refreshChats = async () => {
+    const chats = await chatService.fetchChats();
     setChats(chats);
   };
  
@@ -215,7 +216,7 @@ export const useChatStream = () => {
         return fallbackMessages;
       }
 
-      const fetchedMessages = await chatService.fetchMessages(chatId, user.id);
+      const fetchedMessages = await chatService.fetchMessages(chatId);
       if (useChatStore.getState().currentChatId === chatId) {
         setMessages(fetchedMessages);
       }
@@ -375,17 +376,17 @@ export const useChatStream = () => {
             status: data.status ?? "completed",
             isWebSearching: false,
           };
-          
+
           if (resolvedChatId) {
             const finalChatId = resolvedChatId;
             queueMicrotask(async () => {
               // Commit the optimistic ones first
               commitMessagesForChat(finalChatId, next);
-              
+
               // Then fetch real IDs from server
               if (user?.id) {
                 try {
-                  const realMessages = await chatService.fetchMessages(finalChatId, user.id);
+                  const realMessages = await chatService.fetchMessages(finalChatId);
                   setMessages(realMessages);
                   setOptimisticMessagesForChat(finalChatId, null);
                 } catch (err) {
@@ -431,8 +432,8 @@ export const useChatStream = () => {
 
       // Ensure we have the latest messages with real IDs after ANY stream ends
       if (chatIdToRefresh && user?.id) {
-        refreshChats(user.id).catch(err => console.error("Error refreshing chats list", err));
-        chatService.fetchMessages(chatIdToRefresh, user.id)
+        refreshChats().catch(err => console.error("Error refreshing chats list", err));
+        chatService.fetchMessages(chatIdToRefresh)
           .then(realMessages => {
             setMessages(realMessages);
             setOptimisticMessagesForChat(chatIdToRefresh, null);
@@ -466,6 +467,7 @@ export const useChatStream = () => {
         headers: {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
       });
@@ -650,10 +652,10 @@ export const useChatStream = () => {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
         body: JSON.stringify({
-          userId: user.id,
           message: input,
           provider,
           requestId,
@@ -811,9 +813,9 @@ export const useChatStream = () => {
     try {
       await chatService.stopStream(requestId, chatId);
       if (user?.id) {
-        await refreshChats(user.id);
+        await refreshChats();
         if (chatId) {
-          const realMessages = await chatService.fetchMessages(chatId, user.id);
+          const realMessages = await chatService.fetchMessages(chatId);
           setMessages(realMessages);
           setOptimisticMessagesForChat(chatId, null);
         }
@@ -911,6 +913,7 @@ export const useChatStream = () => {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
         },
         signal: abortController.signal,
         body: JSON.stringify({
@@ -953,7 +956,7 @@ export const useChatStream = () => {
       }
     }
   };
- 
+
   return {
     streamMessage,
     editMessage,

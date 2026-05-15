@@ -10,14 +10,8 @@ const router = Router();
  */
 router.get("/", async (req, res) => {
   try {
-    // SECURITY NOTE: In production, userId should come from a verified JWT (e.g. Clerk Middleware)
-    // rather than a raw header to prevent spoofing.
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.clerkId!;
     
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized: User ID is required" });
-    }
-
     const limit = parseInt(req.query.limit as string) || 50;
     const skip = parseInt(req.query.skip as string) || 0;
 
@@ -34,12 +28,8 @@ router.get("/", async (req, res) => {
  */
 router.delete("/:id", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.clerkId!;
     const { id } = req.params;
-
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
 
     // Ensure the memory belongs to the user before deleting
     const result = await UserMemory.deleteOne({ _id: id, userId });
