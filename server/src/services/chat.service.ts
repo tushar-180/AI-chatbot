@@ -686,6 +686,10 @@ export const chatService = {
     );
   },
 
+  async searchChats(userId: string, query: string) {
+    return await chatRepository.searchChats(requireUserId(userId), query);
+  },
+
   getChatById(chatId: string) {
     return requireChat(chatId);
   },

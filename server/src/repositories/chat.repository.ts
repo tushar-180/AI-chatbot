@@ -58,6 +58,101 @@ export const chatRepository = {
       .limit(limit);
   },
 
+  async searchChats(userId: string, query: string) {
+    try {
+      // First, try searching for chats by title
+      const chatResults = await Chat.find({
+        userId,
+        title: { $regex: query, $options: "i" }
+      })
+      .select("-messages -legacyMessages")
+      .limit(10)
+      .lean();
+
+      // Second, search in messages content
+      const messageResults = await Message.find({
+        userId,
+        content: { $regex: query, $options: "i" }
+      })
+      .limit(20)
+      .lean();
+
+      const resultsMap = new Map<string, any>();
+
+      // Add chat results
+      chatResults.forEach(chat => {
+        resultsMap.set(String(chat._id), {
+          ...chat,
+          matchType: "title",
+          snippet: ""
+        });
+      });
+
+      // Add message results (overwriting or adding snippet)
+      for (const msg of messageResults) {
+        const chatId = String(msg.chatId);
+        const existing = resultsMap.get(chatId);
+        
+        const content = msg.content || "";
+        const index = content.toLowerCase().indexOf(query.toLowerCase());
+        const start = Math.max(0, index - 40);
+        const end = Math.min(content.length, index + 60);
+        const snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "");
+
+        if (existing) {
+          existing.matchType = "content";
+          existing.snippet = snippet;
+        } else {
+          const chat = await Chat.findById(chatId).select("-messages -legacyMessages").lean();
+          if (chat && String(chat.userId) === userId) {
+            resultsMap.set(chatId, {
+              ...chat,
+              matchType: "content",
+              snippet: snippet
+            });
+          }
+        }
+      }
+
+      const finalResults = Array.from(resultsMap.values()).sort((a, b) => 
+        new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf()
+      );
+
+      return finalResults;
+
+      /* 
+      // TO IMPLEMENT TRUE ATLAS SEARCH HIGHLIGHTING:
+      return await Chat.aggregate([
+        {
+          $search: {
+            index: "default",
+            text: {
+              query: query,
+              path: ["title", "messages.content"],
+              fuzzy: {}
+            },
+            highlight: {
+              path: ["title", "messages.content"]
+            }
+          }
+        },
+        { $match: { userId } },
+        { $limit: 20 },
+        {
+          $project: {
+            title: 1,
+            updatedAt: 1,
+            highlights: { $meta: "searchHighlights" }
+          }
+        }
+      ]);
+      */
+    } catch (err) {
+      console.error("Search failed:", err);
+      return [];
+    }
+  },
+
   async deleteById(chatId: string) {
     const chat = await Chat.findByIdAndDelete(chatId);
     if (chat) {

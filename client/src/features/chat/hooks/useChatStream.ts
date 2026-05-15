@@ -630,6 +630,14 @@ export const useChatStream = () => {
       userMessage,
       assistantPlaceholder,
     ]);
+
+    // Optimistically move the chat to the top of the sidebar
+    if (effectiveCurrentChatId && storeState.currentChat) {
+      upsertChat({
+        ...storeState.currentChat,
+        updatedAt: new Date().toISOString(),
+      });
+    }
  
     setLoading(true);
     setIsStreaming(true, activeKey);

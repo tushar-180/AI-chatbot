@@ -21,6 +21,7 @@ import {
   Settings,
   LogOut,
   Share,
+  Search,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -35,6 +36,7 @@ import ShareModal from "./ShareModal";
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
+const SearchModal = lazy(() => import("./SearchModal"));
 
 /**
  * Sidebar Component
@@ -343,6 +345,7 @@ const Sidebar = () => {
     unpinChat,
     selectChat,
     fetchMoreChats,
+    searchChats,
     hasMore,
     viewingArchived,
   } = useChatList();
@@ -353,6 +356,19 @@ const Sidebar = () => {
   const [settingsTab, setSettingsTab] = useState("general");
   const { user } = useUser();
 
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Multi-select state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -360,9 +376,14 @@ const Sidebar = () => {
   const filteredChats = chats
     .filter((c) => c.isArchived === viewingArchived)
     .sort((a, b) => {
+      // 1. Pinned chats always stay at the very top
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
-      return 0;
+
+      // 2. Finally, sort by update time (most recent first)
+      const dateA = new Date(a.updatedAt).getTime();
+      const dateB = new Date(b.updatedAt).getTime();
+      return dateB - dateA;
     });
 
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -465,6 +486,20 @@ const Sidebar = () => {
           >
             <ImageIcon size={16} />
             <span>Gallery</span>
+          </button>
+        </div>
+
+        <div className="px-2">
+          <button
+            onClick={() => setSearchModalOpen(true)}
+            className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
+          >
+            <Search size={14} className="mr-3" />
+            <span>Search conversations...</span>
+            <div className="ml-auto flex items-center gap-1 opacity-40">
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">⌘</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">K</kbd>
+            </div>
           </button>
         </div>
 
@@ -695,6 +730,11 @@ const Sidebar = () => {
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
           initialTab={settingsTab}
+        />
+
+        <SearchModal 
+          isOpen={searchModalOpen} 
+          onClose={() => setSearchModalOpen(false)} 
         />
       </Suspense>
     </>

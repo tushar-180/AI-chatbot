@@ -34,6 +34,7 @@ interface MessageItemProps {
   isAnyStreaming?: boolean;
   onEdit?: (content: string) => void;
   onEditStart?: () => void;
+  highlight?: string;
 }
 
 /**
@@ -170,7 +171,7 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, highlight }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";
@@ -178,6 +179,9 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: Message
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(msg.content);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const highlightedRef = useRef(false);
+    const lastHighlightedTerm = useRef<string | null>(null);
 
     useEffect(() => {
         if (isEditing && textareaRef.current) {
@@ -186,6 +190,96 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: Message
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [isEditing]);
+
+    useEffect(() => {
+        if (!highlight) {
+            highlightedRef.current = false;
+            lastHighlightedTerm.current = null;
+            return;
+        }
+
+        // If we already highlighted this exact term for this message, skip
+        if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
+            return;
+        }
+
+        if (contentRef.current && !isStreaming) {
+            const term = highlight.toLowerCase();
+            const walker = document.createTreeWalker(contentRef.current, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            const nodes: Text[] = [];
+            let fullText = "";
+
+            while ((node = walker.nextNode())) {
+                nodes.push(node as Text);
+                fullText += node.textContent || "";
+            }
+
+            const startIndex = fullText.toLowerCase().indexOf(term);
+            if (startIndex !== -1) {
+                const endIndex = startIndex + term.length;
+                let currentPos = 0;
+                let firstMark: HTMLElement | null = null;
+
+                nodes.forEach((textNode) => {
+                    const nodeText = textNode.textContent || "";
+                    const nodeStart = currentPos;
+                    const nodeEnd = currentPos + nodeText.length;
+
+                    // Check if this node overlaps with the search term
+                    const overlapStart = Math.max(startIndex, nodeStart);
+                    const overlapEnd = Math.min(endIndex, nodeEnd);
+
+                    if (overlapStart < overlapEnd) {
+                        const relativeStart = overlapStart - nodeStart;
+                        const relativeEnd = overlapEnd - nodeStart;
+
+                        const before = nodeText.substring(0, relativeStart);
+                        const match = nodeText.substring(relativeStart, relativeEnd);
+                        const after = nodeText.substring(relativeEnd);
+
+                        const span = document.createElement("span");
+                        const mark = document.createElement("mark");
+                        mark.className = "highlight-mark bg-emerald-500/40 text-emerald-300 font-bold px-0.5 rounded ring-1 ring-emerald-500/50 animate-pulse";
+                        mark.textContent = match;
+                        
+                        span.appendChild(document.createTextNode(before));
+                        span.appendChild(mark);
+                        span.appendChild(document.createTextNode(after));
+
+                        if (!firstMark) firstMark = mark;
+                        
+                        textNode.parentNode?.replaceChild(span, textNode);
+                    }
+
+                    currentPos = nodeEnd;
+                });
+
+                if (firstMark) {
+                    lastHighlightedTerm.current = highlight;
+                    highlightedRef.current = true;
+
+                    // Use requestAnimationFrame for smoother and more reliable scrolling
+                    requestAnimationFrame(() => {
+                        if (firstMark) {
+                            firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                    });
+
+                    // Stop pulsing after 3s
+                    const timer = setTimeout(() => {
+                        const marks = contentRef.current?.querySelectorAll(".highlight-mark");
+                        marks?.forEach(m => {
+                            m.classList.remove("animate-pulse");
+                            m.classList.add("bg-emerald-500/20");
+                        });
+                    }, 3000);
+
+                    return () => clearTimeout(timer);
+                }
+            }
+        }
+    }, [highlight, isStreaming]);
 
     const handleEditStart = () => {
         setIsEditing(true);
@@ -262,6 +356,8 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: Message
                                   ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
                                   : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
                         }`}
+                        ref={contentRef}
+                        key={highlight || "no-highlight"}
                     >
                         {isStreaming && !msg.content ? (
                             msg.isWebSearching ? (
@@ -356,7 +452,8 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.message.status === next.message.status &&
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
-    prev.message.isWebSearching === next.message.isWebSearching
+    prev.message.isWebSearching === next.message.isWebSearching &&
+    prev.highlight === next.highlight
   );
 };
 
