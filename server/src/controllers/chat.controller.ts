@@ -41,7 +41,9 @@ const pipeStreamResponse = async (
     clientDisconnected = true;
   });
 
-  const writePayload = async (payload: Awaited<typeof firstPayload>["value"]) => {
+  const writePayload = async (
+    payload: Awaited<typeof firstPayload>["value"],
+  ) => {
     if (clientDisconnected) return;
 
     if (payload.chunk) {
@@ -184,17 +186,19 @@ export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const updateChatTitle = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const chat = await chatService.updateChatTitle(
-      String(req.params.id),
-      req.body.title
-    );
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to update chat title");
-  }
-});
+export const updateChatTitle = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.updateChatTitle(
+        String(req.params.id),
+        req.body.title,
+      );
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to update chat title");
+    }
+  },
+);
 
 export const archiveChat = asyncHandler(async (req: Request, res: Response) => {
   try {
@@ -205,14 +209,16 @@ export const archiveChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const unarchiveChat = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const chat = await chatService.unarchiveChat(String(req.params.id));
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to unarchive chat");
-  }
-});
+export const unarchiveChat = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.unarchiveChat(String(req.params.id));
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to unarchive chat");
+    }
+  },
+);
 
 export const pinChat = asyncHandler(async (req: Request, res: Response) => {
   try {

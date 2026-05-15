@@ -6,6 +6,9 @@ node_modules/
 dist/
 dist-ssr/
 build/
+out/
+.next/
+.vite/
 *.tsbuildinfo
 
 # Environment
