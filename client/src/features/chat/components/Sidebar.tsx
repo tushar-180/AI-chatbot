@@ -1,7 +1,8 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useCallback, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import type { Chat } from "@/features/chat/types/chat.types";
+import { useLocation, useParams } from "react-router-dom";
 import {
   Plus,
   X,
@@ -22,6 +23,7 @@ import {
   LogOut,
   Share,
   Search,
+  ListChecks,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -79,6 +81,12 @@ const SidebarChatItem = memo(
 
     const itemRef = useRef<HTMLDivElement>(null);
 
+    const handleCancel = useCallback((e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setIsEditing(false);
+      setEditValue(chat.title || "");
+    }, [chat.title]);
+
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
         if (
@@ -95,17 +103,11 @@ const SidebarChatItem = memo(
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
-    }, [isEditing]);
+    }, [handleCancel, isEditing]);
 
     const handleStartEdit = (e?: React.MouseEvent) => {
       e?.stopPropagation();
       setIsEditing(true);
-      setEditValue(chat.title || "");
-    };
-
-    const handleCancel = (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setIsEditing(false);
       setEditValue(chat.title || "");
     };
 
@@ -131,7 +133,7 @@ const SidebarChatItem = memo(
         }}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
-            ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
+            ? "bg-white text-black border-white shadow-[0_15px_35px_-5px_rgba(255,255,255,0.15)] scale-[1.02] z-10"
             : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
         } ${isSelected ? "border-emerald-500/50! bg-emerald-500/5" : ""} ${
           isEditing ? "cursor-default" : "cursor-pointer"
@@ -328,10 +330,25 @@ const SidebarChatItem = memo(
       </div>
     );
   },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.isActive === nextProps.isActive &&
+      prevProps.isSelected === nextProps.isSelected &&
+      prevProps.isSelectionMode === nextProps.isSelectionMode &&
+      prevProps.chat._id === nextProps.chat._id &&
+      prevProps.chat.title === nextProps.chat.title &&
+      prevProps.chat.isPinned === nextProps.chat.isPinned &&
+      prevProps.chat.isArchived === nextProps.chat.isArchived &&
+      prevProps.chat.updatedAt === nextProps.chat.updatedAt
+    );
+  }
 );
 
 const Sidebar = () => {
-  const { sidebarOpen, setSidebarOpen } = useChatStore();
+  const { chatId: urlChatId } = useParams<{ chatId?: string }>();
+  const location = useLocation();
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
+    useChatStore();
   const {
     chats,
     currentChatId,
@@ -345,8 +362,8 @@ const Sidebar = () => {
     unpinChat,
     selectChat,
     fetchMoreChats,
-    searchChats,
     hasMore,
+    loading,
     viewingArchived,
   } = useChatList();
   const [showRecent, setShowRecent] = useState(true);
@@ -373,20 +390,34 @@ const Sidebar = () => {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const activeChatId = urlChatId || currentChatId;
+  const isSearchNavigation = new URLSearchParams(location.search).has("highlight");
+  const isStreamingActiveChat = Boolean(
+    activeChatId && isStreaming && streamingChatId === activeChatId,
+  );
+  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
   const filteredChats = chats
     .filter((c) => c.isArchived === viewingArchived)
     .sort((a, b) => {
-      // 1. Pinned chats always stay at the very top
+      // 1. Pinned chats stay first.
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
-      // 2. Finally, sort by update time (most recent first)
-      const dateA = new Date(a.updatedAt).getTime();
-      const dateB = new Date(b.updatedAt).getTime();
+      // 2. Search-selected or currently streaming chats sit at the top of
+      // their section, below pinned chats.
+      if (shouldPromoteActiveChat) {
+        if (a._id === activeChatId) return -1;
+        if (b._id === activeChatId) return 1;
+      }
+
+      // 3. Finally, sort by update time (most recent first).
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
       return dateB - dateA;
     });
 
   const observerTarget = useRef<HTMLDivElement>(null);
+  const chatListScrollRef = useRef<HTMLDivElement>(null);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredChats.length) {
@@ -434,6 +465,16 @@ const Sidebar = () => {
 
     return () => observer.disconnect();
   }, [hasMore, fetchMoreChats]);
+
+  useEffect(() => {
+    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
 
   return (
     <>
@@ -524,32 +565,37 @@ const Sidebar = () => {
             {filteredChats.length > 0 && showRecent && (
               <button
                 onClick={() => {
-                  setIsSelectionMode(!isSelectionMode);
-                  setSelectedIds(new Set());
+                  if (isSelectionMode) {
+                    setIsSelectionMode(false);
+                    setSelectedIds(new Set());
+                  } else {
+                    setIsSelectionMode(true);
+                  }
                 }}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
                   isSelectionMode
-                    ? "text-emerald-400"
-                    : "text-slate-600 hover:text-slate-400"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
                 }`}
+                title={isSelectionMode ? "Exit Selection" : "Bulk Actions"}
               >
-                {isSelectionMode ? "Done" : "Edit"}
+                {isSelectionMode ? <X size={14} /> : <ListChecks size={14} />}
               </button>
             )}
           </div>
 
           {isSelectionMode && showRecent && (
-            <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-xl bg-white/5 border border-white/5 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+                className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
               >
                 <div
-                  className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                  className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
                     selectedIds.size === filteredChats.length &&
                     filteredChats.length > 0
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-slate-700 bg-transparent"
+                      ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                      : "border-emerald-500/30 bg-transparent"
                   }`}
                 >
                   {selectedIds.size === filteredChats.length &&
@@ -557,37 +603,49 @@ const Sidebar = () => {
                       <Check size={10} strokeWidth={4} />
                     )}
                 </div>
-                <span>Select All</span>
+                <span>All</span>
               </button>
 
-              {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3">
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete ({selectedIds.size})</span>
+                  </button>
+                )}
+
                 <button
-                  onClick={handleBulkDelete}
-                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-400 transition-all"
+                  onClick={() => {
+                    setIsSelectionMode(false);
+                    setSelectedIds(new Set());
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
                 >
-                  <Trash2 size={12} />
-                  <span>Delete ({selectedIds.size})</span>
+                  Cancel
                 </button>
-              )}
+              </div>
             </div>
           )}
 
-          {filteredChats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
-                Empty
-              </p>
-            </div>
-          ) : (
-            showRecent && (
-              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
-                <div className="flex flex-col gap-3">
-                  {filteredChats.map((chat) => (
+          {showRecent && (
+            <div ref={chatListScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-2">
+              <div className="flex flex-col gap-3">
+                {filteredChats.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
+                      Empty
+                    </p>
+                  </div>
+                ) : (
+                  filteredChats.map((chat) => (
                     <SidebarChatItem
                       key={chat._id}
                       chat={chat}
                       currentChatId={currentChatId}
-                      isActive={currentChatId === chat._id}
+                      isActive={urlChatId === chat._id}
                       isSelectionMode={isSelectionMode}
                       isSelected={selectedIds.has(chat._id)}
                       onSelect={selectChat}
@@ -599,17 +657,21 @@ const Sidebar = () => {
                       onUnpin={unpinChat}
                       onToggleSelect={toggleSelect}
                     />
-                  ))}
-                  {/* Intersection Observer Sentinel */}
-                  <div ref={observerTarget} className="h-4 w-full" />
-                  {hasMore && (
-                    <div className="flex justify-center p-4">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    </div>
-                  )}
-                </div>
+                  ))
+                )}
+
+                {/* Intersection Observer Sentinel */}
+                {(hasMore || filteredChats.length > 0) && (
+                  <div ref={observerTarget} className="h-4 w-full mt-2" />
+                )}
+
+                {hasMore && loading && (
+                  <div className="flex justify-center p-4">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                  </div>
+                )}
               </div>
-            )
+            </div>
           )}
         </div>
 

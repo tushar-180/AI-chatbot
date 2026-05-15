@@ -301,6 +301,17 @@ export const useChatList = () => {
       }
       
       toast.success(`${chatIds.length} chats deleted successfully.`);
+
+      // If the list is now empty but there might be more on the server, re-fetch page 1
+      if (chats.length === 0 && hasMore) {
+        setPage(1);
+        const res = await api.get("/chat", {
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
+        });
+        const fetchedChats = res.data || [];
+        setChats(fetchedChats);
+        setHasMore(fetchedChats.length === 20);
+      }
     } catch (err) {
       console.error("Error deleting chats", err);
       toast.error("Could not delete some chats.");
@@ -322,6 +333,7 @@ export const useChatList = () => {
     fetchMoreChats,
     searchChats,
     hasMore,
+    loading,
     viewingArchived,
     setViewingArchived,
     upsertChat,

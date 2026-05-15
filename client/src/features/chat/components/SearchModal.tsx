@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { Search, X, MessageSquare, Clock } from "lucide-react";
 import { useChatList } from "../hooks/useChatList";
 import type { Chat } from "../types/chat.types";
@@ -8,27 +8,43 @@ interface SearchModalProps {
   onClose: () => void;
 }
 
+type SearchResult = Chat & {
+  snippet?: string;
+};
+
 const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const { searchChats, selectChat } = useChatList();
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchChatsRef = useRef(searchChats);
+
+  const handleClose = useCallback(() => {
+    setQuery("");
+    setResults([]);
+    setLoading(false);
+    onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    searchChatsRef.current = searchChats;
+  }, [searchChats]);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
-    } else {
-      setQuery("");
-      setResults([]);
     }
   }, [isOpen]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const timer = setTimeout(async () => {
       if (query.trim()) {
         setLoading(true);
-        const res = await searchChats(query);
+        const res = await searchChatsRef.current(query);
+        if (cancelled) return;
         setResults(res);
         setLoading(false);
       } else {
@@ -36,22 +52,25 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
       }
     }, 300);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        onClose(); // Toggle logic should be in parent
+        handleClose(); // Toggle logic should be in parent
       }
       if (e.key === "Escape" && isOpen) {
-        onClose();
+        handleClose();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [handleClose, isOpen]);
 
   if (!isOpen) return null;
 
@@ -77,7 +96,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4">
       <div 
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" 
-        onClick={onClose} 
+        onClick={handleClose}
       />
       
       <div className="relative w-full max-w-2xl bg-slate-900/90 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 backdrop-blur-xl">
@@ -92,7 +111,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
             className="flex-1 bg-transparent border-none outline-none text-white text-lg placeholder:text-slate-600"
           />
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1.5 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all"
           >
             <X size={20} />
@@ -117,7 +136,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                   key={result._id}
                   onClick={() => {
                     selectChat(result._id, query);
-                    onClose();
+                    handleClose();
                   }}
                   className="w-full flex items-start gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group text-left mb-1 last:mb-0"
                 >
@@ -131,7 +150,9 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                         {highlightMatch(result.title || "Untitled Session", query)}
                       </h4>
                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 shrink-0">
-                        {new Date(result.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {result.updatedAt
+                          ? new Date(result.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+                          : ""}
                       </span>
                     </div>
                     
