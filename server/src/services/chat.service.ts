@@ -17,7 +17,6 @@ import type {
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import {
     type WebGroundingContext,
-    type SearchRejection,
     webSearchService,
 } from "../modules/web-search";
 import { aiService } from "./ai.service";

@@ -1,7 +1,6 @@
 export { webSearchService } from "./webSearch.service";
 export { estimateConfidence, withEstimatedConfidence } from "./confidence";
 export {
-    isLiveDataQuery,
     normalizeQuery,
     resolveSearchQuery,
 } from "./queryResolver";
@@ -10,6 +9,8 @@ export {
     getSearchCache,
     setGroundingCache,
     setSearchCache,
+    getLastSearchPointer,
+    setLastSearchPointer,
 } from "./cache";
 export type {
     ConfidenceEstimate,

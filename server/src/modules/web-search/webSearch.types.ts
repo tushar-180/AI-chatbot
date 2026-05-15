@@ -5,12 +5,13 @@ export type SearchSource = {
     hostname: string;
     snippet: string;
     excerpt: string;
+    snippetFallback: boolean;
     score: number;
     freshnessScore?: number;
     structuredScore?: number;
+    providerScore?: number;
     publishedAt?: string | null;
     lastModified?: string | null;
-    cacheHit?: boolean;
 };
 
 export type SearchCandidate = {
@@ -25,7 +26,6 @@ export type SearchCandidate = {
     lastModified?: string | null;
     freshnessScore?: number;
     structuredScore?: number;
-    extractionCacheHit?: boolean;
 };
 
 export type ResolvedSearchQuery = {
@@ -35,6 +35,7 @@ export type ResolvedSearchQuery = {
     cacheKey: string;
     reusedPreviousQuery: boolean;
     liveDataQuery: boolean;
+    wantsImages: boolean;
 };
 
 export type ConfidenceEstimate = {
@@ -62,15 +63,11 @@ export type WebGroundingContext = {
     citationsMarkdown: string;
     debug: {
         searchStrategy: "tavily";
-        sourceStrategy:
-            | "local-rerank"
-            | "snippet-fallback"
-            | "heuristic-rerank";
+        sourceStrategy: "heuristic-rerank";
         candidateCount: number;
         fetchedSourceCount: number;
         cacheHit: boolean;
         cacheTier: "grounding" | "search" | "none";
         liveDataQuery: boolean;
-        skippedExtraction?: boolean;
     };
 };

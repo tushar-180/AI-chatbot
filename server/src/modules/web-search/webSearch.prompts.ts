@@ -44,7 +44,7 @@ ${sourcesWithMeta
 [${idx + 1}] ${s.title}
     Domain: ${s.hostname} (authority: ${s.authority})
     Published: ${s.publishedAt ? s.publishedAt : "unknown"} ${s.daysOld !== null ? `(${s.daysOld} days old)` : ""}
-    Excerpt: ${s.excerpt.substring(0, 1200)}${s.excerpt.length > 1200 ? "…" : ""}
+    Excerpt: ${s.excerpt}
 `,
     )
     .join("\n")}
@@ -71,4 +71,42 @@ RULES FOR ACCURACY:
 QUERY: ${query}
 
 ANSWER (using only citations and following the rules above):`;
+};
+
+export const QUERY_RESOLUTION_PROMPT = (
+    latestMessage: string,
+    history: string,
+) => {
+    const currentDate = new Date().toISOString().split("T")[0];
+    return `You are an expert search query optimizer for a multi-language search engine. Your task is to analyze the conversation and generate an optimized search query.
+
+CURRENT DATE: ${currentDate}
+
+CONVERSATION HISTORY:
+${history}
+
+LATEST USER MESSAGE:
+${latestMessage}
+
+TASK:
+1. Identify the user's intent from the latest message, using history for context.
+2. Resolve pronouns (it, he, she, that, etc.) and implicit references to specific entities.
+3. Determine if the latest message is a follow-up to the previous conversation or a new standalone topic.
+4. Determine if the user is looking for fresh/live data (news, scores, weather, trending topics).
+5. Determine if the user's intent implies a need for images/visuals.
+6. Generate the search query in the same language as the user's message, or in English if it's more likely to yield better technical/global results.
+
+OUTPUT FORMAT (Return ONLY valid JSON):
+{
+  "searchQuery": "the optimized search query",
+  "isFollowUp": true/false,
+  "isLiveData": true/false,
+  "wantsImages": true/false
+}
+
+RULES:
+- Set "isFollowUp" to true if the latest message relies on context from the history (e.g., uses pronouns or follows up on a previous topic).
+- If the user asks for "latest", "now", "today", or current events, set "isLiveData" to true.
+- If the user asks for "photos", "images", "how it looks", or visual descriptions, set "wantsImages" to true.
+- Return ONLY the JSON object. No preamble, no explanation.`;
 };
