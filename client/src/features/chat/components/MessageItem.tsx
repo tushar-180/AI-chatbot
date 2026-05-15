@@ -1,6 +1,6 @@
-import { memo } from "react";
+import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { User, Globe } from "lucide-react";
+import { User, Globe, Pencil, Check, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -31,6 +31,9 @@ interface Message {
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
+  isAnyStreaming?: boolean;
+  onEdit?: (content: string) => void;
+  onEditStart?: () => void;
 }
 
 /**
@@ -167,90 +170,182 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming }: MessageItemProps) => {
-  const { user } = useUser();
-  const isUser = msg.role === "user";
-  const isFailed = msg.status === "failed";
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart }: MessageItemProps) => {
+    const { user } = useUser();
+    const isUser = msg.role === "user";
+    const isFailed = msg.status === "failed";
 
-  return (
-    <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`flex w-full gap-4 md:gap-6 ${
-          isUser
-            ? "max-w-full md:max-w-4xl flex-row-reverse"
-            : "max-w-full md:max-w-5xl flex-row items-start"
-        }`}
-      >
-        <div className="hidden xs:block">
-          <MessageAvatar
-            isUser={isUser}
-            imageUrl={user?.imageUrl}
-            failed={isFailed}
-          />
-        </div>
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(msg.content);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    useEffect(() => {
+        if (isEditing && textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [isEditing]);
+
+    const handleEditStart = () => {
+        setIsEditing(true);
+        setEditContent(msg.content);
+        onEditStart?.();
+    };
+
+    const handleEditCancel = () => {
+        setIsEditing(false);
+        setEditContent(msg.content);
+    };
+
+    const handleEditSave = () => {
+        if (editContent.trim() && editContent !== msg.content) {
+            onEdit?.(editContent);
+        }
+        setIsEditing(false);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleEditSave();
+        } else if (e.key === "Escape") {
+            handleEditCancel();
+        }
+    };
+
+    return (
         <div
-          className={`flex flex-col gap-2 ${
-            isUser ? "items-end flex-1" : "min-w-0 flex-1"
-          }`}
+            className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
         >
-          {!isFailed && <MessageMetadata isUser={isUser} model={msg.model} />}
+            <div
+                className={`flex w-full gap-4 md:gap-6 ${
+                    isUser
+                        ? "max-w-full md:max-w-4xl flex-row-reverse"
+                        : "max-w-full md:max-w-5xl flex-row items-start"
+                }`}
+            >
+                <div className="hidden xs:block">
+                    <MessageAvatar
+                        isUser={isUser}
+                        imageUrl={user?.imageUrl}
+                        failed={isFailed}
+                    />
+                </div>
 
-          <div
-            className={`transition-opacity duration-150 ease-out ${
-              isUser
-                ? "max-w-full rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white"
-                : isFailed
-                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-400"
-                  : "w-full py-1 text-base leading-[1.8] text-slate-200"
-            }`}
-          >
-            {isStreaming && !msg.content ? (
-              msg.isWebSearching ? (
-                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
-                  <Globe size={14} className="animate-pulse" />
-                  <span>Searching the web...</span>
+                <div
+                    className={`flex flex-col gap-2 ${
+                        isUser ? "items-end flex-1" : "min-w-0 flex-1"
+                    }`}
+                >
+                    {!isFailed && (
+                        <div className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+                            <MessageMetadata isUser={isUser} model={msg.model} />
+                            
+                            {isUser && !isEditing && (
+                                <button
+                                    onClick={handleEditStart}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white"
+                                    title="Edit message"
+                                >
+                                    <Pencil size={12} />
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    <div
+                        className={`transition-all duration-200 ease-out ${
+                            isUser
+                                ? `max-w-full rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
+                                : isFailed
+                                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
+                                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+                        }`}
+                    >
+                        {isStreaming && !msg.content ? (
+                            msg.isWebSearching ? (
+                                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
+                                    <Globe
+                                        size={14}
+                                        className="animate-pulse"
+                                    />
+                                    <span>Searching the web...</span>
+                                </div>
+                            ) : (
+                                <div className="flex gap-2 py-3">
+                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                                </div>
+                            )
+                        ) : isEditing ? (
+                            <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                                <textarea
+                                    ref={textareaRef}
+                                    value={editContent}
+                                    onChange={(e) => {
+                                        setEditContent(e.target.value);
+                                        e.target.style.height = "auto";
+                                        e.target.style.height = `${e.target.scrollHeight}px`;
+                                    }}
+                                    onKeyDown={handleKeyDown}
+                                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                                    rows={1}
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        onClick={handleEditCancel}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                                    >
+                                        <X size={14} />
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleEditSave}
+                                        disabled={!editContent.trim()}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                                    >
+                                        <Check size={14} />
+                                        Save 
+                                    </button>
+                                </div>
+                            </div>
+                        ) : isFailed ? (
+                            <div className="flex flex-col gap-1">
+                                <span className="font-semibold text-red-400/90">
+                                    Server Error
+                                </span>
+                                <span className="text-sm opacity-80">
+                                    {msg.content ||
+                                        "AI failed to respond. Please try again later."}
+                                </span>
+                            </div>
+                        ) : (
+                            <>
+                                {msg.content && (
+                                    <ReactMarkdown
+                                        remarkPlugins={[remarkGfm]}
+                                        rehypePlugins={[rehypeRaw]}
+                                        components={
+                                            isUser
+                                                ? userMarkdownComponents
+                                                : assistantMarkdownComponents
+                                        }
+                                    >
+                                        {msg.content}
+                                    </ReactMarkdown>
+                                )}
+                                <AttachmentList
+                                    attachments={msg.attachments || []}
+                                />
+                            </>
+                        )}
+                    </div>
                 </div>
-              ) : (
-                <div className="flex gap-2 py-3">
-                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
-                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
-                </div>
-              )
-            ) : isFailed ? (
-              <div className="flex flex-col gap-1">
-                <span className="font-semibold text-red-400/90">
-                  Server Error
-                </span>
-                <span className="text-sm opacity-80">
-                  {msg.content ||
-                    "AI failed to respond. Please try again later."}
-                </span>
-              </div>
-            ) : (
-              <>
-                {msg.content && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={
-                      isUser
-                        ? userMarkdownComponents
-                        : assistantMarkdownComponents
-                    }
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
-                )}
-                <AttachmentList attachments={msg.attachments || []} />
-              </>
-            )}
-          </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {

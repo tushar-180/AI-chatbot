@@ -40,11 +40,20 @@ export const chatRepository = {
     };
   },
 
-  findAllByUserId(userId: string, page: number = 1, limit: number = 20) {
+  findAllByUserId(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    isArchived: boolean = false,
+  ) {
     const skip = (page - 1) * limit;
-    return Chat.find({ userId })
+    const query = isArchived
+      ? { userId, isArchived: true }
+      : { userId, isArchived: { $ne: true } };
+
+    return Chat.find(query)
       .select("-messages -legacyMessages")
-      .sort({ updatedAt: -1 })
+      .sort({ isPinned: -1, updatedAt: -1 })
       .skip(skip)
       .limit(limit);
   },
@@ -102,10 +111,57 @@ export const chatRepository = {
     return message;
   },
 
+  async deleteMessagesAfter(chatId: string, messageId: string) {
+    const message = await Message.findById(messageId);
+    if (!message) return;
+
+    await Message.deleteMany({
+      chatId,
+      createdAt: { $gt: message.createdAt },
+    });
+    await this.touchChat(chatId);
+  },
+
+  async update(chatId: string, data: Partial<{ title: string }>) {
+    return await Chat.findByIdAndUpdate(chatId, data, { new: true })
+  },
+
   async updateTitle(chatId: string, title: string) {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { title } },
+      { new: true }
+    );
+  },
+
+  async archiveChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isArchived: true } },
+      { new: true }
+    );
+  },
+
+  async unarchiveChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isArchived: false } },
+      { new: true }
+    );
+  },
+
+  async pinChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isPinned: true } },
+      { new: true }
+    );
+  },
+
+  async unpinChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isPinned: false } },
       { new: true }
     );
   },

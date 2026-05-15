@@ -15,6 +15,7 @@ import {
     X,
     Mic,
     Globe,
+    Archive,
 } from "lucide-react";
 
 import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
@@ -65,6 +66,8 @@ export interface InputAreaProps {
     } | null;
     isQuotaLoading?: boolean;
     onWebSearchToggle: (enabled: boolean) => void;
+    isArchived?: boolean;
+    onUnarchive?: () => void;
 }
 
 /**
@@ -214,9 +217,9 @@ const ModelSelector = ({
                         ? "Loading..."
                         : quotaStatus?.allowed === false
                           ? quotaStatus.scope === "global"
-                              ? "Global limit reached"
+                              ? "Global daily limit reached"
                               : quotaStatus.scope === "user"
-                                ? "Daily limit reached"
+                                ? "Daily user limit reached"
                                 : "Cooldown active"
                           : undefined
                 }
@@ -242,6 +245,8 @@ const InputArea = ({
     onAttachmentsChange,
     webSearchEnabled,
     onWebSearchToggle,
+    isArchived = false,
+    onUnarchive,
     quotaStatus,
     isQuotaLoading,
 }: InputAreaProps) => {
@@ -341,164 +346,195 @@ const InputArea = ({
 
     return (
         <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
-            <form
-                onSubmit={onSubmit}
-                className="mx-auto max-w-4xl relative pointer-events-auto"
-            >
-                <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
-                    <ModelSelector
-                        availableProviders={availableProviders}
-                        selectedProvider={selectedProvider}
-                        onProviderChange={onProviderChange}
-                        webSearchEnabled={webSearchEnabled}
-                        onWebSearchToggle={onWebSearchToggle}
-                        quotaStatus={quotaStatus}
-                        isQuotaLoading={isQuotaLoading}
-                    />
-
-                    {/* Attachment Previews */}
-                    {attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 px-4 py-2">
-                            {attachments.map((att, i) => (
-                                <div
-                                    key={att.url}
-                                    className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
-                                >
-                                    <img
-                                        src={att.url}
-                                        alt={att.name}
-                                        className="h-full w-full object-cover"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeAttachment(i)}
-                                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                </div>
-                            ))}
+            {isArchived ? (
+                <div className="mx-auto max-w-4xl pointer-events-auto px-4 md:px-0">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
+                        <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                                <Archive size={20} />
+                            </div>
+                            <div className="text-left">
+                                <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.15em] mb-0.5">
+                                    Archived Session
+                                </h4>
+                                <p className="text-[10px] text-slate-500 font-medium leading-tight">
+                                    This conversation is preserved in the vault.
+                                </p>
+                            </div>
                         </div>
-                    )}
-
-                    <div className="flex items-end gap-2 pr-2">
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            className="hidden"
-                            accept="image/*"
-                        />
-
-                        {canUpload && (
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={isUploading}
-                                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50"
-                                aria-label="Upload image"
-                            >
-                                {isUploading ? (
-                                    <Loader2
-                                        size={18}
-                                        className="animate-spin text-white"
-                                    />
-                                ) : (
-                                    <Paperclip size={18} />
-                                )}
-                            </button>
-                        )}
-
-                        <textarea
-                            ref={textareaRef}
-                            value={input}
-                            onChange={(e) => onInputChange(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            rows={1}
-                            placeholder={
-                                currentChatId
-                                    ? "Ask anything..."
-                                    : "Start a conversation..."
-                            }
-                            className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
-                        />
                         <button
-                            type="button"
-                            onClick={() => {
-                                if (isListening) {
-                                    stop();
-                                } else {
-                                    start();
-                                }
-                            }}
-                            className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                                isListening
-                                    ? "bg-rose-500/20 text-rose-400"
-                                    : "text-slate-500 hover:bg-white/5 hover:text-white"
-                            }`}
-                            aria-label="Voice input"
+                            onClick={onUnarchive}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
                         >
-                            {isListening && !isSpeaking && (
-                                <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
-                            )}
-
-                            {isSpeaking && (
-                                <>
-                                    <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
-                                    <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
-                                </>
-                            )}
-
-                            <span className="relative z-10 flex items-center justify-center">
-                                {isListening ? (
-                                    <Square size={14} fill="currentColor" />
-                                ) : (
-                                    <Mic size={18} />
-                                )}
-                            </span>
+                            <ArrowUp size={14} className="rotate-180" />
+                            <span>Restore to continue</span>
                         </button>
-                        {isStreaming ? (
-                            <button
-                                type="button"
-                                onClick={onStop}
-                                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
-                                aria-label="Stop generation"
-                            >
-                                <Square
-                                    size={14}
-                                    fill="currentColor"
-                                    className="transition-colors group-hover:text-rose-600"
-                                />
-                            </button>
-                        ) : (
-                            <button
-                                type="submit"
-                                disabled={
-                                    loading ||
-                                    isUploading ||
-                                    (!input.trim() && attachments.length === 0)
-                                }
-                                className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                                    loading ||
-                                    isUploading ||
-                                    (!input.trim() && attachments.length === 0)
-                                        ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                                        : "bg-white text-slate-900 hover:bg-slate-200"
-                                }`}
-                            >
-                                {loading ? (
-                                    <Loader2
-                                        size={18}
-                                        className="animate-spin"
-                                    />
-                                ) : (
-                                    <ArrowUp size={18} strokeWidth={2.5} />
-                                )}
-                            </button>
-                        )}
                     </div>
                 </div>
-            </form>
+            ) : (
+                <form
+                    onSubmit={onSubmit}
+                    className="mx-auto max-w-4xl relative pointer-events-auto"
+                >
+                    <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+                        <ModelSelector
+                            availableProviders={availableProviders}
+                            selectedProvider={selectedProvider}
+                            onProviderChange={onProviderChange}
+                            webSearchEnabled={webSearchEnabled}
+                            onWebSearchToggle={onWebSearchToggle}
+                            quotaStatus={quotaStatus}
+                            isQuotaLoading={isQuotaLoading}
+                        />
+
+                        {/* Attachment Previews */}
+                        {attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 px-4 py-2">
+                                {attachments.map((att, i) => (
+                                    <div
+                                        key={att.url}
+                                        className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                                    >
+                                        <img
+                                            src={att.url}
+                                            alt={att.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachment(i)}
+                                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex items-end gap-2 pr-2">
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                className="hidden"
+                                accept="image/*"
+                            />
+
+                            {canUpload && (
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        fileInputRef.current?.click()
+                                    }
+                                    disabled={isUploading}
+                                    className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50"
+                                    aria-label="Upload image"
+                                >
+                                    {isUploading ? (
+                                        <Loader2
+                                            size={18}
+                                            className="animate-spin text-white"
+                                        />
+                                    ) : (
+                                        <Paperclip size={18} />
+                                    )}
+                                </button>
+                            )}
+
+                            <textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={(e) => onInputChange(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                rows={1}
+                                placeholder={
+                                    currentChatId
+                                        ? "Ask anything..."
+                                        : "Start a conversation..."
+                                }
+                                className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (isListening) {
+                                        stop();
+                                    } else {
+                                        start();
+                                    }
+                                }}
+                                className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
+                                    isListening
+                                        ? "bg-rose-500/20 text-rose-400"
+                                        : "text-slate-500 hover:bg-white/5 hover:text-white"
+                                }`}
+                                aria-label="Voice input"
+                            >
+                                {isListening && !isSpeaking && (
+                                    <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
+                                )}
+
+                                {isSpeaking && (
+                                    <>
+                                        <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
+                                        <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
+                                    </>
+                                )}
+
+                                <span className="relative z-10 flex items-center justify-center">
+                                    {isListening ? (
+                                        <Square size={14} fill="currentColor" />
+                                    ) : (
+                                        <Mic size={18} />
+                                    )}
+                                </span>
+                            </button>
+                            {isStreaming ? (
+                                <button
+                                    type="button"
+                                    onClick={onStop}
+                                    className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
+                                    aria-label="Stop generation"
+                                >
+                                    <Square
+                                        size={14}
+                                        fill="currentColor"
+                                        className="transition-colors group-hover:text-rose-600"
+                                    />
+                                </button>
+                            ) : (
+                                <button
+                                    type="submit"
+                                    disabled={
+                                        loading ||
+                                        isUploading ||
+                                        (!input.trim() &&
+                                            attachments.length === 0)
+                                    }
+                                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
+                                        loading ||
+                                        isUploading ||
+                                        (!input.trim() &&
+                                            attachments.length === 0)
+                                            ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                                            : "bg-white text-slate-900 hover:bg-slate-200"
+                                    }`}
+                                >
+                                    {loading ? (
+                                        <Loader2
+                                            size={18}
+                                            className="animate-spin"
+                                        />
+                                    ) : (
+                                        <ArrowUp size={18} strokeWidth={2.5} />
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </form>
+            )}
         </div>
     );
 };

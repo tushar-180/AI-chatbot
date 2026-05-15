@@ -12,9 +12,9 @@ export const chatService = {
   /**
    * Fetches all chats for a given user.
    */
-  async fetchChats(userId: string): Promise<Chat[]> {
+  async fetchChats(isArchived: boolean = false): Promise<Chat[]> {
     const res = await api.get("/chat", {
-      params: { userId },
+      params: { isArchived },
     });
     return res.data || [];
   },
@@ -22,8 +22,8 @@ export const chatService = {
   /**
    * Fetches messages for a specific chat.
    */
-  async fetchMessages(chatId: string, userId: string): Promise<Message[]> {
-    const res = await api.get(`/chat/${chatId}`, { params: { userId } });
+  async fetchMessages(chatId: string): Promise<Message[]> {
+    const res = await api.get(`/chat/${chatId}`);
     return res.data.messages || [];
   },
 
@@ -33,6 +33,13 @@ export const chatService = {
   getStreamUrl(chatId?: string): string {
     const path = chatId ? `/api/chat/${chatId}/stream` : `/api/chat/stream`;
     return `${API_ORIGIN}${path}`;
+  },
+
+  /**
+   * Generates the streaming endpoint URL for editing a message.
+   */
+  getEditStreamUrl(chatId: string, messageId: string): string {
+    return `${API_ORIGIN}/api/chat/${chatId}/messages/${messageId}/stream`;
   },
 
   /**
@@ -107,5 +114,21 @@ export const chatService = {
     }
 
     return "Server Error: Something went wrong while sending your message.";
+  },
+
+  async archiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/archive`);
+  },
+
+  async unarchiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unarchive`);
+  },
+
+  async pinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/pin`);
+  },
+
+  async unpinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unpin`);
   },
 };

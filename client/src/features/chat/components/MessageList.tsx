@@ -57,6 +57,8 @@ interface MessageListProps {
   currentChatId: string | null;
   isNewChat: boolean;
   onSuggestionClick?: (text: string) => void;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onEditStart?: () => void;
 }
 
 const MessageList = ({
@@ -69,6 +71,8 @@ const MessageList = ({
   currentChatId,
   isNewChat,
   onSuggestionClick,
+  onEditMessage,
+  onEditStart,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -281,6 +285,9 @@ const MessageList = ({
                 <MessageItem
                   message={msg}
                   isStreaming={isStreaming && i === messages.length - 1}
+                  isAnyStreaming={isStreaming}
+                  onEdit={(content) => onEditMessage?.(msg.id, content)}
+                  onEditStart={onEditStart}
                 />
               </div>
             ))}

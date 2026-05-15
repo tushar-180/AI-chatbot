@@ -13,6 +13,8 @@ type ChatState = {
   sidebarOpen: boolean;
   hasMore: boolean;
   page: number;
+  viewingArchived: boolean;
+  currentChat: Chat | null;
 
   setSidebarOpen: (open: boolean) => void;
   setChats: (chats: Chat[]) => void;
@@ -20,7 +22,7 @@ type ChatState = {
   setHasMore: (hasMore: boolean) => void;
   setPage: (page: number) => void;
   resetPagination: () => void;
-  setCurrentChat: (id: string | null) => void;
+  setCurrentChat: (id: string | null, chat?: Chat) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string, model?: string) => void;
@@ -30,6 +32,9 @@ type ChatState = {
   upsertChat: (chat: Chat) => void;
   removeChat: (id: string) => void;
   updateChatTitle: (id: string, title: string) => void;
+  updateChatArchive: (id: string, _isArchived: boolean) => void;
+  updateChatPin: (id: string, isPinned: boolean) => void;
+  setViewingArchived: (viewing: boolean) => void;
   clearMessages: () => void;
 };
 
@@ -46,6 +51,8 @@ export const useChatStore = create<ChatState>()(
       sidebarOpen: false,
       hasMore: true,
       page: 1,
+      viewingArchived: false,
+      currentChat: null,
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
@@ -54,7 +61,7 @@ export const useChatStore = create<ChatState>()(
       appendChats: (newChats) =>
         set((state) => {
           const uniqueNewChats = newChats.filter(
-            (newChat) => !state.chats.some((chat) => chat._id === newChat._id)
+            (newChat) => !state.chats.some((chat) => chat._id === newChat._id),
           );
           return { chats: [...state.chats, ...uniqueNewChats] };
         }),
@@ -65,11 +72,16 @@ export const useChatStore = create<ChatState>()(
 
       resetPagination: () => set({ page: 1, hasMore: true, chats: [] }),
 
-      setCurrentChat: (id) =>
-        set((state) => ({
-          currentChatId: id,
-          isNewChat: id ? false : state.isNewChat,
-        })),
+      setCurrentChat: (id, chat) =>
+        set((state) => {
+          const foundChat =
+            chat || state.chats.find((c) => c._id === id) || null;
+          return {
+            currentChatId: id,
+            isNewChat: id ? false : state.isNewChat,
+            currentChat: foundChat,
+          };
+        }),
 
       setMessages: (messages) => set({ messages }),
 
@@ -89,8 +101,8 @@ export const useChatStore = create<ChatState>()(
               content,
             };
           } else {
-             newMessages.push({
-              id: crypto.randomUUID(), 
+            newMessages.push({
+              id: crypto.randomUUID(),
               role: "assistant",
               content,
               model,
@@ -126,7 +138,13 @@ export const useChatStore = create<ChatState>()(
             (item) => item._id !== chat._id,
           );
 
-          return { chats: [updatedChat, ...remainingChats] };
+          return {
+            chats: [updatedChat, ...remainingChats],
+            currentChat:
+              state.currentChatId === chat._id
+                ? updatedChat
+                : state.currentChat,
+          };
         }),
 
       removeChat: (id) =>
@@ -143,6 +161,80 @@ export const useChatStore = create<ChatState>()(
             chat._id === id ? { ...chat, title } : chat,
           ),
         })),
+
+      updateChatArchive: (id, isArchived) =>
+        set((state) => {
+          const isMatch = state.viewingArchived === isArchived;
+          const isPresent = state.chats.some((c) => c._id === id);
+
+          let updatedChats = state.chats;
+          if (isPresent && !isMatch) {
+            // Remove from list if it no longer matches view
+            updatedChats = state.chats.filter((c) => c._id !== id);
+          } else if (isPresent && isMatch) {
+            // Update in place if it still matches view
+            updatedChats = state.chats.map((c) =>
+              c._id === id
+                ? {
+                    ...c,
+                    isArchived,
+                    isPinned: isArchived ? c.isPinned : false,
+                  }
+                : c,
+            );
+          } else if (!isPresent && isMatch) {
+            // Add back to list if it now matches view (e.g. unarchived while viewing)
+            if (state.currentChat && state.currentChat._id === id) {
+              updatedChats = [
+                {
+                  ...state.currentChat,
+                  isArchived,
+                  isPinned: isArchived ? state.currentChat.isPinned : false,
+                },
+                ...state.chats,
+              ];
+            }
+          }
+
+          let updatedCurrentChat = state.currentChat;
+          if (state.currentChatId === id) {
+            updatedCurrentChat = {
+              ...state.currentChat!,
+              isArchived,
+              isPinned: isArchived ? state.currentChat!.isPinned : false,
+            };
+          }
+
+          return {
+            chats: updatedChats,
+            currentChat: updatedCurrentChat,
+          };
+        }),
+
+      updateChatPin: (id, isPinned) =>
+        set((state) => {
+          const chatIndex = state.chats.findIndex((c) => c._id === id);
+          if (chatIndex === -1) return state;
+
+          const updatedChat = { ...state.chats[chatIndex], isPinned };
+          const remainingChats = state.chats.filter((c) => c._id !== id);
+
+          if (isPinned) {
+            return { chats: [updatedChat, ...remainingChats] };
+          } else {
+            // Find its original place based on updatedAt or just put it after pinned chats
+            // For simplicity, we'll just put it at the beginning of non-pinned chats
+            const pinnedChats = remainingChats.filter((c) => c.isPinned);
+            const nonPinnedChats = remainingChats.filter((c) => !c.isPinned);
+            return { chats: [...pinnedChats, updatedChat, ...nonPinnedChats] };
+          }
+        }),
+
+      setViewingArchived: (viewingArchived) =>
+        set((state) => {
+          if (state.viewingArchived === viewingArchived) return state;
+          return { viewingArchived, page: 1, hasMore: true, chats: [] };
+        }),
 
       clearMessages: () => set({ messages: [] }),
     }),

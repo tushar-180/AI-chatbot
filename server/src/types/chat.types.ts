@@ -65,6 +65,15 @@ export type SendMessageInput = {
     webSearchEnabled?: boolean;
 };
 
+export type EditMessageInput = {
+  chatId: string;
+  messageId: string;
+  content: string;
+  provider?: string;
+  requestId?: string;
+  webSearchEnabled?: boolean;
+};
+
 export type StopStreamInput = {
     requestId?: string;
     chatId?: string;

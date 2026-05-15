@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { api } from "@/lib/api";
 import {
   X,
   User,
@@ -36,7 +37,7 @@ const TONE_OPTIONS = [
   "Friendly",
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_SERVER_URL || "http://localhost:5000";
+
 
 const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
   isOpen,
@@ -57,11 +58,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
     if (!user) return;
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/user/profile/${user.id}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch profile");
-      const userData = await response.json();
+      const { data: userData } = await api.get("/user/profile");
       if (userData.personalization) {
         setData({
           nickname: userData.personalization.nickname || "",
@@ -82,17 +79,7 @@ const PersonalizationModal: React.FC<PersonalizationModalProps> = ({
     if (!user) return;
     setIsSaving(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/user/personalization/${user.id}`,
-        {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        },
-      );
-
-      if (!response.ok) throw new Error("Update failed");
-
+      await api.put("/user/personalization", data);
       toast.success("Identity updated successfully");
       onClose();
     } catch (error) {

@@ -1,35 +1,18 @@
 import { useEffect } from "react";
-import { useUser } from "@clerk/react";
-import { api } from "../../../lib/api";
+import { useAuth } from "@clerk/react";
+import { setAuthTokenGetter } from "../../../lib/api";
 
 /**
- * Hook to synchronize Clerk user data with the local MongoDB database.
- * Calls the /api/user/sync endpoint whenever the user signs in.
+ * Wires Clerk's getToken into the axios instance so every
+ * request automatically carries a valid JWT in the Authorization header.
+ *
+ * The server handles user creation on first request via the requireAuth
+ * middleware — no manual sync logic needed on the client.
  */
-export const useUserSync = () => {
-  const { user, isLoaded, isSignedIn } = useUser();
+export const useAuthSetup = () => {
+  const { getToken } = useAuth();
 
   useEffect(() => {
-    const syncUser = async () => {
-      if (isLoaded && isSignedIn && user) {
-        try {
-          const response = await api.post("/user/sync", {
-            clerkId: user.id,
-            email: user.primaryEmailAddress?.emailAddress,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            imageUrl: user.imageUrl,
-          });
-
-          if (response.status !== 200) {
-            console.error("Failed to sync user with database");
-          }
-        } catch (error) {
-          console.error("Error syncing user:", error);
-        }
-      }
-    };
-
-    syncUser();
-  }, [isLoaded, isSignedIn, user]);
+    setAuthTokenGetter(getToken);
+  }, [getToken]);
 };
