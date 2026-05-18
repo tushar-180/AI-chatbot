@@ -206,11 +206,13 @@ const buildPromptMessages = async (
     }
 
     let webGrounding: WebGroundingContext | null = null;
+    const supportsImages = provider?.startsWith('gemini')
     if (webSearchEnabled && latestUserMessage) {
         const result = await webSearchService.buildGroundingContext(
             latestUserMessage,
             chatMessages,
             userId,
+            supportsImages
         );
 
         // Handle quota/cooldown rejections gracefully

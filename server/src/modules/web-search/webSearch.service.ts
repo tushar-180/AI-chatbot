@@ -211,27 +211,17 @@ export const webSearchService = {
         query?: string,
         chatMessages: ChatMessage[] = [],
         userId?: string,
-        previousSearch?: { cacheKey: string; sources?: SearchSource[] },
+        supportsImages = false,
     ): Promise<WebGroundingContext | SearchRejection | null> {
         const trimmed = query?.trim();
         if (!trimmed) return null;
-
-        // 1. External previousSearch fast‑path
-        if (previousSearch?.cacheKey) {
-            const cached = await getGroundingCache(previousSearch.cacheKey);
-            if (cached) {
-                console.log(
-                    `${logPrefix} Reusing grounding context from provided cache key`,
-                );
-                return cached;
-            }
-        }
 
         // 2. Internal follow‑up detection via Redis pointer (Fast path)
         const pointer = userId ? await getLastSearchPointer(userId) : null;
 
         // 3. Build the resolved query (Async LLM-powered)
         const resolved = await resolveSearchQuery(trimmed, chatMessages);
+        if(!supportsImages) resolved.wantsImages = false;
 
         // 4. If the follow-up resolver points back to the same effective search, reuse the
         // previous grounding cache directly instead of re-querying Tavily.
@@ -305,23 +295,6 @@ export const webSearchService = {
                         : STABLE_QUERY_TTL_MS,
                 );
             }
-        }
-
-        // 6. Merge external previous sources if provided
-        if (previousSearch?.sources?.length) {
-            const old: SearchCandidate[] = previousSearch.sources.map((s) => ({
-                title: s.title,
-                url: s.url,
-                hostname: s.hostname,
-                snippet: s.snippet,
-                rawContent: s.excerpt,
-                searchProviderScore: s.score,
-                publishedAt: s.publishedAt,
-                lastModified: s.lastModified,
-            }));
-            const existingUrls = new Set(candidates.map((c) => c.url));
-            const fresh = old.filter((c) => !existingUrls.has(c.url));
-            candidates = [...candidates, ...fresh];
         }
 
         if (!candidates?.length) return null;
