@@ -116,7 +116,6 @@ export const useChatStream = (hookOptions?: {
 
     scheduleOptimisticFlush();
   };
- 
   const setOptimisticMessagesForChat = useCallback((
     chatId: string | null,
     next: Message[] | null,
@@ -127,7 +126,6 @@ export const useChatStream = (hookOptions?: {
       [key]: next,
     }));
   }, []);
- 
   const isStreamingCurrentChat =
     isStreaming &&
     streamingChatId === getActiveChatKey(currentChatId) &&
@@ -694,7 +692,6 @@ export const useChatStream = (hookOptions?: {
         updatedAt: new Date().toISOString(),
       });
     }
- 
     setLoading(true);
     setIsStreaming(true, activeKey);
     stopRequestedRef.current = false;
