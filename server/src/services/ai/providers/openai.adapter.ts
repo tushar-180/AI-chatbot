@@ -74,7 +74,7 @@ export class OpenAIAdapter implements IAIService {
 
               contentParts.push({
                 type: "input_image",
-                image_url: { url: imageUrl },
+                image_url: imageUrl,
               });
             } catch (err) {
               console.error(`Failed to process image for OpenAI: ${att.url}`, err);
