@@ -17,7 +17,9 @@ const getActiveChatKey = (chatId: string | null) =>
 const createOptimisticTitle = (input: string) =>
   input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
  
-export const useChatStream = () => {
+export const useChatStream = (hookOptions?: {
+  onWebSearchComplete?: () => void;
+}) => {
   const { user } = useUser();
   const { getToken } = useAuth();
   const navigate = useNavigate();
@@ -708,6 +710,10 @@ export const useChatStream = () => {
         assistantPlaceholder.id!,
         optimisticTitle,
       );
+
+      if (webSearchEnabled && hookOptions?.onWebSearchComplete) {
+        hookOptions.onWebSearchComplete();
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         const resolvedChatId =
@@ -940,6 +946,10 @@ export const useChatStream = () => {
         requestId,
         assistantPlaceholder.id!,
       );
+
+      if (webSearchEnabled && hookOptions?.onWebSearchComplete) {
+        hookOptions.onWebSearchComplete();
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         return;
@@ -967,5 +977,3 @@ export const useChatStream = () => {
     loading: isLoadingCurrentChat,
   };
 };
- 
- 

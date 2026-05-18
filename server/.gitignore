@@ -22,3 +22,5 @@ uploads/
 temp/
 .cache/
 
+file_structure.txt
+src/modules/web-search/web_search.txt
