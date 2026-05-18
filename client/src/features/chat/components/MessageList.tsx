@@ -7,6 +7,7 @@ import {
   useLayoutEffect,
 } from "react";
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import type { WebSource } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
@@ -85,11 +86,14 @@ const MessageList = ({
   onSourcesClick,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlight = searchParams.get("highlight");
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   // Track if user manually scrolled up
   const shouldAutoScrollRef = useRef(true);
+  const hasInitialScrolledRef = useRef<string | null>(null);
 
   // Track previous values
   const prevChatIdRef = useRef<string | null>(null);
@@ -144,24 +148,47 @@ const MessageList = ({
   // ATTACH SCROLL LISTENER
   useEffect(() => {
     const container = getScrollContainer();
-
     if (!container) return;
-
     container.addEventListener("scroll", handleScroll);
-
-    // Initial check
     handleScroll();
-
-    return () => {
-      container.removeEventListener("scroll", handleScroll);
-    };
+    return () => container.removeEventListener("scroll", handleScroll);
   }, [getScrollContainer, handleScroll]);
+
+  // CLEAR HIGHLIGHT ON CLICK OR AFTER 3s
+  useEffect(() => {
+    if (!highlight) return;
+
+    // Disable auto-scroll while searching
+    shouldAutoScrollRef.current = false;
+
+    const clearHighlight = () => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (!next.has("highlight")) return prev;
+        next.delete("highlight");
+        return next;
+      }, { replace: true });
+    };
+
+    const handleClick = () => clearHighlight();
+    const timer = setTimeout(clearHighlight, 3000);
+
+    window.addEventListener("click", handleClick, true);
+    return () => {
+      window.removeEventListener("click", handleClick, true);
+      clearTimeout(timer);
+    };
+  }, [highlight, setSearchParams]);
 
   // AUTO SCROLL ON:
   // 1. NEW MESSAGE
   // 2. CHAT SWITCH
   // 3. PAGE REFRESH
   useLayoutEffect(() => {
+    if (highlight) {
+      shouldAutoScrollRef.current = false;
+    }
+
     const messageCountChanged = messages.length !== prevMessageCountRef.current;
 
     const chatChanged = currentChatId !== prevChatIdRef.current;
@@ -171,8 +198,10 @@ const MessageList = ({
     // - refreshing/loading chat
     // - sending new message while already at bottom
     if (
-      chatChanged ||
-      (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
+      !highlight && (
+        chatChanged ||
+        (!messagesLoading && shouldAutoScrollRef.current && messageCountChanged)
+      )
     ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
@@ -181,13 +210,23 @@ const MessageList = ({
 
     prevMessageCountRef.current = messages.length;
     prevChatIdRef.current = currentChatId;
-  }, [messages, currentChatId, messagesLoading, scrollToBottom]);
+  }, [messages, currentChatId, messagesLoading, scrollToBottom, highlight]);
 
   // FORCE SCROLL AFTER CHAT LOAD
   useEffect(() => {
-    if (hasLoadedCurrentChat && messages.length > 0 && !messagesLoading) {
+    if (hasLoadedCurrentChat && messages.length > 0 && !messagesLoading && currentChatId) {
+      // If we already scrolled for this chat, don't do it again
+      if (hasInitialScrolledRef.current === currentChatId) return;
+      
+      // If we have a highlight, we skip the initial scroll and mark as done
+      if (highlight) {
+        hasInitialScrolledRef.current = currentChatId;
+        return;
+      }
+
       const timeout = setTimeout(() => {
         scrollToBottom(false);
+        hasInitialScrolledRef.current = currentChatId;
       }, 50);
 
       return () => clearTimeout(timeout);
@@ -198,6 +237,7 @@ const MessageList = ({
     messages.length,
     messagesLoading,
     scrollToBottom,
+    highlight,
   ]);
 
   const showSuggestions = !currentChatId && messages.length === 0;
@@ -299,6 +339,7 @@ const MessageList = ({
                   onEditStart={onEditStart}
                   onRetry={() => onRetryMessage?.(msg.id)}
                   onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                  highlight={highlight || undefined}
                   onCitationClick={onCitationClick}
                   onSourcesClick={onSourcesClick}
                 />

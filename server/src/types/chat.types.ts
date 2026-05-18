@@ -1,4 +1,5 @@
 import { EventEmitter } from "events";
+import { TokenUsage } from "../utils/tokenCounter";
 
 export type Personalization = {
   nickname: string;
@@ -14,6 +15,7 @@ export type UserProfile = {
   lastName?: string;
   imageUrl?: string;
   lastSignInAt?: Date;
+  role?: "user" | "admin";
   personalization?: Personalization;
 };
 
@@ -44,6 +46,7 @@ export type ChatMessage = {
   requestId?: string;
   status: ChatMessageStatus;
   feedback?: "like" | "dislike" | null;
+    tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
 };

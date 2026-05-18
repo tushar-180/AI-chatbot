@@ -11,6 +11,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['hoist-non-react-statics'],
+  },
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {

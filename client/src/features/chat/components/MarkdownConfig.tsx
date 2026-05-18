@@ -174,6 +174,10 @@ export const assistantMarkdownComponents = {
       )}
     </span>
   ),
+  string: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  number: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  boolean: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  any: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
 };
 
 export const userMarkdownComponents = {
@@ -191,4 +195,8 @@ export const userMarkdownComponents = {
   strong: (props: React.ComponentPropsWithoutRef<"strong">) => (
     <strong className="font-semibold text-white" {...props} />
   ),
+  string: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
+  number: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
+  boolean: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
+  any: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
 };

@@ -7,10 +7,40 @@ export const CHAT_TITLE_MAX_LENGTH = 30;
 export const supportsVision = (modelId: string): boolean => {
   const mid = modelId.toLowerCase();
   
-  // Explicitly check for models we know support vision
-  const visionKeywords = ['flash', 'vision', 'gpt-4o', 'sonnet', 'opus', 'gemini-1.5', 'gemini-2.0'];
+  // Extract model name in case it contains provider prefix (e.g., "openai:gpt-5-mini" -> "gpt-5-mini")
+  const parts = mid.split(":");
+  const modelName = parts.length > 1 ? parts[1].trim() : parts[0].trim();
   
-  return visionKeywords.some(kw => mid.includes(kw));
+  // Explicitly check for exact models that support vision in our configuration
+  const explicitVisionModels = [
+    // Gemini
+    "gemini-2.0-flash",
+    "gemini-3.1-flash-lite-preview",
+    // OpenAI
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-4.1",
+    "gpt-4.1-mini",
+    "o4-mini",
+    // Nvidia
+    "black-forest-labs/flux.2-klein-4b"
+  ];
+  
+  if (explicitVisionModels.includes(modelName)) {
+    return true;
+  }
+  
+  // Keywords that identify general/dynamic vision models safely without matching nano/fictive submodels
+  const visionKeywords = [
+    'flash',
+    'vision',
+    'gpt-4o',
+    'sonnet',
+    'opus',
+    'gemini-1.5'
+  ];
+  
+  return visionKeywords.some(kw => modelName.includes(kw));
 };
 /**
  * Standardizes model names for display.

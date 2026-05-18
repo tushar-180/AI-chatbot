@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser, useAuth } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
@@ -117,8 +117,7 @@ export const useChatStream = (hookOptions?: {
 
     scheduleOptimisticFlush();
   };
-
-  const setOptimisticMessagesForChat = (
+  const setOptimisticMessagesForChat = useCallback((
     chatId: string | null,
     next: Message[] | null,
   ) => {
@@ -127,8 +126,7 @@ export const useChatStream = (hookOptions?: {
       ...current,
       [key]: next,
     }));
-  };
-
+  }, []);
   const isStreamingCurrentChat =
     isStreaming &&
     streamingChatId === getActiveChatKey(currentChatId) &&
@@ -294,6 +292,7 @@ export const useChatStream = (hookOptions?: {
           upsertChat({
             _id: nextChatId,
             title: optimisticTitle || "New Chat",
+            updatedAt: new Date().toISOString(),
           });
           const shouldSelectResolvedChat =
             useChatStore.getState().currentChatId === initialChatId;
@@ -715,6 +714,17 @@ export const useChatStream = (hookOptions?: {
       assistantPlaceholder,
     ]);
 
+    // Optimistically move the chat to the top of the sidebar when activity starts.
+    const activeChat =
+      storeState.currentChat ??
+      storeState.chats.find((chat) => chat._id === effectiveCurrentChatId);
+
+    if (effectiveCurrentChatId && activeChat) {
+      upsertChat({
+        ...activeChat,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     setLoading(true);
     setIsStreaming(true, activeKey);
     stopRequestedRef.current = false;
