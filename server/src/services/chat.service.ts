@@ -129,11 +129,12 @@ const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchReject
     liveDataQuery: webGrounding.liveDataQuery,
     confidence: webGrounding.confidence,
     debug: webGrounding.debug,
-    sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
+    sources: webGrounding.sources.map(({ id, title, url, hostname, snippet }) => ({
       id,
       title,
       url,
       hostname,
+      snippet,
     })),
   };
 };
@@ -303,6 +304,20 @@ async function* streamAssistantResponse(
   yield (includeChatId
     ? { chatId, messageId, requestId, model: providerName, status: "streaming" }
     : { messageId, requestId, model: providerName, status: "streaming" }) as StreamPayload;
+
+  if (webGrounding && !('rejected' in webGrounding) && webGrounding.sources.length > 0) {
+    yield {
+        type: "sources",
+        sources: webGrounding.sources.map(s => ({
+            id: s.id,
+            url: s.url,
+            title: s.title,
+            hostname: s.hostname,
+            snippet: s.snippet,
+        })),
+        requestId,
+    } as StreamPayload;
+}
 
   let fullResponse = "";
   let receivedFirstChunk = false;

@@ -8,6 +8,7 @@ import {
 } from "@/features/chat/services/chat.service";
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
+import type { WebSource } from "../types/chat.types";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
 
@@ -396,6 +397,38 @@ export const useChatStream = (hookOptions?: {
           return { ...current, [key]: next };
         });
       }
+
+      if ("sources" in data && data.sources && Array.isArray(data.sources)) {
+       const sources = data.sources as WebSource[];
+      const key = resolvedChatId ?? initialKey;
+
+      setOptimisticMessagesByChatId((current) => {
+      const messagesForChat = current[key];
+      if (!messagesForChat?.length) return current;
+
+      // Find the last assistant message (the streaming one)
+      const lastAssistantIdx = messagesForChat.findLastIndex(
+        (m) => m.role === "assistant" && m.status === "streaming"
+      );
+      if (lastAssistantIdx === -1) return current;
+
+      const next = [...messagesForChat];
+      next[lastAssistantIdx] = {
+        ...next[lastAssistantIdx],
+        sources,
+        isWebSearching: false, // sources are ready, stop spinning globe
+      };
+      return { ...current, [key]: next };
+    });
+
+    // Also mark the placeholder as having sources (if needed)
+    // Optionally flush any pending updates
+    if (pendingOptimisticUpdateRef.current[key]) {
+      // force a flush to show sources immediately
+      flushOptimisticUpdates();
+    }
+    return; // no further processing for this event
+  }
 
       if (data.done) {
         if (pendingOptimisticFrameRef.current !== null) {

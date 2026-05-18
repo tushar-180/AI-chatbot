@@ -8,6 +8,21 @@ import type {
 
 export type { Chat, Message };
 
+const normalizeMessage = (message: Message & { metadata?: { sources?: Message["sources"] } }): Message => {
+  if (message.sources?.length) {
+    return message;
+  }
+
+  if (message.metadata?.sources?.length) {
+    return {
+      ...message,
+      sources: message.metadata.sources,
+    };
+  }
+
+  return message;
+};
+
 export const chatService = {
   /**
    * Fetches all chats for a given user.
@@ -24,7 +39,7 @@ export const chatService = {
    */
   async fetchMessages(chatId: string): Promise<Message[]> {
     const res = await api.get(`/chat/${chatId}`);
-    return res.data.messages || [];
+    return (res.data.messages || []).map(normalizeMessage);
   },
 
   /**
