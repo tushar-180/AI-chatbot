@@ -51,6 +51,11 @@ const Chat = () => {
   const [selectedSources, setSelectedSources] = useState<WebSource[]>([]);
   const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
 
+  useEffect(() => {
+    setSelectedSources([]);
+    setActiveSourceId(null);
+  }, [currentChatId]);
+
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
     if (chatId && chatId !== currentChatId) {
