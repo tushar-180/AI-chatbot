@@ -27,6 +27,11 @@ interface Message {
   attachments?: Attachment[];
   isWebSearching?: boolean;
   feedback?: "like" | "dislike" | null;
+  tokens?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 interface MessageItemProps {
@@ -36,6 +41,7 @@ interface MessageItemProps {
   onEditStart?: () => void;
   onRetry?: () => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
+  highlight?: string;
 }
 
 /**
@@ -144,35 +150,71 @@ const MessageAvatar = ({
 const MessageMetadata = ({
   isUser,
   model,
+  tokens,
+  isStreaming,
+  content,
 }: {
   isUser: boolean;
   model?: string;
-}) => (
-  <div
-    className={`flex items-center gap-2.5 ${
-      isUser ? "flex-row-reverse" : "flex-row"
-    }`}
-  >
-    <span
-      className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
-        isUser ? "text-slate-400" : "text-slate-500"
-      } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+  tokens?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  isStreaming?: boolean;
+  content?: string;
+}) => {
+  const estimatedCompletionTokens = content ? Math.ceil(content.length / 4) : 0;
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 ${
+        isUser ? "flex-row-reverse" : "flex-row"
+      }`}
     >
-      {isUser ? "You" : "Velora"}
-    </span>
-    {!isUser && model && (
-      <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
-        {formatModelName(model)}
+      <span
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
+          isUser ? "text-slate-400" : "text-slate-500"
+        } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+      >
+        {isUser ? "You" : "Velora"}
       </span>
-    )}
-  </div>
-);
+      {!isUser && model && (
+        <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+          {formatModelName(model)}
+        </span>
+      )}
+      {/* Real-time thinking / generation status tracker */}
+      {!isUser && isStreaming && (
+        <>
+          {!content ? (
+            <span className="flex items-center rounded-md border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-[9px] font-mono text-indigo-400/90 animate-pulse">
+              Thinking...
+            </span>
+          ) : (
+            <span className="flex items-center rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[9px] font-mono text-indigo-400 animate-pulse">
+              {estimatedCompletionTokens} tokens generating...
+            </span>
+          )}
+        </>
+      )}
+      {/* Finalized tokens badge shown after generation completes */}
+      {!isUser && !isStreaming && tokens && tokens.completionTokens > 0 && (
+        <span
+          className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[9px] font-mono text-slate-500"
+        >
+          {tokens.completionTokens?.toLocaleString()} tokens
+        </span>
+      )}
+    </div>
+  );
+};
 
 /**
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback, highlight }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";
@@ -181,6 +223,9 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
     const [editContent, setEditContent] = useState(msg.content);
     const [copied, setCopied] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const highlightedRef = useRef(false);
+    const lastHighlightedTerm = useRef<string | null>(null);
 
     useEffect(() => {
         if (isEditing && textareaRef.current) {
@@ -189,6 +234,96 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
             textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
         }
     }, [isEditing]);
+
+    useEffect(() => {
+        if (!highlight) {
+            highlightedRef.current = false;
+            lastHighlightedTerm.current = null;
+            return;
+        }
+
+        // If we already highlighted this exact term for this message, skip
+        if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
+            return;
+        }
+
+        if (contentRef.current && !isStreaming) {
+            const term = highlight.toLowerCase();
+            const walker = document.createTreeWalker(contentRef.current, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            const nodes: Text[] = [];
+            let fullText = "";
+
+            while ((node = walker.nextNode())) {
+                nodes.push(node as Text);
+                fullText += node.textContent || "";
+            }
+
+            const startIndex = fullText.toLowerCase().indexOf(term);
+            if (startIndex !== -1) {
+                const endIndex = startIndex + term.length;
+                let currentPos = 0;
+                let firstMark: HTMLElement | null = null;
+
+                nodes.forEach((textNode) => {
+                    const nodeText = textNode.textContent || "";
+                    const nodeStart = currentPos;
+                    const nodeEnd = currentPos + nodeText.length;
+
+                    // Check if this node overlaps with the search term
+                    const overlapStart = Math.max(startIndex, nodeStart);
+                    const overlapEnd = Math.min(endIndex, nodeEnd);
+
+                    if (overlapStart < overlapEnd) {
+                        const relativeStart = overlapStart - nodeStart;
+                        const relativeEnd = overlapEnd - nodeStart;
+
+                        const before = nodeText.substring(0, relativeStart);
+                        const match = nodeText.substring(relativeStart, relativeEnd);
+                        const after = nodeText.substring(relativeEnd);
+
+                        const span = document.createElement("span");
+                        const mark = document.createElement("mark");
+                        mark.className = "highlight-mark bg-emerald-500/40 text-emerald-300 font-bold px-0.5 rounded ring-1 ring-emerald-500/50 animate-pulse";
+                        mark.textContent = match;
+                        
+                        span.appendChild(document.createTextNode(before));
+                        span.appendChild(mark);
+                        span.appendChild(document.createTextNode(after));
+
+                        if (!firstMark) firstMark = mark;
+                        
+                        textNode.parentNode?.replaceChild(span, textNode);
+                    }
+
+                    currentPos = nodeEnd;
+                });
+
+                if (firstMark) {
+                    lastHighlightedTerm.current = highlight;
+                    highlightedRef.current = true;
+
+                    // Use requestAnimationFrame for smoother and more reliable scrolling
+                    requestAnimationFrame(() => {
+                        if (firstMark) {
+                            firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                    });
+
+                    // Stop pulsing after 3s
+                    const timer = setTimeout(() => {
+                        const marks = contentRef.current?.querySelectorAll(".highlight-mark");
+                        marks?.forEach(m => {
+                            m.classList.remove("animate-pulse");
+                            m.classList.add("bg-emerald-500/20");
+                        });
+                    }, 3000);
+
+                    return () => clearTimeout(timer);
+                }
+            }
+        }
+    }, [highlight, isStreaming]);
 
     const handleEditStart = () => {
         setIsEditing(true);
@@ -249,7 +384,13 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
                 >
                     {!isFailed && (
                         <div className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-                            <MessageMetadata isUser={isUser} model={msg.model} />
+                            <MessageMetadata 
+                                isUser={isUser} 
+                                model={msg.model} 
+                                tokens={msg.tokens} 
+                                isStreaming={isStreaming} 
+                                content={msg.content}
+                            />
                             
                             {isUser && !isEditing && (
                                 <button
@@ -271,6 +412,8 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
                                   ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
                                   : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
                         }`}
+                        ref={contentRef}
+                        key={highlight || "no-highlight"}
                     >
                         {isStreaming && !msg.content ? (
                             msg.isWebSearching ? (
@@ -404,7 +547,9 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
     prev.message.isWebSearching === next.message.isWebSearching &&
-    prev.message.feedback === next.message.feedback
+    prev.message.feedback === next.message.feedback &&
+    prev.highlight === next.highlight &&
+    prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens
   );
 };
 

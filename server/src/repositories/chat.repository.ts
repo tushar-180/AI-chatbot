@@ -58,6 +58,75 @@ export const chatRepository = {
       .limit(limit);
   },
 
+  async searchChats(userId: string, query: string) {
+    try {
+      // First, try searching for chats by title
+      const chatResults = await Chat.find({
+        userId,
+        title: { $regex: query, $options: "i" }
+      })
+      .select("-messages -legacyMessages")
+      .limit(10)
+      .lean();
+
+      // Second, search in messages content
+      const messageResults = await Message.find({
+        userId,
+        content: { $regex: query, $options: "i" }
+      })
+      .limit(20)
+      .lean();
+
+      const resultsMap = new Map<string, any>();
+
+      // Add chat results
+      chatResults.forEach(chat => {
+        resultsMap.set(String(chat._id), {
+          ...chat,
+          matchType: "title",
+          snippet: ""
+        });
+      });
+
+      // Add message results (overwriting or adding snippet)
+      for (const msg of messageResults) {
+        const chatId = String(msg.chatId);
+        const existing = resultsMap.get(chatId);
+        
+        const content = msg.content || "";
+        const index = content.toLowerCase().indexOf(query.toLowerCase());
+        const start = Math.max(0, index - 40);
+        const end = Math.min(content.length, index + 60);
+        const snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "");
+
+        if (existing) {
+          existing.matchType = "content";
+          existing.snippet = snippet;
+        } else {
+          const chat = await Chat.findById(chatId).select("-messages -legacyMessages").lean();
+          if (chat && String(chat.userId) === userId) {
+            resultsMap.set(chatId, {
+              ...chat,
+              matchType: "content",
+              snippet: snippet
+            });
+          }
+        }
+      }
+
+      const finalResults = Array.from(resultsMap.values()).sort((a, b) => 
+        new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf()
+      );
+
+      return finalResults;
+
+     
+    } catch (err) {
+      console.error("Search failed:", err);
+      return [];
+    }
+  },
+
   async deleteById(chatId: string) {
     const chat = await Chat.findByIdAndDelete(chatId);
     if (chat) {
@@ -72,7 +141,20 @@ export const chatRepository = {
       userId: messageData.userId,
       ...messageData,
     });
-    await this.touchChat(chatId);
+    
+    if (messageData.tokens) {
+      await Chat.findByIdAndUpdate(chatId, {
+        $inc: {
+          "tokens.promptTokens": messageData.tokens.promptTokens || 0,
+          "tokens.completionTokens": messageData.tokens.completionTokens || 0,
+          "tokens.totalTokens": messageData.tokens.totalTokens || 0,
+        },
+        $set: { updatedAt: new Date() },
+      });
+    } else {
+      await this.touchChat(chatId);
+    }
+    
     return message;
   },
 
@@ -91,7 +173,18 @@ export const chatRepository = {
     }
 
     if (message?.chatId) {
-      await this.touchChat(String(message.chatId));
+      if (updateData.tokens) {
+        await Chat.findByIdAndUpdate(String(message.chatId), {
+          $inc: {
+            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
+            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
+            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
+        });
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
     }
     return message;
   },
@@ -117,7 +210,20 @@ export const chatRepository = {
       returnDocument: "after",
       },
     );
-    await this.touchChat(chatId);
+    if (message?.chatId) {
+      if (updateData.tokens) {
+        await Chat.findByIdAndUpdate(String(message.chatId), {
+          $inc: {
+            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
+            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
+            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
+        });
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
+    }
     return message;
   },
 

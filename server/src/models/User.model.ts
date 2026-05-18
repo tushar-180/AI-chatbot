@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema(
     lastSignInAt: {
       type: Date,
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     personalization: {
       customInstructions: { type: String, default: "" },
       nickname: { type: String, default: "" },
