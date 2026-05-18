@@ -52,3 +52,33 @@ export const forkSharedChat = asyncHandler(async (req: Request, res: Response) =
     return sendControllerError(res, error, "Failed to fork shared chat");
   }
 });
+
+export const getUserSharedChats = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const userId = req.clerkId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const result = await sharedChatService.getUserSharedChats(userId);
+    return res.json(result);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to fetch user shared chats");
+  }
+});
+
+export const deleteSharedChat = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const userId = req.clerkId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const sharedChatId = req.params.sharedChatId as string;
+    const result = await sharedChatService.deleteSharedChat(sharedChatId, userId);
+    return res.json(result);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to delete shared chat");
+  }
+});
+

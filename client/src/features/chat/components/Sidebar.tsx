@@ -1,7 +1,8 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
-import type { Chat } from "@/features/chat/types/chat.types";
+import { useGroupStore } from "../store/useGroupStore";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   X,
@@ -13,14 +14,16 @@ import {
   ChevronUp,
   Image as ImageIcon,
   Sparkles,
-  Archive,
-  ArchiveRestore,
+  Share,
+  Users,
+  Link as LinkIcon,
   Pin,
   PinOff,
+  Archive,
+  ArchiveRestore,
   User,
   Settings,
   LogOut,
-  Share,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -32,6 +35,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ShareModal from "./ShareModal";
+import CreateGroupModal from "./CreateGroupModal";
+import GroupLinkModal from "./GroupLinkModal";
+import { api } from "@/lib/api";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
+
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
@@ -40,25 +54,33 @@ const SettingsModal = lazy(() => import("./SettingsModal"));
  * Sidebar Component
  * Manages the list of chat threads and navigation.
  */
-interface ChatItemProps {
-  chat: Chat;
-  currentChatId: string | null;
+interface UnifiedItem {
+  _id: string;
+  title: string;
+  updatedAt: string;
+  itemType: "chat" | "group";
+}
+
+interface ItemProps {
+  item: UnifiedItem;
   isActive: boolean;
   isSelectionMode: boolean;
   isSelected: boolean;
-  onSelect: (id: string) => void | Promise<void>;
-  onDelete: (id: string) => void;
+  onSelect: (item: UnifiedItem) => void;
+  onDelete: (id: string, type: "chat" | "group") => void;
   onRename: (id: string, title: string) => Promise<void>;
   onArchive: (id: string) => void;
   onUnarchive: (id: string) => void;
   onPin: (id: string) => void;
   onUnpin: (id: string) => void;
   onToggleSelect: (id: string) => void;
+  isPinned: boolean;
+  isArchived: boolean;
 }
 
-const SidebarChatItem = memo(
+const SidebarItem = memo(
   ({
-    chat,
+    item,
     isActive,
     isSelectionMode,
     isSelected,
@@ -70,12 +92,46 @@ const SidebarChatItem = memo(
     onPin,
     onUnpin,
     onToggleSelect,
-  }: ChatItemProps) => {
+    isPinned,
+    isArchived,
+  }: ItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
-    const [editValue, setEditValue] = useState(chat.title || "");
+    const [editValue, setEditValue] = useState(item.title || "");
+    const [showMenu, setShowMenu] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+    const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
+
+    const { groups } = useGroupStore();
+    const group = groups.find((g) => g._id === item._id);
+    const inviteCode = group?.inviteCode || "";
 
     const itemRef = useRef<HTMLDivElement>(null);
+    const [openUpwards, setOpenUpwards] = useState(false);
+    const menuButtonRef = useRef<HTMLDivElement>(null);
+
+    const handleStartEdit = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsEditing(true);
+      setShowMenu(false);
+      setEditValue(item.title || "");
+    };
+
+    const handleCancel = useCallback((e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setIsEditing(false);
+      setEditValue(item.title || "");
+    }, [item.title]);
+
+    const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+      e?.stopPropagation();
+      if (!editValue.trim() || editValue === item.title) {
+        handleCancel();
+        return;
+      }
+      await onRename(item._id, editValue);
+      setIsEditing(false);
+    };
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -83,48 +139,35 @@ const SidebarChatItem = memo(
           itemRef.current &&
           !itemRef.current.contains(event.target as Node)
         ) {
+          if (showMenu) setShowMenu(false);
           if (isEditing) handleCancel();
         }
       };
 
-      if (isEditing) {
+      if (showMenu || isEditing) {
         document.addEventListener("mousedown", handleClickOutside);
       }
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
-    }, [isEditing]);
+    }, [showMenu, isEditing, handleCancel]);
 
-    const handleStartEdit = (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setIsEditing(true);
-      setEditValue(chat.title || "");
-    };
-
-    const handleCancel = (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setIsEditing(false);
-      setEditValue(chat.title || "");
-    };
-
-    const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
-      e?.stopPropagation();
-      if (!editValue.trim() || editValue === chat.title) {
-        handleCancel();
-        return;
+    useEffect(() => {
+      if (showMenu && menuButtonRef.current) {
+        const rect = menuButtonRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setOpenUpwards(spaceBelow < 160);
       }
-      await onRename(chat._id, editValue);
-      setIsEditing(false);
-    };
+    }, [showMenu]);
 
     return (
       <div
         ref={itemRef}
         onClick={() => {
           if (isSelectionMode) {
-            onToggleSelect(chat._id);
+            if (item.itemType === "chat") onToggleSelect(item._id);
           } else if (!isEditing) {
-            onSelect(chat._id);
+            onSelect(item);
           }
         }}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
@@ -136,7 +179,7 @@ const SidebarChatItem = memo(
         }`}
       >
         <div className="flex flex-1 items-center gap-3 min-w-0">
-          {isSelectionMode && (
+          {isSelectionMode && item.itemType === "chat" && (
             <div
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
@@ -147,7 +190,35 @@ const SidebarChatItem = memo(
               {isSelected && <Check size={10} strokeWidth={4} />}
             </div>
           )}
-          {chat.isPinned && !isEditing && (
+
+          {item.itemType === "group" && (
+            group ? (
+              <AvatarGroup className="flex-shrink-0">
+                {group.members.slice(0, 2).map((member) => (
+                  <Avatar key={member.userId} className="h-5 w-5 ring-1 ring-slate-950">
+                    {member.userImage && (
+                      <AvatarImage src={member.userImage} alt={member.username} className="object-cover" />
+                    )}
+                    <AvatarFallback className="text-[8px] font-bold bg-zinc-800 text-zinc-300 flex items-center justify-center">
+                      {member.username.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {group.members.length > 2 && (
+                  <AvatarGroupCount className="h-5 w-5 text-[8px] bg-emerald-500/10 text-emerald-500 ring-1 ring-slate-950 font-bold border-none">
+                    +{group.members.length - 2}
+                  </AvatarGroupCount>
+                )}
+              </AvatarGroup>
+            ) : (
+              <Users
+                size={14}
+                className={isActive ? "text-emerald-600" : "text-emerald-500/50"}
+              />
+            )
+          )}
+
+          {item.itemType === "chat" && isPinned && !isEditing && (
             <Pin 
               size={12} 
               strokeWidth={2.5} 
@@ -156,23 +227,29 @@ const SidebarChatItem = memo(
               }`} 
             />
           )}
+
           {isEditing ? (
-            <div className="flex-1 flex items-center gap-3 min-w-0">
-              <input
-                autoFocus
-                className={`flex-1 max-w-[180px] bg-transparent border-b-2 outline-none py-1 text-[13px] min-w-0 transition-all font-medium ${
-                  isActive 
-                    ? "border-black/10 focus:border-black/30 text-black" 
-                    : "border-white/10 focus:border-white/30 text-white"
-                }`}
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSave();
-                  if (e.key === "Escape") handleCancel();
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
+            <input
+              autoFocus
+              className="flex-1 bg-transparent text-inherit border-none outline-none py-0 text-[13px]"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") handleCancel();
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <span className="block truncate font-medium tracking-tight">
+              {item.title || "Untitled Session"}
+            </span>
+          )}
+        </div>
+
+        {!isSelectionMode && (
+          <div className="flex shrink-0 items-center gap-1">
+            {isEditing ? (
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={(e) => {
@@ -203,124 +280,174 @@ const SidebarChatItem = memo(
                   <X size={14} strokeWidth={3} />
                 </button>
               </div>
-            </div>
-          ) : (
-            <span className="block truncate font-medium tracking-tight">
-              {chat.title || "Untitled Session"}
-            </span>
-          )}
-        </div>
+            ) : (
+              <div className="relative" ref={menuButtonRef}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(!showMenu);
+                  }}
+                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all outline-none ${
+                    isActive
+                      ? "text-black/40 hover:text-black"
+                      : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
+                  }`}
+                >
+                  <MoreVertical size={14} />
+                </button>
 
-        {!isSelectionMode && !isEditing && (
-          <div className="flex shrink-0 items-center gap-1">
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
+                {showMenu && (
+                  <div
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all outline-none ${
-                      isActive
-                        ? "text-black/40 hover:text-black"
-                        : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
+                    className={`absolute right-0 z-50 w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 outline-none ${
+                      openUpwards
+                        ? "bottom-full mb-2 origin-bottom-right"
+                        : "top-full mt-2 origin-top-right"
                     }`}
                   >
-                    <MoreVertical size={14} />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={8}
-                  className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 z-100 outline-none focus:ring-0"
-                >
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleStartEdit();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
-                  >
-                    <Edit2 size={12} />
-                    <span>Rename</span>
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsShareModalOpen(true);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
-                  >
-                    <Share size={12} />
-                    <span>Share</span>
-                  </DropdownMenuItem>
-
-                  {chat.isArchived ? (
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onUnarchive(chat._id);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
-                    >
-                      <ArchiveRestore size={12} />
-                      <span>Unarchive</span>
-                    </DropdownMenuItem>
-                  ) : (
-                    <>
-                      {chat.isPinned ? (
-                        <DropdownMenuItem
+                    {item.itemType === "chat" && (
+                      <>
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onUnpin(chat._id);
+                            setIsShareModalOpen(true);
+                            setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
-                          <PinOff size={12} className="rotate-[-35deg]" />
-                          <span>Unpin</span>
-                        </DropdownMenuItem>
-                      ) : (
-                        <DropdownMenuItem
+                          <Share size={12} />
+                          <span>Share</span>
+                        </button>
+
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onPin(chat._id);
+                            setIsGroupModalOpen(true);
+                            setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-white"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
-                          <Pin size={12} className="rotate-[-35deg]" />
-                          <span>Pin</span>
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
+                          <Users size={12} />
+                          <span>Create Group</span>
+                        </button>
+
+                        <button
+                          onClick={handleStartEdit}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                        >
+                          <Edit2 size={12} />
+                          <span>Rename</span>
+                        </button>
+
+                        {isArchived ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnarchive(item._id);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          >
+                            <ArchiveRestore size={12} />
+                            <span>Unarchive</span>
+                          </button>
+                        ) : (
+                          <>
+                            {isPinned ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUnpin(item._id);
+                                  setShowMenu(false);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                              >
+                                <PinOff size={12} className="rotate-[-35deg]" />
+                                <span>Unpin</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPin(item._id);
+                                  setShowMenu(false);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                              >
+                                <Pin size={12} className="rotate-[-35deg]" />
+                                <span>Pin</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                  e.stopPropagation();
+                                  onArchive(item._id);
+                                  setShowMenu(false);
+                              }}
+                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-all outline-none"
+                            >
+                              <Archive size={12} />
+                              <span>Archive</span>
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {item.itemType === "group" && (
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onArchive(chat._id);
+                          setIsGroupLinkModalOpen(true);
+                          setShowMenu(false);
                         }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-amber-400"
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                       >
-                        <Archive size={12} />
-                        <span>Archive</span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(chat._id);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all cursor-pointer outline-none focus:bg-white/5 focus:text-red-400"
-                  >
-                    <Trash2 size={12} />
-                    <span>Delete</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                        <LinkIcon size={12} />
+                        <span>Group Link</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowMenu(false);
+                        onDelete(item._id, item.itemType);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all outline-none"
+                    >
+                      <Trash2 size={12} />
+                      <span>
+                        {item.itemType === "group" ? "Leave Group" : "Delete"}
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
-        {chat._id && (
-          <ShareModal
-            isOpen={isShareModalOpen}
-            onClose={() => setIsShareModalOpen(false)}
-            chatId={chat._id}
+        {item.itemType === "chat" && (
+          <>
+            <ShareModal
+              isOpen={isShareModalOpen}
+              onClose={() => setIsShareModalOpen(false)}
+              chatId={item._id}
+            />
+            <CreateGroupModal
+              isOpen={isGroupModalOpen}
+              onClose={() => setIsGroupModalOpen(false)}
+              chatId={item._id}
+            />
+          </>
+        )}
+
+        {item.itemType === "group" && (
+          <GroupLinkModal
+            isOpen={isGroupLinkModalOpen}
+            onClose={() => setIsGroupLinkModalOpen(false)}
+            inviteCode={inviteCode}
           />
         )}
       </div>
@@ -330,6 +457,10 @@ const SidebarChatItem = memo(
 
 const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useChatStore();
+  const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup } =
+    useGroupStore();
+  const { user } = useUser();
+  const navigate = useNavigate();
   const {
     chats,
     currentChatId,
@@ -346,26 +477,54 @@ const Sidebar = () => {
     hasMore,
     viewingArchived,
   } = useChatList();
+
   const [showRecent, setShowRecent] = useState(true);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteConfig, setDeleteConfig] = useState<{
+    id: string;
+    type: "chat" | "group";
+  } | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("general");
-  const { user } = useUser();
 
   // Multi-select state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const filteredChats = chats
-    .filter((c) => c.isArchived === viewingArchived)
-    .sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return 0;
-    });
+
+  const filteredChats = useMemo(() => {
+    return chats
+      .filter((c) => c.isArchived === viewingArchived)
+      .sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0;
+      });
+  }, [chats, viewingArchived]);
 
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Merge and sort chats and groups
+  const unifiedList = useMemo(() => {
+    const combined: UnifiedItem[] = [
+      ...filteredChats.map((c) => ({
+        _id: c._id,
+        title: c.title,
+        updatedAt: c.updatedAt || "",
+        itemType: "chat" as const,
+      })),
+      ...(!viewingArchived ? groups.map((g) => ({
+        _id: g._id,
+        title: g.title,
+        updatedAt: g.updatedAt,
+        itemType: "group" as const,
+      })) : []),
+    ];
+    return combined.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  }, [filteredChats, groups, viewingArchived]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredChats.length) {
@@ -397,6 +556,19 @@ const Sidebar = () => {
     setShowBulkDeleteConfirm(false);
   };
 
+  const handleLeaveGroup = async (groupId: string) => {
+    try {
+      await api.post(`/group/${groupId}/leave`, { userId: user?.id });
+      removeGroup(groupId);
+      if (currentGroupId === groupId) {
+        setCurrentGroup(null);
+        navigate("/chat");
+      }
+    } catch (err) {
+      console.error("Failed to leave group:", err);
+    }
+  };
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -413,6 +585,16 @@ const Sidebar = () => {
 
     return () => observer.disconnect();
   }, [hasMore, fetchMoreChats]);
+
+  useEffect(() => {
+    if (user?.id) {
+      api
+        .get("/group/user-groups", { params: { userId: user.id } })
+        .then((res) => {
+          setGroups(res.data);
+        });
+    }
+  }, [user?.id, setGroups]);
 
   return (
     <>
@@ -431,7 +613,7 @@ const Sidebar = () => {
       `}
       >
         <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3 group">
+          <div className="flex items-center gap-3 group text-white">
             <img
               src="/logo.png"
               alt="Velora Logo"
@@ -537,7 +719,7 @@ const Sidebar = () => {
             </div>
           )}
 
-          {filteredChats.length === 0 ? (
+          {unifiedList.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
                 Empty
@@ -547,24 +729,40 @@ const Sidebar = () => {
             showRecent && (
               <div className="min-h-0 flex-1 overflow-y-auto pr-2">
                 <div className="flex flex-col gap-3">
-                  {filteredChats.map((chat) => (
-                    <SidebarChatItem
-                      key={chat._id}
-                      chat={chat}
-                      currentChatId={currentChatId}
-                      isActive={currentChatId === chat._id}
-                      isSelectionMode={isSelectionMode}
-                      isSelected={selectedIds.has(chat._id)}
-                      onSelect={selectChat}
-                      onDelete={(id) => setDeleteId(id)}
-                      onRename={renameChat}
-                      onArchive={archiveChat}
-                      onUnarchive={unarchiveChat}
-                      onPin={pinChat}
-                      onUnpin={unpinChat}
-                      onToggleSelect={toggleSelect}
-                    />
-                  ))}
+                  {unifiedList.map((item) => {
+                    const chat = chats.find((c) => c._id === item._id);
+                    return (
+                      <SidebarItem
+                        key={item._id}
+                        item={item}
+                        isActive={
+                          item.itemType === "chat"
+                            ? currentChatId === item._id
+                            : currentGroupId === item._id
+                        }
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedIds.has(item._id)}
+                        onSelect={(target) => {
+                          if (target.itemType === "chat") {
+                            selectChat(target._id);
+                          } else {
+                            setCurrentGroup(target._id);
+                            setSidebarOpen(false);
+                            navigate(`/group/${target._id}`);
+                          }
+                        }}
+                        onDelete={(id, type) => setDeleteConfig({ id, type })}
+                        onRename={renameChat}
+                        onArchive={archiveChat}
+                        onUnarchive={unarchiveChat}
+                        onPin={pinChat}
+                        onUnpin={unpinChat}
+                        onToggleSelect={toggleSelect}
+                        isPinned={chat?.isPinned || false}
+                        isArchived={chat?.isArchived || false}
+                      />
+                    );
+                  })}
                   {/* Intersection Observer Sentinel */}
                   <div ref={observerTarget} className="h-4 w-full" />
                   {hasMore && (
@@ -665,24 +863,43 @@ const Sidebar = () => {
 
       <Suspense fallback={null}>
         <DeleteConfirmModal
-          isOpen={!!deleteId || showBulkDeleteConfirm}
+          isOpen={!!deleteConfig || showBulkDeleteConfirm}
           onClose={() => {
-            setDeleteId(null);
+            setDeleteConfig(null);
             setShowBulkDeleteConfirm(false);
           }}
           onConfirm={() => {
-            if (deleteId) {
-              deleteChat(deleteId);
-              setDeleteId(null);
+            if (deleteConfig) {
+              if (deleteConfig.type === "chat") {
+                deleteChat(deleteConfig.id);
+              } else {
+                handleLeaveGroup(deleteConfig.id);
+              }
+              setDeleteConfig(null);
             } else if (showBulkDeleteConfirm) {
               confirmBulkDelete();
             }
           }}
-          title={showBulkDeleteConfirm ? "Delete Multiple Chats" : undefined}
+          purpose={
+            showBulkDeleteConfirm
+              ? `Delete ${selectedIds.size} Chats`
+              : deleteConfig?.type === "group"
+                ? "Leave"
+                : "Delete"
+          }
+          title={
+            showBulkDeleteConfirm
+              ? "Delete Multiple Chats"
+              : deleteConfig?.type === "group"
+                ? "Leave Group"
+                : undefined
+          }
           message={
             showBulkDeleteConfirm
               ? `Are you sure you want to delete ${selectedIds.size} selected chats? This action cannot be undone.`
-              : undefined
+              : deleteConfig?.type === "group"
+                ? "Are you sure you want to leave this group chat?"
+                : undefined
           }
         />
 
