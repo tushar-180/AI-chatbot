@@ -14,6 +14,7 @@ export type Message = {
         mimeType?: string;
         size?: number;
     }[];
+    sources?: WebSource[];
 };
 
 export type Chat = {
@@ -35,3 +36,11 @@ export type StreamEventPayload = {
     error?: string;
     messageId?: string;
 };
+
+export type WebSource = {
+    id: number;
+    title: string;
+    hostname: string;
+    url: string;
+    snippet: string;
+}
