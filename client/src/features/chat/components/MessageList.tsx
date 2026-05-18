@@ -8,6 +8,7 @@ import {
 } from "react";
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import type { WebSource } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
 
@@ -16,6 +17,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   model?: string;
+  sources?: WebSource[];
 }
 
 const SUGGESTIONS = [
@@ -62,6 +64,8 @@ interface MessageListProps {
   onEditStart?: () => void;
   onRetryMessage?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
+  onCitationClick?: (id: number) => void;
+  onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
 }
 
 const MessageList = ({
@@ -78,6 +82,8 @@ const MessageList = ({
   onEditStart,
   onRetryMessage,
   onFeedback,
+  onCitationClick,
+  onSourcesClick,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -334,6 +340,8 @@ const MessageList = ({
                   onRetry={() => onRetryMessage?.(msg.id)}
                   onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
                   highlight={highlight || undefined}
+                  onCitationClick={onCitationClick}
+                  onSourcesClick={onSourcesClick}
                 />
               </div>
             ))}

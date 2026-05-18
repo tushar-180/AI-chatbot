@@ -4,6 +4,7 @@ import { User, Globe, Pencil, Check, X, RotateCcw, ThumbsUp, ThumbsDown, Copy } 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import type { WebSource } from "../types/chat.types";
 import {
   assistantMarkdownComponents,
   userMarkdownComponents,
@@ -32,6 +33,8 @@ interface Message {
     completionTokens: number;
     totalTokens: number;
   };
+  // 🆕 Web search sources (if any)
+  sources?: WebSource[];
 }
 
 interface MessageItemProps {
@@ -42,6 +45,8 @@ interface MessageItemProps {
   onRetry?: () => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
   highlight?: string;
+  onCitationClick?: (id: number) => void;
+  onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
 }
 
 /**
@@ -214,7 +219,7 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback, highlight }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback, highlight, onCitationClick, onSourcesClick }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";
@@ -358,6 +363,32 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
         }
     };
 
+    const processedContent = !isUser && msg.content
+        ? msg.content.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>')
+        : msg.content;
+
+    const citationComponents = !isUser
+        ? {
+              ...assistantMarkdownComponents,
+              cite: ({ node }: any) => {
+                  const id = Number(node?.properties?.dataId);
+                  if (isNaN(id)) return null;
+                  return (
+                      <button
+                          onClick={(e) => {
+                              e.preventDefault();
+                              onCitationClick?.(id);
+                          }}
+                          className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+                          title={`Source ${id}`}
+                      >
+                          {id}
+                      </button>
+                  );
+              },
+          }
+        : undefined;
+
     return (
         <div
             className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
@@ -482,10 +513,10 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
                                         components={
                                             isUser
                                                 ? userMarkdownComponents
-                                                : assistantMarkdownComponents
+                                                : citationComponents
                                         }
                                     >
-                                        {msg.content}
+                                        {processedContent}
                                     </ReactMarkdown>
                                 )}
                                 <AttachmentList
@@ -497,7 +528,7 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
 
                         {/* Assistant Action Buttons (ChatGPT Style) */}
                         {!isUser && !isStreaming && (msg.content || isFailed) && (
-                            <div className="mt-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                            <div className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                                 <button
                                     onClick={handleCopy}
                                     className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -529,6 +560,20 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
                                 >
                                     <RotateCcw size={14} />
                                 </button>
+
+                                {!!msg.sources?.length && (
+                                    <button
+                                        onClick={() => {
+                                            if (msg.sources?.length) {
+                                                onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                                            }
+                                        }}
+                                        className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                                        title="View sources"
+                                    >
+                                        Sources
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -549,7 +594,9 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.message.isWebSearching === next.message.isWebSearching &&
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
-    prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens
+    prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens &&
+    prev.message.sources === next.message.sources
+
   );
 };
 

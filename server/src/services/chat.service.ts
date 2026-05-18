@@ -134,11 +134,12 @@ const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchReject
     liveDataQuery: webGrounding.liveDataQuery,
     confidence: webGrounding.confidence,
     debug: webGrounding.debug,
-    sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
+    sources: webGrounding.sources.map(({ id, title, url, hostname, snippet }) => ({
       id,
       title,
       url,
       hostname,
+      snippet,
     })),
   };
 };
@@ -208,24 +209,33 @@ const buildPromptMessages = async (
     });
   }
 
-  let webGrounding: WebGroundingContext | null = null;
-  if (webSearchEnabled && latestUserMessage) {
-    const maybeGrounding = await webSearchService.buildGroundingContext(
-      latestUserMessage,
-      chatMessages,
-    );
-    if (maybeGrounding && "systemPrompt" in maybeGrounding) {
-      webGrounding = maybeGrounding as WebGroundingContext;
+    let webGrounding: WebGroundingContext | null = null;
+    const supportsImages = provider?.startsWith('gemini')
+    if (webSearchEnabled && latestUserMessage) {
+        const result = await webSearchService.buildGroundingContext(
+            latestUserMessage,
+            chatMessages,
+            userId,
+            supportsImages
+        );
+
+        // Handle quota/cooldown rejections gracefully
+        if (result && "rejected" in result) {
+            console.warn(
+                `[chat] Web search rejected: ${result.reason} — ${result.message}`,
+            );
+        } else {
+            webGrounding = result;
+        }
     }
-  }
-  if (webGrounding) {
-    systemMessages.push({
-      role: "system",
-      content: webGrounding.systemPrompt,
-      userId,
-      status: "completed",
-    });
-  }
+    if (webGrounding) {
+        systemMessages.push({
+            role: "system",
+            content: webGrounding.systemPrompt,
+            userId,
+            status: "completed",
+        });
+    }
 
   return {
     promptMessages: [...systemMessages, ...promptMessages],
@@ -299,6 +309,20 @@ async function* streamAssistantResponse(
   yield (includeChatId
     ? { chatId, messageId, requestId, model: providerName, status: "streaming" }
     : { messageId, requestId, model: providerName, status: "streaming" }) as StreamPayload;
+
+  if (webGrounding && !('rejected' in webGrounding) && webGrounding.sources.length > 0) {
+    yield {
+        type: "sources",
+        sources: webGrounding.sources.map(s => ({
+            id: s.id,
+            url: s.url,
+            title: s.title,
+            hostname: s.hostname,
+            snippet: s.snippet,
+        })),
+        requestId,
+    } as StreamPayload;
+}
 
   let fullResponse = "";
   let receivedFirstChunk = false;

@@ -24,12 +24,8 @@ export const AI_PROVIDERS = {
     models: [
       "nvidia/nemotron-3-super-120b-a12b",
       "moonshotai/kimi-k2-instruct",
-      "openai/gpt-oss-120b",
-      "black-forest-labs/flux.2-klein-4b",
-    ],
-    visionModels: [
-      "black-forest-labs/flux.2-klein-4b", // For image gen, but could be extended
-    ],
+      "openai/gpt-oss-120b"
+    ]
   },
 } as const;
 

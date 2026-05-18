@@ -13,33 +13,42 @@
 │   ├── controllers
 │   │   ├── ai.controller.ts
 │   │   ├── chat.controller.ts
+│   │   ├── groupChat.controller.ts
+│   │   ├── sharedChat.controller.ts
 │   │   └── user.controller.ts
 │   ├── middleware
+│   │   ├── auth.middleware.ts
 │   │   └── error.middleware.ts
 │   ├── models
 │   │   ├── Chat.model.ts
+│   │   ├── GroupChat.model.ts
+│   │   ├── SharedChat.model.ts
 │   │   ├── UserMemory.model.ts
 │   │   └── User.model.ts
 │   ├── modules
 │   │   └── web-search
 │   │       ├── cache.ts
 │   │       ├── confidence.ts
-│   │       ├── deduplication.ts
 │   │       ├── index.ts
-│   │       ├── llamaindex.ts
 │   │       ├── queryResolver.ts
+│   │       ├── quotaStatus.ts
+│   │       ├── rateLimiter.ts
 │   │       ├── reranker.ts
 │   │       ├── webSearch.prompts.ts
 │   │       ├── webSearch.service.ts
+│   │       ├── web_search.txt
 │   │       └── webSearch.types.ts
 │   ├── repositories
 │   │   └── chat.repository.ts
 │   ├── routes
 │   │   ├── ai.routes.ts
 │   │   ├── chat.routes.ts
+│   │   ├── groupChat.routes.ts
 │   │   ├── memory.routes.ts
+│   │   ├── sharedChat.routes.ts
 │   │   ├── upload.routes.ts
-│   │   └── user.routes.ts
+│   │   ├── user.routes.ts
+│   │   └── webSearch.routes.ts
 │   ├── server.ts
 │   ├── services
 │   │   ├── ai
@@ -56,14 +65,17 @@
 │   │   ├── chat.service.ts
 │   │   ├── chatStreamRegistry.service.ts
 │   │   ├── cloudinary.service.ts
+│   │   ├── groupChat.service.ts
 │   │   ├── memory.service.ts
+│   │   ├── sharedChat.service.ts
 │   │   └── user.service.ts
 │   ├── types
 │   │   └── chat.types.ts
 │   └── utils
 │       ├── asyncHandler.ts
 │       ├── chatHistory.ts
+│       ├── groupSse.ts
 │       └── sse.ts
 └── tsconfig.json
 
-15 directories, 51 files
+15 directories, 63 files
