@@ -14,6 +14,7 @@ export type UserProfile = {
   lastName?: string;
   imageUrl?: string;
   lastSignInAt?: Date;
+  role?: "user" | "admin";
   personalization?: Personalization;
 };
 

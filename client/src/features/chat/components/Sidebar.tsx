@@ -2,7 +2,8 @@ import { memo, useCallback, useState, useRef, useEffect } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import type { Chat } from "@/features/chat/types/chat.types";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { api } from "@/lib/api";
 import {
   Plus,
   X,
@@ -24,6 +25,7 @@ import {
   Share,
   Search,
   ListChecks,
+  Shield,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -372,6 +374,19 @@ const Sidebar = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("general");
   const { user } = useUser();
+  const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get("/user/profile")
+      .then(({ data }) => {
+        setIsAdmin(data.role === "admin");
+      })
+      .catch(err => {
+        console.error("Failed to fetch user role for sidebar:", err);
+      });
+  }, [user]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
 
@@ -714,6 +729,16 @@ const Sidebar = () => {
               sideOffset={12}
               className="w-72 bg-slate-900/95 backdrop-blur-xl border border-white/5 p-1.5 animate-in fade-in zoom-in-95 duration-200 outline-none focus:ring-0"
             >
+              {isAdmin && (
+                <DropdownMenuItem
+                  onClick={() => navigate("/admin")}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-indigo-400 focus:bg-indigo-500/10 focus:text-indigo-400 bg-indigo-500/5 border border-indigo-500/10 mb-1.5 transition-all cursor-pointer font-bold"
+                >
+                  <Shield size={16} className="text-indigo-400" />
+                  <span>Admin Panel</span>
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={() => {
                   setSettingsTab("general");

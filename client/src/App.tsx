@@ -11,6 +11,7 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Auth = lazy(() => import("./pages/Auth"));
 const SharedChatPage = lazy(() => import("./pages/SharedChatPage"));
+const Admin = lazy(() => import("./pages/Admin"));
 function App() {
   const { isSignedIn, isLoaded } = useUser();
   const { isDown, isRetrying, retry } = useServerStatus();
@@ -54,6 +55,16 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Chat />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Protected Admin Route */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute>
+                    <Admin />
                   </ProtectedRoute>
                 }
               />

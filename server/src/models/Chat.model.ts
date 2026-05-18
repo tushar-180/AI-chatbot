@@ -41,6 +41,7 @@ const messageSchema = new mongoose.Schema(
     ],
     model: {
       type: String,
+      index: true,
     },
     requestId: {
       type: String,
