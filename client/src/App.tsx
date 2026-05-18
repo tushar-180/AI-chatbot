@@ -91,7 +91,7 @@ function App() {
                   !isSignedIn ? <Auth /> : <Navigate to="/chat" replace />
                 }
               />
-
+              
               {/* Catch all - redirect to landing */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -33,18 +33,19 @@ export type Attachment = {
 };
 
 export type ChatMessage = {
-    id?: string;
-    userId?: string;
-    role: ChatRole;
-    content: string;
-    type?: ChatMessageType;
-    metadata?: Record<string, unknown>;
-    attachments?: Attachment[];
-    model?: string;
-    requestId?: string;
-    status: ChatMessageStatus;
-    createdAt?: Date;
-    updatedAt?: Date;
+  id?: string;
+  userId?: string;
+  role: ChatRole;
+  content: string;
+  type?: ChatMessageType;
+  metadata?: Record<string, unknown>;
+  attachments?: Attachment[];
+  model?: string;
+  requestId?: string;
+  status: ChatMessageStatus;
+  feedback?: "like" | "dislike" | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 export type CreateChatInput = {
@@ -74,19 +75,27 @@ export type EditMessageInput = {
   webSearchEnabled?: boolean;
 };
 
+export type RetryMessageInput = {
+  chatId: string;
+  messageId: string;
+  provider?: string;
+  requestId?: string;
+};
+
 export type StopStreamInput = {
     requestId?: string;
     chatId?: string;
 };
 
 export type StreamPayload = {
-    chatId?: string;
-    requestId?: string;
-    model?: string;
-    chunk?: string;
-    done?: boolean;
-    status?: ChatMessageStatus;
-    error?: string;
+  chatId?: string;
+  messageId?: string;
+  requestId?: string;
+  model?: string;
+  chunk?: string;
+  done?: boolean;
+  status?: ChatMessageStatus;
+  error?: string;
 };
 
 export type ActiveStream = {
