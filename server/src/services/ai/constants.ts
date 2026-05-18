@@ -11,6 +11,26 @@ export const AI_PROVIDERS = {
       "gemini-3.1-flash-lite-preview"
     ]
   },
+  OPENAI: {
+    id: "openai",
+    models: [
+      "gpt-5",
+      "gpt-5-mini",
+      "gpt-5-nano",
+      "gpt-4.1",
+      "gpt-4.1-mini",
+      "gpt-4.1-nano",
+      "o3",
+      "o4-mini",
+    ],
+    visionModels: [
+      "gpt-5",
+      "gpt-5-mini",
+      "gpt-4.1",
+      "gpt-4.1-mini",
+      "o4-mini",
+    ]
+  },
   NVIDIA: {
     id: "nvidia",
     models: [

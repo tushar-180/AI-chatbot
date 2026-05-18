@@ -8,7 +8,18 @@ export const supportsVision = (modelId: string): boolean => {
   const mid = modelId.toLowerCase();
   
   // Explicitly check for models we know support vision
-  const visionKeywords = ['flash', 'vision', 'gpt-4o', 'sonnet', 'opus', 'gemini-1.5', 'gemini-2.0'];
+  const visionKeywords = [
+    'flash',
+    'vision',
+    'gpt-4o',
+    'sonnet',
+    'opus',
+    'gemini-1.5',
+    'gemini-2.0',
+    'gpt-5',
+    'gpt-4.1',
+    'o4-mini'
+  ];
   
   return visionKeywords.some(kw => mid.includes(kw));
 };
