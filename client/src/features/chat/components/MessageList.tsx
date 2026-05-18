@@ -59,6 +59,8 @@ interface MessageListProps {
   onSuggestionClick?: (text: string) => void;
   onEditMessage?: (messageId: string, content: string) => void;
   onEditStart?: () => void;
+  onRetryMessage?: (messageId: string) => void;
+  onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
 }
 
 const MessageList = ({
@@ -73,6 +75,8 @@ const MessageList = ({
   onSuggestionClick,
   onEditMessage,
   onEditStart,
+  onRetryMessage,
+  onFeedback,
 }: MessageListProps) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -285,9 +289,10 @@ const MessageList = ({
                 <MessageItem
                   message={msg}
                   isStreaming={isStreaming && i === messages.length - 1}
-                  isAnyStreaming={isStreaming}
                   onEdit={(content) => onEditMessage?.(msg.id, content)}
                   onEditStart={onEditStart}
+                  onRetry={() => onRetryMessage?.(msg.id)}
+                  onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
                 />
               </div>
             ))}
