@@ -41,7 +41,6 @@ import {
 import ShareModal from "./ShareModal";
 import CreateGroupModal from "./CreateGroupModal";
 import GroupLinkModal from "./GroupLinkModal";
-import { api } from "@/lib/api";
 import {
   Avatar,
   AvatarFallback,
@@ -463,17 +462,17 @@ const SidebarItem = memo(
       prevProps.isActive === nextProps.isActive &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isSelectionMode === nextProps.isSelectionMode &&
-      prevProps.chat._id === nextProps.chat._id &&
-      prevProps.chat.title === nextProps.chat.title &&
-      prevProps.chat.isPinned === nextProps.chat.isPinned &&
-      prevProps.chat.isArchived === nextProps.chat.isArchived &&
-      prevProps.chat.updatedAt === nextProps.chat.updatedAt
+      prevProps.item._id === nextProps.item._id &&
+      prevProps.item.title === nextProps.item.title &&
+      prevProps.isPinned === nextProps.isPinned &&
+      prevProps.isArchived === nextProps.isArchived &&
+      prevProps.item.updatedAt === nextProps.item.updatedAt
     );
   }
 );
 
 const Sidebar = () => {
-  const { chatId: urlChatId } = useParams<{ chatId?: string }>();
+  const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
   const location = useLocation();
   const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
     useChatStore();
@@ -507,7 +506,6 @@ const Sidebar = () => {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("general");
-  const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
