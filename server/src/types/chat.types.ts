@@ -1,35 +1,35 @@
 import { EventEmitter } from "events";
 
 export type Personalization = {
-  nickname: string;
-  occupation: string;
-  tone: string;
-  customInstructions: string;
+    nickname: string;
+    occupation: string;
+    tone: string;
+    customInstructions: string;
 };
 
 export type UserProfile = {
-  clerkId: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  imageUrl?: string;
-  lastSignInAt?: Date;
-  personalization?: Personalization;
+    clerkId: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    imageUrl?: string;
+    lastSignInAt?: Date;
+    personalization?: Personalization;
 };
 
 export type ChatRole = "user" | "assistant" | "system";
 export type ChatMessageStatus =
-  | "streaming"
-  | "stopped"
-  | "completed"
-  | "failed";
+    | "streaming"
+    | "stopped"
+    | "completed"
+    | "failed";
 export type ChatMessageType = "text" | "image" | "file" | "action";
 
 export type Attachment = {
-  url: string;
-  name?: string;
-  mimeType?: string;
-  size?: number;
+    url: string;
+    name?: string;
+    mimeType?: string;
+    size?: number;
 };
 
 export type ChatMessage = {
@@ -49,21 +49,21 @@ export type ChatMessage = {
 };
 
 export type CreateChatInput = {
-  userId?: string;
-  message?: string;
-  provider?: string;
-  requestId?: string;
-  attachments?: Attachment[];
-  webSearchEnabled?: boolean;
+    userId?: string;
+    message?: string;
+    provider?: string;
+    requestId?: string;
+    attachments?: Attachment[];
+    webSearchEnabled?: boolean;
 };
 
 export type SendMessageInput = {
-  chatId: string;
-  message?: string;
-  provider?: string;
-  requestId?: string;
-  attachments?: Attachment[];
-  webSearchEnabled?: boolean;
+    chatId: string;
+    message?: string;
+    provider?: string;
+    requestId?: string;
+    attachments?: Attachment[];
+    webSearchEnabled?: boolean;
 };
 
 export type EditMessageInput = {
@@ -83,8 +83,8 @@ export type RetryMessageInput = {
 };
 
 export type StopStreamInput = {
-  requestId?: string;
-  chatId?: string;
+    requestId?: string;
+    chatId?: string;
 };
 
 export type StreamPayload = {
@@ -99,12 +99,12 @@ export type StreamPayload = {
 };
 
 export type ActiveStream = {
-  requestId: string;
-  chatId: string;
-  messageId: string;
-  fullResponse: string;
-  emitter: EventEmitter;
-  model: string;
-  status: ChatMessageStatus;
-  abortController: AbortController;
+    requestId: string;
+    chatId: string;
+    messageId: string;
+    fullResponse: string;
+    emitter: EventEmitter;
+    model: string;
+    status: ChatMessageStatus;
+    abortController: AbortController;
 };

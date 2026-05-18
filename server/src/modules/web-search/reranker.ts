@@ -1,114 +1,208 @@
-import type { ExtractedPage } from "./cache";
-import type { SearchSource } from "./webSearch.types";
+import MiniSearch from "minisearch";
+import { differenceInDays, parseISO, isValid } from "date-fns";
+import type { SearchCandidate } from "./webSearch.types";
 
-const MAX_EXCERPT_CHARS = 900;
-const CHUNK_SIZE = 800;
-const CHUNK_OVERLAP = 150;
-
-const tokenize = (text: string): string[] => {
-  return text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .filter((token) => token.length > 2);
-};
-
-const scoreText = (queryTokens: string[], text: string): number => {
-  const haystack = text.toLowerCase();
-  let score = 0;
-  for (const token of queryTokens) {
-    const regex = new RegExp(`\\b${token}\\b`, "gi");
-    const matches = haystack.match(regex);
-    if (matches) {
-      score += matches.length;
+// ---------------------------------------------------------------------------
+//  Freshness scoring (no changes)
+// ---------------------------------------------------------------------------
+export const detectFreshnessScore = (params: {
+    publishedAt?: string | null;
+    lastModified?: string | null;
+    liveDataQuery: boolean;
+}): number => {
+    const dateStr = params.publishedAt || params.lastModified;
+    if (!dateStr) {
+        return params.liveDataQuery ? 0.25 : 0.45;
     }
-  }
-  return score;
+    const date = parseISO(dateStr);
+    if (!isValid(date)) return 0.5;
+
+    const ageDays = differenceInDays(new Date(), date);
+    if (ageDays <= 1) return 1.0;
+    if (ageDays <= 7) return 0.92;
+    if (ageDays <= 30) return 0.8;
+    if (ageDays <= 180) return 0.6;
+    if (ageDays <= 365) return 0.45;
+    return 0.25;
 };
 
-const chunkText = (text: string): string[] => {
-  const chunks: string[] = [];
-  let start = 0;
-  while (start < text.length) {
-    const end = Math.min(start + CHUNK_SIZE, text.length);
-    chunks.push(text.slice(start, end).trim());
-    start += CHUNK_SIZE - CHUNK_OVERLAP;
-  }
-  return chunks;
+// ---------------------------------------------------------------------------
+//  Language‑agnostic URL / snippet signals (hardcoded patterns removed)
+// ---------------------------------------------------------------------------
+const urlSignal = (url: string): number => {
+    try {
+        const u = new URL(url);
+        const path = u.pathname;
+
+        // Path depth indicates structured content (e.g., /section/article/id)
+        const segments = path.split("/").filter(Boolean);
+        const depth = segments.length;
+
+        // Bonus for paths containing a year-like pattern (universal)
+        const hasYear = /\b(19|20)\d{2}\b/.test(path);
+
+        // More depth → more likely to be a substantive article
+        let score = Math.min(depth / 4, 0.8); // caps at 0.8
+
+        if (hasYear) score += 0.1;
+
+        return Math.min(score, 0.9); // overall max 0.9
+    } catch {
+        return 0.5;
+    }
 };
 
-export const localRerank = (params: {
-  query: string;
-  pages: Array<
-    ExtractedPage & { freshnessScore: number; structuredScore: number }
-  >;
-  maxSourceCount: number;
-}): SearchSource[] => {
-  const { query, pages, maxSourceCount } = params;
-  const queryTokens = tokenize(query);
+const snippetSignal = (snippet: string): number => {
+    if (!snippet) return 0.2;
+    const lenScore = Math.min(snippet.length / 300, 1);
 
-  if (queryTokens.length === 0) {
-    return pages.slice(0, maxSourceCount).map((page, i) => ({
-      id: i + 1,
-      title: page.title,
-      url: page.url,
-      hostname: page.hostname,
-      snippet: page.snippet,
-      excerpt: page.text.slice(0, MAX_EXCERPT_CHARS),
-      score: 1,
-      freshnessScore: page.freshnessScore,
-      structuredScore: page.structuredScore,
-      publishedAt: page.publishedAt,
-      lastModified: page.lastModified,
-      cacheHit: true,
+    // Check for numerical data (useful for factual queries across languages)
+    const numericDensity =
+        (snippet.match(/\d/g)?.length ?? 0) / Math.max(snippet.length, 1);
+
+    // Check for structure (dates, percentages, or list-like patterns)
+    const hasStructuredData = /\d{4}|\d+\s?%|[\d.]+\s?[\p{L}]{1,5}/u.test(
+        snippet,
+    );
+
+    // Entity detection (capitalized words) - works for many scripts
+    const entityHints = (snippet.match(/\p{Lu}\p{Ll}+/gu)?.length ?? 0) / 10;
+
+    return (
+        lenScore * 0.45 +
+        Math.min(numericDensity * 2, 0.25) +
+        (hasStructuredData ? 0.2 : 0) +
+        Math.min(entityHints, 0.1)
+    );
+};
+
+const extractabilityScore = (c: SearchCandidate): number => {
+    return urlSignal(c.url) * 0.4 + snippetSignal(c.snippet) * 0.5;
+};
+
+// ---------------------------------------------------------------------------
+//  BM25 scoring via MiniSearch (no changes)
+// ---------------------------------------------------------------------------
+const computeBM25Scores = (
+    candidates: SearchCandidate[],
+    query: string,
+): number[] => {
+    const miniSearch = new MiniSearch({
+        fields: ["title", "snippet"],
+        storeFields: ["url"],
+        searchOptions: {
+            boost: { title: 2.5, snippet: 1.0 },
+            fuzzy: 0.15,
+            prefix: true,
+        },
+    });
+
+    const documents = candidates.map((c, idx) => ({
+        id: idx,
+        title: c.title || "",
+        snippet: c.snippet || "",
+        url: c.url,
     }));
-  }
+    miniSearch.addAll(documents);
 
-  const allChunks = pages.flatMap((page) => {
-    const chunks = chunkText(page.text);
-    return chunks.map((chunk) => {
-      const keywordScore = scoreText(queryTokens, chunk);
-      const titleScore = scoreText(queryTokens, page.title) * 2;
-      const snippetScore = scoreText(queryTokens, page.snippet);
+    const results = miniSearch.search(query);
+    const maxScore = results.length > 0 ? results[0].score : 1;
+    const scoreMap = new Map<number, number>();
+    for (const result of results) {
+        scoreMap.set(Number(result.id), result.score / maxScore);
+    }
 
-      const baseScore = keywordScore + titleScore + snippetScore;
-      const finalScore =
-        baseScore * 0.7 +
-        page.freshnessScore * 10 +
-        page.structuredScore * 5;
+    return candidates.map((_, idx) => scoreMap.get(idx) ?? 0);
+};
 
-      return {
-        page,
-        chunk,
-        score: finalScore,
-      };
+// ---------------------------------------------------------------------------
+//  Tokenization with Unicode support (no changes)
+// ---------------------------------------------------------------------------
+const tokenize = (text: string): Set<string> => {
+    const words = text
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^\p{L}\p{N}\s]/gu, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 1);
+    return new Set(words);
+};
+
+const jaccardSimilarity = (a: Set<string>, b: Set<string>): number => {
+    if (a.size === 0 || b.size === 0) return 0;
+    let intersection = 0;
+    for (const token of a) {
+        if (b.has(token)) intersection++;
+    }
+    const union = a.size + b.size - intersection;
+    return union === 0 ? 0 : intersection / union;
+};
+
+const areDuplicates = (a: SearchCandidate, b: SearchCandidate): boolean => {
+    const ta = tokenize(a.title);
+    const tb = tokenize(b.title);
+    return jaccardSimilarity(ta, tb) > 0.85;
+};
+
+// ---------------------------------------------------------------------------
+//  Combined weights (no hardcoded domain authority)
+//  Weights: provider score (35%), BM25 (30%), extractability (15%), freshness (20%)
+// ---------------------------------------------------------------------------
+const COMBINED_WEIGHTS = {
+    providerScore: 0.35,
+    bm25: 0.3,
+    extractability: 0.15,
+    freshness: 0.2,
+};
+
+// ---------------------------------------------------------------------------
+//  Main reranking (no domain‑authority hardcoding)
+// ---------------------------------------------------------------------------
+export const heuristicRerank = (
+    candidates: SearchCandidate[],
+    query: string,
+    liveDataQuery: boolean,
+    maxResults: number,
+): SearchCandidate[] => {
+    if (!candidates.length) return [];
+
+    const bm25Scores = computeBM25Scores(candidates, query);
+
+    const scored = candidates.map((candidate, index) => {
+        const freshnessScore = detectFreshnessScore({
+            publishedAt: candidate.publishedAt,
+            lastModified: candidate.lastModified,
+            liveDataQuery,
+        });
+        const providerScore = candidate.searchProviderScore ?? 0;
+        const extractScore = extractabilityScore(candidate);
+        const bm25Score = bm25Scores[index] ?? 0;
+
+        const combinedScore =
+            COMBINED_WEIGHTS.providerScore * providerScore +
+            COMBINED_WEIGHTS.bm25 * bm25Score +
+            COMBINED_WEIGHTS.extractability * extractScore +
+            COMBINED_WEIGHTS.freshness * freshnessScore;
+
+        return {
+            ...candidate,
+            freshnessScore,
+            combinedScore,
+        };
     });
-  });
 
-  const sortedChunks = allChunks.sort((a, b) => b.score - a.score);
-  const seenUrls = new Set<string>();
-  const results: SearchSource[] = [];
+    scored.sort((a, b) => b.combinedScore! - a.combinedScore!);
 
-  for (const item of sortedChunks) {
-    if (seenUrls.has(item.page.url)) continue;
-    seenUrls.add(item.page.url);
+    const final: typeof scored = [];
+    for (const item of scored) {
+        const isDuplicate = final.some((existing) =>
+            areDuplicates(item, existing),
+        );
+        if (!isDuplicate) {
+            final.push(item);
+            if (final.length >= maxResults) break;
+        }
+    }
 
-    results.push({
-      id: 0,
-      title: item.page.title,
-      url: item.page.url,
-      hostname: item.page.hostname,
-      snippet: item.page.snippet,
-      excerpt: item.chunk.slice(0, MAX_EXCERPT_CHARS),
-      score: Number(item.score.toFixed(2)),
-      freshnessScore: item.page.freshnessScore,
-      structuredScore: item.page.structuredScore,
-      publishedAt: item.page.publishedAt,
-      lastModified: item.page.lastModified,
-      cacheHit: true,
-    });
-
-    if (results.length >= maxSourceCount) break;
-  }
-
-  return results.map((s, i) => ({ ...s, id: i + 1 }));
+    return final;
 };

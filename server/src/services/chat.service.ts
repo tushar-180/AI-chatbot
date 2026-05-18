@@ -17,6 +17,7 @@ import type {
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import {
   type WebGroundingContext,
+  type SearchRejection,
   webSearchService,
 } from "../modules/web-search";
 import { aiService } from "./ai.service";
@@ -118,15 +119,13 @@ const getAssistantMessageByRequestId = (
       message.role === "assistant" && message.requestId === requestId,
   );
 
-const buildGroundingMetadata = (webGrounding: WebGroundingContext | null) => {
-  if (!webGrounding) return undefined;
-
+const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchRejection | null) => {
+  if (!webGrounding || 'rejected' in webGrounding) return undefined;
   return {
     grounded: true,
     query: webGrounding.query,
     resolvedQuery: webGrounding.resolvedQuery,
     normalizedQuery: webGrounding.normalizedQuery,
-    reusedPreviousQuery: webGrounding.reusedPreviousQuery,
     liveDataQuery: webGrounding.liveDataQuery,
     confidence: webGrounding.confidence,
     debug: webGrounding.debug,
@@ -204,12 +203,15 @@ const buildPromptMessages = async (
     });
   }
 
-  let webGrounding = null;
+  let webGrounding: WebGroundingContext | null = null;
   if (webSearchEnabled && latestUserMessage) {
-    webGrounding = await webSearchService.buildGroundingContext(
+    const maybeGrounding = await webSearchService.buildGroundingContext(
       latestUserMessage,
       chatMessages,
     );
+    if (maybeGrounding && "systemPrompt" in maybeGrounding) {
+      webGrounding = maybeGrounding as WebGroundingContext;
+    }
   }
   if (webGrounding) {
     systemMessages.push({

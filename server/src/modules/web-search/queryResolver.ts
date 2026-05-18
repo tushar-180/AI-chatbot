@@ -1,118 +1,142 @@
+// queryResolver.ts
+// Overhauled to use LLM for query resolution.
+// Support for multi-language and removal of hardcoded patterns.
+
+import { aiService } from "../../services/ai.service";
 import type { ChatMessage } from "../../types/chat.types";
-import { getNormalizationCache, setNormalizationCache } from "./cache";
 import type { ResolvedSearchQuery } from "./webSearch.types";
+import { QUERY_RESOLUTION_PROMPT } from "./webSearch.prompts";
 
-const NORMALIZATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const REUSE_PREVIOUS_QUERY_PATTERN =
-  /^(search again|try again|refresh|search once more|run that again|rerun)\W*$/i;
+/**
+ * Normalizes a query string for consistent caching.
+ * Supports Unicode characters for multi-language support.
+ */
+export const normalizeQuery = (query: string): string =>
+    query
+        .toLowerCase()
+        .normalize("NFKD") // Normalize Unicode
+        .replace(/['’]/g, "")
+        // Keep letters (any language), numbers, spaces, and specific symbols
+        .replace(/[^\p{L}\p{N}\s./:-]/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-const LIVE_DATA_PATTERNS = [
-  /\b(latest|current|today|live|now|this week|this season)\b/i,
-  /\b(standings|ranking|rankings|leaderboard|leaderboards|table)\b/i,
-  /\b(stats|statistics|stat line|statline|score|scores|results)\b/i,
-  /\b(schedule|fixtures|injury report|odds)\b/i,
-  /\b(stock price|market cap|exchange rate|weather)\b/i,
-];
+/**
+ * Resolves the search query using Gemini.
+ * Takes the entire chat context and the latest message to generate optimized search terms.
+ * No hardcoded patterns - relies on LLM for intent detection.
+ */
+export const resolveSearchQuery = async (
+    latestUserMessage: string,
+    chatMessages: ChatMessage[],
+): Promise<ResolvedSearchQuery> => {
+    const trimmedMessage = latestUserMessage.trim();
 
-const normalizeReusableValue = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/['’]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\b(please|show me|can you|could you|would you|tell me|find|look up)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    // Limit context to prevent token overflow while keeping enough history
+    const contextMessages = chatMessages.slice(-15);
 
-const readResolvedQueryFromMetadata = (
-  metadata: Record<string, unknown> | undefined,
-) => {
-  const resolvedQuery = metadata?.resolvedQuery;
-  if (typeof resolvedQuery === "string" && resolvedQuery.trim()) {
-    return resolvedQuery.trim();
-  }
+    const history = contextMessages
+        .map(
+            (m) =>
+                `${m.role.toUpperCase()}: ${typeof m.content === "string" ? m.content : " [Multimedia Content] "}`,
+        )
+        .join("\n\n");
 
-  const query = metadata?.query;
-  if (typeof query === "string" && query.trim()) {
-    return query.trim();
-  }
+    const prompt = QUERY_RESOLUTION_PROMPT(trimmedMessage, history);
 
-  return null;
-};
+    // Using Gemini 3.1 Flash Lite for fast and accurate query resolution
+    let provider = aiService.getProvider("gemini:gemini-3.1-flash-lite");
 
-const findPreviousResolvedQuery = (
-  chatMessages: ChatMessage[],
-  latestUserMessage: string,
-) => {
-  for (let index = chatMessages.length - 1; index >= 0; index -= 1) {
-    const message = chatMessages[index];
+    let resolvedQuery = trimmedMessage;
+    let isFollowUpQuery = false;
+    let liveDataQuery = false;
+    let wantsImages = false;
 
-    if (
-      message.role === "user" &&
-      message.content.trim() === latestUserMessage.trim() &&
-      index === chatMessages.length - 1
-    ) {
-      continue;
+    try {
+        let response: string;
+        try {
+            response = await provider.generateResponse([
+                { role: "user", content: prompt },
+            ]);
+        } catch (primaryError) {
+            // Fallback to Gemini 2.0 Flash
+            console.warn(
+                "[queryResolver] Primary provider failed, attempting fallback to gemini-2.0-flash:",
+                primaryError,
+            );
+            provider = aiService.getProvider("gemini:gemini-2.0-flash");
+            response = await provider.generateResponse([
+                { role: "user", content: prompt },
+            ]);
+        }
+
+        // ── Robust JSON extraction ──────────────────────────────
+        // 1. Strip common markdown code fences
+        const cleanResponse = response
+            .replace(/```json\s*/gi, '')
+            .replace(/```\s*/g, '')
+            .trim();
+
+        let result: any = null;
+        try {
+            // 2. Try direct parsing first
+            result = JSON.parse(cleanResponse);
+        } catch {
+            // 3. Fallback: locate the first balanced JSON object
+            const start = cleanResponse.indexOf('{');
+            if (start !== -1) {
+                let depth = 0;
+                for (let i = start; i < cleanResponse.length; i++) {
+                    if (cleanResponse[i] === '{') depth++;
+                    else if (cleanResponse[i] === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            try {
+                                result = JSON.parse(cleanResponse.slice(start, i + 1));
+                            } catch {
+                                // keep result null if slice isn't valid JSON
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Apply extracted values if we got a valid searchQuery
+        if (result && result.searchQuery && result.searchQuery.length > 2) {
+            resolvedQuery = result.searchQuery;
+            isFollowUpQuery = !!result.isFollowUp;
+            liveDataQuery = !!result.isLiveData;
+            wantsImages = !!result.wantsImages;
+
+            console.log("[queryResolver] Gemini resolved query:", {
+                original: trimmedMessage,
+                resolved: resolvedQuery,
+                isFollowUp: isFollowUpQuery,
+                isLiveData: liveDataQuery,
+                wantsImages: wantsImages,
+            });
+        }
+    } catch (error) {
+        console.error(
+            "[queryResolver] LLM query resolution failed, falling back to raw message:",
+            error,
+        );
+        // liveDataQuery is already false by default, no need to reassign
     }
 
-    if (message.role === "assistant") {
-      const resolvedQuery = readResolvedQueryFromMetadata(message.metadata);
-      if (resolvedQuery) return resolvedQuery;
-    }
+    const normalizedQuery = normalizeQuery(resolvedQuery);
 
-    if (
-      message.role === "user" &&
-      typeof message.content === "string" &&
-      message.content.trim() &&
-      !REUSE_PREVIOUS_QUERY_PATTERN.test(message.content.trim())
-    ) {
-      const webSearchEnabled = Boolean(message.metadata?.webSearchEnabled);
-      if (webSearchEnabled) {
-        return message.content.trim();
-      }
-    }
-  }
-
-  return null;
-};
-
-export const normalizeQuery = (query: string) => normalizeReusableValue(query);
-
-export const isLiveDataQuery = (query: string) =>
-  LIVE_DATA_PATTERNS.some((pattern) => pattern.test(query));
-
-export const resolveSearchQuery = (
-  latestUserMessage: string,
-  chatMessages: ChatMessage[],
-): ResolvedSearchQuery => {
-  const cached = getNormalizationCache(latestUserMessage);
-  if (cached) return cached;
-
-  const trimmedMessage = latestUserMessage.trim();
-  const shouldReusePreviousQuery =
-    REUSE_PREVIOUS_QUERY_PATTERN.test(trimmedMessage);
-  const previousQuery = shouldReusePreviousQuery
-    ? findPreviousResolvedQuery(chatMessages, latestUserMessage)
-    : null;
-  const resolvedQuery = previousQuery || trimmedMessage;
-  const normalizedQuery = normalizeQuery(resolvedQuery);
-  const liveDataQuery = isLiveDataQuery(resolvedQuery);
-
-  const resolved: ResolvedSearchQuery = {
-    rawQuery: trimmedMessage,
-    resolvedQuery,
-    normalizedQuery,
-    cacheKey: liveDataQuery
-      ? `live:${normalizedQuery}`
-      : `stable:${normalizedQuery}`,
-    reusedPreviousQuery: Boolean(previousQuery),
-    liveDataQuery,
-  };
-
-  setNormalizationCache(
-    latestUserMessage,
-    resolved,
-    NORMALIZATION_CACHE_TTL_MS,
-  );
-
-  return resolved;
+    return {
+        rawQuery: trimmedMessage,
+        resolvedQuery,
+        normalizedQuery,
+        cacheKey: liveDataQuery
+            ? `live:${normalizedQuery}`
+            : `stable:${normalizedQuery}`,
+        isFollowUpQuery,
+        liveDataQuery,
+        wantsImages,
+    };
 };

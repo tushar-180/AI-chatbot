@@ -9,6 +9,7 @@ import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
+import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
 
 /**
@@ -63,7 +64,14 @@ const Chat = () => {
     skipFetch: canAutoStartFromSeededMessages,
   });
 
-  // 2. Manage Streaming Logic & Optimistic UI
+  // 2. Manage Web Search Quota
+  const {
+    quotaStatus,
+    isLoading: isQuotaLoading,
+    refreshQuota,
+  } = useWebSearchQuota();
+
+  // 3. Manage Streaming Logic & Optimistic UI
   const {
     streamMessage,
     editMessage,
@@ -72,9 +80,11 @@ const Chat = () => {
     optimisticMessages,
     isStreaming,
     loading: isCurrentChatLoading,
-  } = useChatStream();
+  } = useChatStream({
+    onWebSearchComplete: refreshQuota,
+  });
 
-  // 3. Manage Input & Form Submission
+  // 4. Manage Input & Form Submission
   const {
     input,
     setInput,
@@ -93,7 +103,7 @@ const Chat = () => {
       }),
   });
 
-  // 4. Handle auto-start message from SharedChatPage
+  // 5. Handle auto-start message from SharedChatPage
   useEffect(() => {
     if (
       pendingState?.pendingInput &&
@@ -196,6 +206,8 @@ const Chat = () => {
               onWebSearchToggle={setWebSearchEnabled}
               isArchived={isArchived}
               onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
+              quotaStatus={quotaStatus}
+              isQuotaLoading={isQuotaLoading}
             />
           </div>
         </div>
