@@ -11,6 +11,7 @@ import { useChatInput } from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
+import { useGroupStore } from "@/features/chat/store/useGroupStore";
 
 /**
  * Chat Page Component
@@ -31,6 +32,9 @@ const Chat = () => {
     setMessages,
     setIsNewChat,
   } = useChatStore();
+
+  const { setCurrentGroup } = useGroupStore();
+
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
@@ -47,6 +51,10 @@ const Chat = () => {
 
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
+    if (chatId) {
+      setCurrentGroup(null); // Deselect group chat when in a private chat
+    }
+
     if (chatId && chatId !== currentChatId) {
       setCurrentChat(chatId);
       setMessages([]);
@@ -57,7 +65,7 @@ const Chat = () => {
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [chatId]);
+  }, [chatId, currentChatId, setCurrentChat, setMessages, setIsNewChat, setCurrentGroup]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -98,7 +106,6 @@ const Chat = () => {
   } = useChatInput({
     onSubmit: (input, provider, attachments, options) =>
       streamMessage(input, provider, attachments, {
-        forceNewChat: Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
       }),
   });

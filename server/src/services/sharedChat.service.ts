@@ -100,4 +100,26 @@ export const sharedChatService = {
 
     return { newChatId };
   },
+
+  async getUserSharedChats(userId: string) {
+    return await SharedChat.find({ userId }).sort({ createdAt: -1 }).lean();
+  },
+
+  async deleteSharedChat(sharedChatId: string, userId: string) {
+    const sharedChat = await SharedChat.findById(sharedChatId);
+    if (!sharedChat) {
+      const error = new Error("Shared chat not found");
+      (error as any).name = "NotFoundError";
+      throw error;
+    }
+    if (sharedChat.userId !== userId) {
+      const error = new Error("Unauthorized: You do not own this shared chat");
+      (error as any).name = "ForbiddenError";
+      throw error;
+    }
+
+    await SharedChat.findByIdAndDelete(sharedChatId);
+    return { success: true };
+  },
 };
+

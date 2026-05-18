@@ -8,6 +8,8 @@ import uploadRoutes from "./routes/upload.routes";
 import memoryRoutes from "./routes/memory.routes";
 import webSearchRoutes from "./routes/webSearch.routes";
 import sharedChatRoutes from "./routes/sharedChat.routes";
+import { groupChatRoutes } from "./routes/groupChat.routes";
+import { GroupChatController } from "./controllers/groupChat.controller";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
@@ -46,6 +48,12 @@ app.get("/health", (req, res) => {
     res.status(200).json({ ok: true });
 });
 
+app.get("/api/ping", (req, res) => {
+    res.status(200).json({ pong: true });
+});
+
+// Routes
+app.use("/api/group", groupChatRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
 app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/user", requireAuth, userRoutes);
