@@ -231,42 +231,67 @@ async function* streamAssistantResponse(
   requestId: string,
   provider?: string,
   includeChatId = false,
+  existingAssistantMessageId?: string,
 ): AsyncGenerator<StreamPayload> {
   const aiProvider = aiService.getProvider(provider);
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
-  const lastUserMessage = (chat.messages as ChatMessage[])
+
+  // If retrying, we filter out the message being retried from the prompt context
+  const messagesForPrompt = existingAssistantMessageId
+    ? (chat.messages as ChatMessage[]).filter(
+        (m) => (m as any).id !== existingAssistantMessageId,
+      )
+    : (chat.messages as ChatMessage[]);
+
+  const lastUserMessage = messagesForPrompt
     .filter((m) => m.role === "user")
     .pop();
+
   const { promptMessages, webGrounding } = await buildPromptMessages(
     String(chat.userId),
-    chat.messages as ChatMessage[],
+    messagesForPrompt,
     lastUserMessage?.content,
     Boolean(lastUserMessage?.metadata?.webSearchEnabled),
     provider,
   );
 
-  // Create assistant message in its own collection
-  const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
-    role: "assistant",
-    userId: chat.userId,
-    content: "",
-    model: providerName,
-    requestId,
-    status: "streaming",
-    metadata: buildGroundingMetadata(webGrounding),
-  });
+  let assistantMessageDoc;
+  if (existingAssistantMessageId) {
+    assistantMessageDoc = await chatRepository.updateMessage(
+      existingAssistantMessageId,
+      {
+        content: "",
+        status: "streaming",
+        requestId,
+        model: providerName,
+        metadata: buildGroundingMetadata(webGrounding),
+      },
+    );
+  } else {
+    // Create assistant message in its own collection
+    assistantMessageDoc = await chatRepository.saveMessage(chatId, {
+      role: "assistant",
+      userId: chat.userId,
+      content: "",
+      model: providerName,
+      requestId,
+      status: "streaming",
+      metadata: buildGroundingMetadata(webGrounding),
+    });
+  }
 
+  const messageId = (assistantMessageDoc as any)._id?.toString() || "";
   const activeStream = chatStreamRegistry.create({
     requestId,
     chatId,
-    messageId: (assistantMessageDoc as any)._id?.toString() || "",
+    messageId,
     model: providerName,
   });
 
-  yield includeChatId
-    ? { chatId, requestId, model: providerName, status: "streaming" }
-    : { requestId, model: providerName, status: "streaming" };
+  yield (includeChatId
+    ? { chatId, messageId, requestId, model: providerName, status: "streaming" }
+    : { messageId, requestId, model: providerName, status: "streaming" }) as StreamPayload;
 
   let fullResponse = "";
   let receivedFirstChunk = false;
@@ -837,4 +862,137 @@ export const chatService = {
       provider,
     );
   },
+
+  async retryMessage({
+    chatId,
+    messageId,
+    provider,
+  }: {
+    chatId: string;
+    messageId: string;
+    provider?: string;
+  }) {
+    const chat = await requireChat(chatId);
+    let assistantMessage = (chat.messages as any[]).find(
+      (m) =>
+        (m.id === messageId ||
+          String(m._id) === messageId ||
+          m.requestId === messageId) &&
+        m.role === "assistant",
+    );
+
+    // Fallback for old messages with mismatched UUIDs: use the last assistant message
+    if (!assistantMessage && messageId.includes("-")) {
+      assistantMessage = (chat.messages as any[])
+        .filter((m) => m.role === "assistant")
+        .pop();
+    }
+
+    if (!assistantMessage) {
+      throw new Error("Assistant message not found for retry");
+    }
+
+    // Filter context to messages before this one
+    const contextMessages = (chat.messages as any[]).filter(
+      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
+    );
+
+    const lastUserMessage = contextMessages
+      .filter((m) => m.role === "user")
+      .pop();
+
+    const aiProvider = aiService.getProvider(provider);
+    const providerName = aiProvider.getProviderName();
+
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
+      contextMessages,
+      lastUserMessage?.content,
+      Boolean(lastUserMessage?.metadata?.webSearchEnabled),
+      provider,
+    );
+
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in retryMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
+
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
+
+    await chatRepository.updateMessage(messageId, {
+      content: reply,
+      status: "completed",
+      model: providerName,
+      metadata: buildGroundingMetadata(webGrounding),
+    });
+
+    return await chatRepository.findById(chatId);
+  },
+
+  async *streamRetryMessage({
+    chatId,
+    messageId,
+    provider,
+    requestId,
+  }: {
+    chatId: string;
+    messageId: string;
+    provider?: string;
+    requestId: string;
+  }) {
+    const resolvedRequestId = requireRequestId(requestId);
+    const chat = await requireChat(chatId);
+
+    console.log("Retrying messageId:", messageId);
+    console.log("Chat messages count:", chat.messages.length);
+    console.log("Last 2 messages:", chat.messages.slice(-2).map((m: any) => ({ id: m.id, _id: m._id, requestId: m.requestId, role: m.role })));
+
+    let assistantMessage = (chat.messages as any[]).find(
+      (m) =>
+        (m.id === messageId ||
+          String(m._id) === messageId ||
+          m.requestId === messageId) &&
+        m.role === "assistant",
+    );
+
+    // Fallback for old messages with mismatched UUIDs: use the last assistant message
+    if (!assistantMessage && messageId.includes("-")) {
+      console.log("Using fallback: Finding last assistant message in chat");
+      assistantMessage = (chat.messages as any[])
+        .filter((m) => m.role === "assistant")
+        .pop();
+    }
+
+    if (!assistantMessage) {
+      console.log("FAILED TO FIND MESSAGE. IDs in chat:", chat.messages.map((m: any) => m.id || m._id));
+      throw new Error("Assistant message not found for retry");
+    }
+
+    // Filter chat messages to only include those before the message being retried
+    const filteredMessages = (chat.messages as any[]).filter(
+      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
+    );
+
+    const updatedChat = {
+      ...chat,
+      messages: filteredMessages,
+    };
+
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+      false,
+      messageId,
+    );
+  },
+
+  async updateMessageFeedback(messageId: string, feedback: "like" | "dislike" | null) {
+    return await chatRepository.updateMessage(messageId, { feedback });
+  },
+
+
 };

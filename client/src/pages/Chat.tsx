@@ -39,6 +39,7 @@ const Chat = () => {
   const {
     streamMessage,
     editMessage,
+    retryMessage,
     stopGeneration,
     optimisticMessages,
     isStreaming,
@@ -105,6 +106,9 @@ const Chat = () => {
                 })
               }
               onEditStart={stopGeneration}
+              onRetryMessage={(messageId) => 
+                retryMessage(messageId, selectedProvider)
+              }
             />
           </div>
         </div>

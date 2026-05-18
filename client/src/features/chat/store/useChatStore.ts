@@ -31,7 +31,8 @@ type ChatState = {
   removeChat: (id: string) => void;
   updateChatTitle: (id: string, title: string) => void;
   clearMessages: () => void;
-};
+  setMessageFeedback: (messageId: string, feedback: "like" | "dislike" | null) => void;
+}
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -145,6 +146,13 @@ export const useChatStore = create<ChatState>()(
         })),
 
       clearMessages: () => set({ messages: [] }),
+
+      setMessageFeedback: (messageId, feedback) =>
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === messageId ? { ...m, feedback } : m
+          ),
+        })),
     }),
     {
       name: "chat-storage",

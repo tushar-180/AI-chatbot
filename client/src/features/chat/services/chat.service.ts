@@ -43,6 +43,13 @@ export const chatService = {
   },
 
   /**
+   * Generates the streaming endpoint URL for retrying a message.
+   */
+  getRetryStreamUrl(chatId: string, messageId: string): string {
+    return `${API_ORIGIN}/api/chat/${chatId}/messages/${messageId}/retry/stream`;
+  },
+
+  /**
    * Generates the stream updates endpoint URL for recovery.
    */
   getStreamUpdatesUrl(chatId: string): string {
@@ -55,6 +62,12 @@ export const chatService = {
       chatId,
     });
   },
+
+  async updateMessageFeedback(chatId: string, messageId: string, feedback: "like" | "dislike" | null) {
+    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
+  },
+
+
 
   /**
    * Parses a raw SSE event string.

@@ -43,6 +43,7 @@ export type ChatMessage = {
   model?: string;
   requestId?: string;
   status: ChatMessageStatus;
+  feedback?: "like" | "dislike" | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -74,6 +75,13 @@ export type EditMessageInput = {
   webSearchEnabled?: boolean;
 };
 
+export type RetryMessageInput = {
+  chatId: string;
+  messageId: string;
+  provider?: string;
+  requestId?: string;
+};
+
 export type StopStreamInput = {
   requestId?: string;
   chatId?: string;
@@ -81,6 +89,7 @@ export type StopStreamInput = {
 
 export type StreamPayload = {
   chatId?: string;
+  messageId?: string;
   requestId?: string;
   model?: string;
   chunk?: string;

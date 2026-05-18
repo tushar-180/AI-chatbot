@@ -93,6 +93,7 @@ export type ChatMessage = {
   model?: string;
   requestId?: string;
   status: "streaming" | "stopped" | "completed" | "failed";
+  feedback?: "like" | "dislike" | null;
   createdAt?: Date;
   updatedAt?: Date;
 };

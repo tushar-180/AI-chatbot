@@ -63,7 +63,7 @@ function App() {
                 path="/auth"
                 element={!isSignedIn ? <Auth /> : <Navigate to="/chat" replace />}
               />
-
+              
               {/* Catch all - redirect to landing */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

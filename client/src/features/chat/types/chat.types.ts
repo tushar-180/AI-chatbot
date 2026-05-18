@@ -5,6 +5,7 @@ export type Message = {
     model?: string;
     requestId?: string;
     status?: "streaming" | "stopped" | "completed" | "failed";
+    feedback?: "like" | "dislike" | null;
     isWebSearching?: boolean;
     type?: "text" | "image" | "file" | "action";
     attachments?: {
@@ -18,9 +19,10 @@ export type Message = {
 export type Chat = {
     _id: string;
     title: string;
+    shareId?: string;
+    isPublic?: boolean;
     updatedAt?: string;
 };
-
 export type StreamEventPayload = {
     chatId?: string;
     requestId?: string;
@@ -29,4 +31,5 @@ export type StreamEventPayload = {
     done?: boolean;
     status?: "streaming" | "stopped" | "completed" | "failed";
     error?: string;
+    messageId?: string;
 };

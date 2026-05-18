@@ -32,4 +32,7 @@ router.patch("/:id", ChatController.updateChatTitle);
 router.patch("/:id/messages/:messageId", ChatController.editMessage);
 router.patch("/:id/messages/:messageId/stream", ChatController.streamEditMessage);
 
+// Retry message
+router.post("/:id/messages/:messageId/retry", ChatController.retryMessage);
+router.post("/:id/messages/:messageId/retry/stream", ChatController.streamRetryMessage);
 export default router;
