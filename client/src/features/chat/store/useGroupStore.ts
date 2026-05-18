@@ -46,6 +46,7 @@ type GroupState = {
   setLoading: (loading: boolean) => void;
   removeGroup: (id: string) => void;
   updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
+  updateGroup: (groupId: string, updates: Partial<GroupChat>) => void;
 };
 
 export const useGroupStore = create<GroupState>()(
@@ -84,6 +85,12 @@ export const useGroupStore = create<GroupState>()(
         set((state) => ({
           groups: state.groups.map((g) =>
             g._id === groupId ? { ...g, members } : g,
+          ),
+        })),
+      updateGroup: (groupId, updates) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g._id === groupId ? { ...g, ...updates } : g,
           ),
         })),
     }),

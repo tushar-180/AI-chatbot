@@ -23,12 +23,17 @@ import {
   Copy,
   Check,
   XCircle,
+  Share,
+  Users,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
+
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useGroupStore } from "@/features/chat/store/useGroupStore";
+
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -67,7 +72,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsNewChat,
     setSidebarOpen,
   } = useChatStore();
+  const {
+    removeGroup,
+    currentGroupId,
+    setCurrentGroup,
+  } = useGroupStore();
   const [activeTab, setActiveTab] = useState(initialTab);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -107,10 +118,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localArchivedChats, setLocalArchivedChats] = useState<any[]>([]);
   const [isArchiveLoading, setIsArchiveLoading] = useState(false);
 
+  // Local Sharing State
+  const [sharedChats, setSharedChats] = useState<any[]>([]);
+  const [createdGroups, setCreatedGroups] = useState<any[]>([]);
+  const [isSharingLoading, setIsSharingLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+
   // Export State
   const [exportSummary, setExportSummary] = useState("");
   const [isExportLoading, setIsExportLoading] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Bulk Delete and Confirmation State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemsToDelete, setItemsToDelete] = useState<string[]>([]);
+  const [deleteType, setDeleteType] = useState<"archive" | "share" | "group" | "memory" | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+
+
 
   // Fetch Personalization
   const fetchPersonalization = useCallback(async () => {
@@ -197,14 +225,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleDeleteArchived = async (chatId: string) => {
-    try {
-      await globalDeleteChat(chatId);
-      setLocalArchivedChats((prev) => prev.filter((c) => c._id !== chatId));
-    } catch (error) {
-      console.error("Delete Error:", error);
-    }
-  };
 
   const openArchivedChat = (chat: any) => {
     setIsNewChat(false);
@@ -215,11 +235,126 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
+  // Fetch Sharing details
+  const fetchSharingData = useCallback(async () => {
+    if (!user) return;
+    setIsSharingLoading(true);
+    try {
+      const [sharesRes, groupsRes] = await Promise.all([
+        api.get("/shared-chat/user/shares"),
+        api.get("/group/user-created", { params: { userId: user.id } }),
+      ]);
+      setSharedChats(sharesRes.data);
+      setCreatedGroups(groupsRes.data);
+    } catch (error) {
+      console.error("Sharing Fetch Error:", error);
+      toast.error("Failed to load sharing details");
+    } finally {
+      setIsSharingLoading(false);
+    }
+  }, [user]);
+
+  const promptDeleteArchive = (chatIds: string[]) => {
+    setItemsToDelete(chatIds);
+    setDeleteType("archive");
+    setDeleteModalOpen(true);
+  };
+
+  const promptDeleteShare = (shareIds: string[]) => {
+    setItemsToDelete(shareIds);
+    setDeleteType("share");
+    setDeleteModalOpen(true);
+  };
+
+  const promptDeleteGroup = (groupIds: string[]) => {
+    setItemsToDelete(groupIds);
+    setDeleteType("group");
+    setDeleteModalOpen(true);
+  };
+
+  const promptDeleteMemory = (memoryIds: string[]) => {
+    setItemsToDelete(memoryIds);
+    setDeleteType("memory");
+    setDeleteModalOpen(true);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+
+  const handleConfirmDelete = async () => {
+    setDeleteModalOpen(false);
+    if (itemsToDelete.length === 0 || !deleteType) return;
+
+    const ids = [...itemsToDelete];
+    setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
+    setItemsToDelete([]);
+
+    if (deleteType === "archive") {
+      try {
+        await Promise.all(ids.map(id => globalDeleteChat(id)));
+        setLocalArchivedChats((prev) => prev.filter((c) => !ids.includes(c._id)));
+        toast.success(ids.length > 1 ? "Archived chats deleted" : "Archived chat deleted");
+      } catch (error) {
+        console.error("Bulk Delete Archive Error:", error);
+        toast.error("Failed to delete some archived chats");
+      }
+    } else if (deleteType === "share") {
+      try {
+        await Promise.all(ids.map(id => api.delete(`/shared-chat/${id}`)));
+        setSharedChats((prev) => prev.filter((c) => !ids.includes(c._id)));
+        toast.success(ids.length > 1 ? "Shared chat links deleted" : "Shared chat link deleted");
+      } catch (error) {
+        console.error("Bulk Delete Shared Chats Error:", error);
+        toast.error("Failed to delete some shared chat links");
+      }
+    } else if (deleteType === "group") {
+      try {
+        await Promise.all(ids.map(id => api.delete(`/group/${id}`, { data: { userId: user?.id } })));
+        setCreatedGroups((prev) => prev.filter((g) => !ids.includes(g._id)));
+        ids.forEach(id => removeGroup(id));
+        toast.success(ids.length > 1 ? "Group chats deleted" : "Group chat deleted");
+        if (ids.includes(currentGroupId || "")) {
+          setCurrentGroup(null);
+          navigate("/chat");
+        }
+      } catch (error) {
+        console.error("Bulk Delete Groups Error:", error);
+        toast.error("Failed to delete some group chats");
+      }
+    } else if (deleteType === "memory") {
+      try {
+        await Promise.all(ids.map(id => api.delete(`/memory/${id}`)));
+        setMemories((prev) => prev.filter((m) => !ids.includes(m._id)));
+        toast.success(ids.length > 1 ? "Memory fragments purged" : "Memory fragment purged");
+      } catch (error) {
+        console.error("Bulk Purge Memories Error:", error);
+        toast.error("Failed to purge some memory fragments");
+      }
+    }
+    setDeleteType(null);
+    setIsEditMode(false);
+  };
+
+
+
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+    toast.success("Copied to clipboard");
+  };
+
+
   useEffect(() => {
     if (isOpen) {
       fetchPersonalization();
       if (activeTab === "memory") fetchMemories(true);
       if (activeTab === "archive") fetchArchivedChats();
+      if (activeTab === "sharing" || activeTab === "groups") fetchSharingData();
     }
   }, [
     isOpen,
@@ -227,7 +362,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     fetchPersonalization,
     fetchMemories,
     fetchArchivedChats,
+    fetchSharingData,
   ]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+    setIsEditMode(false);
+  }, [activeTab, isOpen]);
+
+
+
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -266,30 +410,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const deleteMemory = async (id: string) => {
-    if (!user) return;
-    try {
-      await api.delete(`/memory/${id}`);
-      setMemories((prev) => prev.filter((m) => m._id !== id));
-      toast.success("Memory purged successfully");
-    } catch (error: any) {
-      if (error?.response?.status === 404) {
-        setMemories((prev) => prev.filter((m) => m._id !== id));
-        return;
-      }
-      console.error("Delete Error:", error);
-      toast.error("Failed to purge memory fragment");
-    }
-  };
+
 
   const navItems = [
     { id: "general", label: "General", icon: Settings },
     { id: "personalization", label: "Personalization", icon: Sparkles },
     { id: "memory", label: "Memory", icon: Brain },
     { id: "archive", label: "Archive", icon: Archive },
+    { id: "sharing", label: "Shared Chats", icon: Share },
+    { id: "groups", label: "My Groups", icon: Users },
     { id: "data", label: "Data Control", icon: FileText },
     { id: "security", label: "Security", icon: Shield },
   ];
+
+
 
   const modalContent = (
     <div
@@ -302,7 +436,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl h-[600px] bg-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300"
+        className="w-full max-w-4xl h-[600px] bg-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300 relative"
       >
         {/* Internal Sidebar */}
         <div className="w-full md:w-64 bg-slate-900/50 border-r border-white/5 p-4 flex flex-col">
@@ -476,11 +610,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <p className="text-[10px] text-emerald-400/60 font-medium">Auto-sync active</p>
                       </div>
                    </div>
-                   <div className="text-right">
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{memories.length} / 100</p>
-                      <div className="h-1 w-24 bg-white/5 rounded-full mt-1 overflow-hidden">
-                         <div className="h-full bg-emerald-500" style={{width: `${Math.min(memories.length, 100)}%`}} />
-                      </div>
+                   <div className="flex items-center gap-4">
+                     <div className="text-right">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{memories.length} / 100</p>
+                        <div className="h-1 w-24 bg-white/5 rounded-full mt-1 overflow-hidden">
+                           <div className="h-full bg-emerald-500" style={{width: `${Math.min(memories.length, 100)}%`}} />
+                        </div>
+                     </div>
+                     {memories.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setIsEditMode(prev => !prev);
+                            setSelectedIds([]);
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                            isEditMode 
+                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30" 
+                              : "bg-white/5 text-slate-400 border border-white/5 hover:text-white hover:bg-white/10"
+                          }`}
+                        >
+                          {isEditMode ? "Cancel" : "Edit"}
+                        </button>
+                     )}
                    </div>
                 </div>
 
@@ -496,23 +647,92 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {memories.map((memory) => (
-                      <div key={memory._id} className="group flex items-start gap-4 p-4 rounded-2xl bg-white/2 border border-white/5 hover:border-white/10 transition-all">
-                        <div className="mt-1 text-slate-600 group-hover:text-emerald-400 transition-colors">
-                          <Zap size={14} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                           <p className="text-[13px] text-slate-300 leading-relaxed">{memory.content}</p>
-                           <div className="flex items-center gap-2 mt-2">
-                              <span className="text-[9px] font-bold upabortControllerRefpercase tracking-widest text-slate-600">{memory.category}</span>
-                              <span className="text-[9px] text-slate-700">• {new Date(memory.createdAt).toLocaleDateString()}</span>
-                           </div>
-                        </div>
-                        <button onClick={() => deleteMemory(memory._id)} className="opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all">
-                          <Trash2 size={14} />
+                    {isEditMode && (
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <button
+                          onClick={() => {
+                            const allIds = memories.map(m => m._id);
+                            const allSelected = allIds.every(id => selectedIds.includes(id));
+                            if (allSelected) {
+                              setSelectedIds([]);
+                            } else {
+                              setSelectedIds(allIds);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                        >
+                          {memories.every(m => selectedIds.includes(m._id)) ? "Deselect All" : "Select All"}
+                        </button>
+                        
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {selectedIds.length} Selected
+                        </span>
+
+                        <button
+                          disabled={selectedIds.length === 0}
+                          onClick={() => promptDeleteMemory(selectedIds)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
+                            selectedIds.length > 0
+                              ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
+                              : "bg-white/2 border-white/5 text-slate-600 cursor-not-allowed"
+                          }`}
+                        >
+                          <Trash2 size={12} />
+                          Delete Selected
                         </button>
                       </div>
-                    ))}
+                    )}
+
+                    {memories.map((memory) => {
+                      const isSelected = selectedIds.includes(memory._id);
+                      return (
+                        <div 
+                          key={memory._id}
+                          onClick={() => isEditMode && toggleSelect(memory._id)}
+                          className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all ${
+                            isEditMode ? "cursor-pointer" : ""
+                          } ${
+                            isSelected 
+                              ? "bg-emerald-500/5 border-emerald-500/20" 
+                              : "bg-white/2 border-white/5 hover:border-white/10"
+                          }`}
+                        >
+                          {isEditMode && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelect(memory._id);
+                              }}
+                              className={`flex-shrink-0 w-4 h-4 rounded-md border flex items-center justify-center mt-1 transition-all ${
+                                isSelected 
+                                  ? "bg-emerald-500 border-emerald-400 text-slate-950" 
+                                  : "border-white/20 hover:border-emerald-500/50"
+                              }`}
+                            >
+                              {isSelected && <Check size={10} strokeWidth={4} />}
+                            </button>
+                          )}
+                          <div className="mt-1 text-slate-600 group-hover:text-emerald-400 transition-colors">
+                            <Zap size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                             <p className="text-[13px] text-slate-300 leading-relaxed">{memory.content}</p>
+                             <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[9px] font-bold upabortControllerRefpercase tracking-widest text-slate-600">{memory.category}</span>
+                                <span className="text-[9px] text-slate-700">• {new Date(memory.createdAt).toLocaleDateString()}</span>
+                             </div>
+                          </div>
+                          {!isEditMode && (
+                            <button 
+                              onClick={() => promptDeleteMemory([memory._id])} 
+                              className="opacity-0 group-hover:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                     {hasMoreMemory && (
                        <button 
                         onClick={() => fetchMemories(false)}
@@ -526,15 +746,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
               </div>
             )}
-
             {activeTab === "archive" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 mb-4 flex items-center gap-3">
-                   <Archive className="text-amber-400" size={20} />
-                   <div>
-                     <p className="text-[11px] font-bold text-white uppercase tracking-widest">Archive Vault</p>
-                     <p className="text-[10px] text-amber-400/60 font-medium">{localArchivedChats.length} Conversations preserved</p>
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 mb-4 flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <Archive className="text-amber-400" size={20} />
+                      <div>
+                        <p className="text-[11px] font-bold text-white uppercase tracking-widest">Archive Vault</p>
+                        <p className="text-[10px] text-amber-400/60 font-medium">{localArchivedChats.length} Conversations preserved</p>
+                      </div>
                    </div>
+                   {localArchivedChats.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setIsEditMode(prev => !prev);
+                          setSelectedIds([]);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          isEditMode 
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30" 
+                            : "bg-white/5 text-slate-400 border border-white/5 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {isEditMode ? "Cancel" : "Edit"}
+                      </button>
+                   )}
                 </div>
 
                 {isArchiveLoading ? (
@@ -549,50 +785,431 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {localArchivedChats.map((chat) => (
-                      <div 
-                        key={chat._id} 
-                        onClick={() => openArchivedChat(chat)}
-                        className="group flex items-center justify-between p-4 rounded-2xl bg-white/2 border border-white/5 hover:bg-white/5 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center gap-4">
-                           <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center text-slate-500 group-hover:text-amber-400 transition-colors">
-                              <MessageSquare size={18} />
-                           </div>
-                           <div>
-                              <p className="text-sm font-bold text-white">{chat.title || "Untitled Session"}</p>
-                              <p className="text-[10px] text-slate-600 font-medium">Last active {new Date(chat.updatedAt).toLocaleDateString()}</p>
-                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                           <button 
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleUnarchive(chat._id);
-                            }}
-                            className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
-                           >
-                             <ArrowLeft size={14} />
-                             Restore
-                           </button>
-                           <button 
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleDeleteArchived(chat._id);
-                            }}
-                            className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                           >
-                             <Trash2 size={14} />
-                           </button>
-                        </div>
+                    {isEditMode && (
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <button
+                          onClick={() => {
+                            const allIds = localArchivedChats.map(c => c._id);
+                            const allSelected = allIds.every(id => selectedIds.includes(id));
+                            if (allSelected) {
+                              setSelectedIds([]);
+                            } else {
+                              setSelectedIds(allIds);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                        >
+                          {localArchivedChats.every(c => selectedIds.includes(c._id)) ? "Deselect All" : "Select All"}
+                        </button>
+                        
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                          {selectedIds.length} Selected
+                        </span>
+
+                        <button
+                          disabled={selectedIds.length === 0}
+                          onClick={() => promptDeleteArchive(selectedIds)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
+                            selectedIds.length > 0
+                              ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
+                              : "bg-white/2 border-white/5 text-slate-600 cursor-not-allowed"
+                          }`}
+                        >
+                          <Trash2 size={12} />
+                          Delete Selected
+                        </button>
                       </div>
-                    ))}
+                    )}
+
+                    {localArchivedChats.map((chat) => {
+                      const isSelected = selectedIds.includes(chat._id);
+                      return (
+                        <div 
+                          key={chat._id} 
+                          onClick={() => {
+                            if (isEditMode) {
+                              toggleSelect(chat._id);
+                            } else {
+                              openArchivedChat(chat);
+                            }
+                          }}
+                          className={`group flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${
+                            isSelected 
+                              ? "bg-white/5 border-amber-500/30" 
+                              : "bg-white/2 border-white/5 hover:bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
+                             {isEditMode && (
+                               <div 
+                                 className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                   isSelected 
+                                     ? "bg-amber-500 border-amber-500 text-white" 
+                                     : "border-white/10 bg-white/5 hover:border-white/20"
+                                 }`}
+                               >
+                                 {isSelected && <Check size={12} className="stroke-[3]" />}
+                               </div>
+                             )}
+                             <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center text-slate-500 group-hover:text-amber-400 transition-colors shrink-0">
+                                <MessageSquare size={18} />
+                             </div>
+                             <div className="min-w-0 flex-1">
+                                <p className="text-sm font-bold text-white truncate">{chat.title || "Untitled Session"}</p>
+                                <p className="text-[10px] text-slate-600 font-medium">Last active {new Date(chat.updatedAt).toLocaleDateString()}</p>
+                             </div>
+                          </div>
+                          
+                          {!isEditMode && (
+                            <div className="flex items-center gap-2 shrink-0">
+                               <button 
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleUnarchive(chat._id);
+                                }}
+                                className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
+                               >
+                                 <ArrowLeft size={14} />
+                                 Restore
+                               </button>
+                               <button 
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  promptDeleteArchive([chat._id]);
+                                }}
+                                className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                               >
+                                 <Trash2 size={14} />
+                               </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
+
+            {activeTab === "sharing" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <Share className="text-indigo-400" size={20} />
+                      <div>
+                        <p className="text-[11px] font-bold text-white uppercase tracking-widest">Shared Chats</p>
+                        <p className="text-[10px] text-indigo-400/60 font-medium">Manage your publicly shared conversation links</p>
+                      </div>
+                   </div>
+                   {sharedChats.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setIsEditMode(prev => !prev);
+                          setSelectedIds([]);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          isEditMode 
+                            ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30" 
+                            : "bg-white/5 text-slate-400 border border-white/5 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {isEditMode ? "Cancel" : "Edit"}
+                      </button>
+                   )}
+                </div>
+
+                {isSharingLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                    <p className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Synchronizing resources...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <MessageSquare size={14} className="text-indigo-400" />
+                        Shared Conversations ({sharedChats.length})
+                      </h3>
+                      
+                      {sharedChats.length === 0 ? (
+                        <div className="p-8 text-center bg-white/2 border border-dashed border-white/5 rounded-2xl">
+                          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">No shared chats yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {isEditMode && (
+                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                              <button
+                                onClick={() => {
+                                  const allIds = sharedChats.map(c => c._id);
+                                  const allSelected = allIds.every(id => selectedIds.includes(id));
+                                  if (allSelected) {
+                                    setSelectedIds([]);
+                                  } else {
+                                    setSelectedIds(allIds);
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                              >
+                                {sharedChats.every(c => selectedIds.includes(c._id)) ? "Deselect All" : "Select All"}
+                              </button>
+                              
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                {selectedIds.length} Selected
+                              </span>
+
+                              <button
+                                disabled={selectedIds.length === 0}
+                                onClick={() => promptDeleteShare(selectedIds)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
+                                  selectedIds.length > 0
+                                    ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
+                                    : "bg-white/2 border-white/5 text-slate-600 cursor-not-allowed"
+                                }`}
+                              >
+                                <Trash2 size={12} />
+                                Delete Selected
+                              </button>
+                            </div>
+                          )}
+
+                          {sharedChats.map((share) => {
+                            const shareUrl = `${window.location.origin}/shared/${share._id}`;
+                            const isShareCopied = copiedId === share._id;
+                            const isSelected = selectedIds.includes(share._id);
+                            return (
+                              <div 
+                                key={share._id} 
+                                onClick={() => {
+                                  if (isEditMode) {
+                                    toggleSelect(share._id);
+                                  }
+                                }}
+                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                  isEditMode ? "cursor-pointer" : ""
+                                } ${
+                                  isSelected 
+                                    ? "bg-white/5 border-indigo-500/30" 
+                                    : "bg-white/2 border-white/5 hover:bg-white/5"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
+                                  {isEditMode && (
+                                    <div 
+                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                        isSelected 
+                                          ? "bg-indigo-500 border-indigo-500 text-white" 
+                                          : "border-white/10 bg-white/5 hover:border-white/20"
+                                      }`}
+                                    >
+                                      {isSelected && <Check size={12} className="stroke-[3]" />}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-white truncate">{share.title || "Shared Chat Session"}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-[9px] text-slate-500 font-medium">Shared {new Date(share.createdAt).toLocaleDateString()}</span>
+                                      <span className="text-[9px] text-slate-600 truncate max-w-[200px]">{shareUrl}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {!isEditMode && (
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button 
+                                      onClick={() => handleCopy(shareUrl, share._id)}
+                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${
+                                        isShareCopied 
+                                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                          : "bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10"
+                                      }`}
+                                      title="Copy Share Link"
+                                    >
+                                      {isShareCopied ? <Check size={12} /> : <Copy size={12} />}
+                                      {isShareCopied ? "Copied" : "Copy Link"}
+                                    </button>
+                                    <button 
+                                      onClick={() => promptDeleteShare([share._id])}
+                                      className="p-2.5 rounded-xl bg-white/5 border border-transparent text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
+                                      title="Revoke / Delete share link"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "groups" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <Users className="text-indigo-400" size={20} />
+                      <div>
+                        <p className="text-[11px] font-bold text-white uppercase tracking-widest">My Groups</p>
+                        <p className="text-[10px] text-indigo-400/60 font-medium">Manage and delete collaborative groups you created</p>
+                      </div>
+                   </div>
+                   {createdGroups.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setIsEditMode(prev => !prev);
+                          setSelectedIds([]);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
+                          isEditMode 
+                            ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30" 
+                            : "bg-white/5 text-slate-400 border border-white/5 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        {isEditMode ? "Cancel" : "Edit"}
+                      </button>
+                   )}
+                </div>
+
+                {isSharingLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                    <p className="text-[10px] uppercase tracking-widest text-zinc-600 font-bold">Synchronizing resources...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                        <Users size={14} className="text-indigo-400" />
+                        Created Groups ({createdGroups.length})
+                      </h3>
+
+                      {createdGroups.length === 0 ? (
+                        <div className="p-8 text-center bg-white/2 border border-dashed border-white/5 rounded-2xl">
+                          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">No created groups yet</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {isEditMode && (
+                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                              <button
+                                onClick={() => {
+                                  const allIds = createdGroups.map(c => c._id);
+                                  const allSelected = allIds.every(id => selectedIds.includes(id));
+                                  if (allSelected) {
+                                    setSelectedIds([]);
+                                  } else {
+                                    setSelectedIds(allIds);
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-xl bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/5 transition-all text-[9px] font-bold uppercase tracking-widest"
+                              >
+                                {createdGroups.every(c => selectedIds.includes(c._id)) ? "Deselect All" : "Select All"}
+                              </button>
+                              
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                {selectedIds.length} Selected
+                              </span>
+
+                              <button
+                                disabled={selectedIds.length === 0}
+                                onClick={() => promptDeleteGroup(selectedIds)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
+                                  selectedIds.length > 0
+                                    ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
+                                    : "bg-white/2 border-white/5 text-slate-600 cursor-not-allowed"
+                                }`}
+                              >
+                                <Trash2 size={12} />
+                                Delete Selected
+                              </button>
+                            </div>
+                          )}
+
+                          {createdGroups.map((group) => {
+                            const inviteUrl = `${window.location.origin}/join/${group.inviteCode}`;
+                            const isInviteCopied = copiedId === group._id;
+                            const isSelected = selectedIds.includes(group._id);
+                            return (
+                              <div 
+                                key={group._id} 
+                                onClick={() => {
+                                  if (isEditMode) {
+                                    toggleSelect(group._id);
+                                  }
+                                }}
+                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
+                                  isEditMode ? "cursor-pointer" : ""
+                                } ${
+                                  isSelected 
+                                    ? "bg-white/5 border-indigo-500/30" 
+                                    : "bg-white/2 border-white/5 hover:bg-white/5"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
+                                  {isEditMode && (
+                                    <div 
+                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                                        isSelected 
+                                          ? "bg-indigo-500 border-indigo-500 text-white" 
+                                          : "border-white/10 bg-white/5 hover:border-white/20"
+                                      }`}
+                                    >
+                                      {isSelected && <Check size={12} className="stroke-[3]" />}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-bold text-white truncate">{group.title || "Collaborative Group"}</p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                      <span className="text-[9px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md">Creator</span>
+                                      <span className="text-[9px] text-slate-500 font-medium">{group.members?.length || 1} Members</span>
+                                      <span className="text-[9px] text-slate-600 font-medium">Code: {group.inviteCode}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {!isEditMode && (
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button 
+                                      onClick={() => handleCopy(inviteUrl, group._id)}
+                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${
+                                        isInviteCopied 
+                                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                          : "bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10"
+                                      }`}
+                                      title="Copy Invite Link"
+                                    >
+                                      {isInviteCopied ? <Check size={12} /> : <Copy size={12} />}
+                                      {isInviteCopied ? "Copied" : "Copy Invite"}
+                                    </button>
+                                    <button 
+                                      onClick={() => promptDeleteGroup([group._id])}
+                                      className="p-2.5 rounded-xl bg-white/5 border border-transparent text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
+                                      title="Delete group (Removes all members)"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+
             {activeTab === "data" && (
+
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="p-6 rounded-3xl bg-blue-500/5 border border-blue-500/10 mb-4">
                   <div className="flex items-center gap-4 mb-4">
@@ -741,6 +1358,43 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
           </div>
+
+          {deleteModalOpen && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
+              <div className="w-full max-w-sm p-8 rounded-3xl bg-slate-900/90 border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] space-y-6 text-center animate-in zoom-in-95 duration-200">
+                <div className="mx-auto w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shadow-[0_0_20px_rgba(244,63,94,0.15)]">
+                  <Trash2 size={22} className="animate-pulse" />
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-base font-bold text-white tracking-wide">Confirm Action</h4>
+                  <p className="text-xs text-slate-400 leading-relaxed px-2">
+                    {itemsToDelete.length > 1
+                      ? `Are you sure you want to permanently delete these ${itemsToDelete.length} selected items? This action cannot be undone.`
+                      : "Are you sure you want to permanently delete this item? This action cannot be undone."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      setDeleteModalOpen(false);
+                      setItemsToDelete([]);
+                      setDeleteType(null);
+                    }}
+                    className="flex-1 py-3 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 hover:text-white text-slate-300 text-xs font-bold uppercase tracking-wider transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleConfirmDelete}
+                    className="flex-1 py-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 hover:bg-rose-600 hover:text-white text-rose-400 text-xs font-bold uppercase tracking-wider transition-all shadow-[0_0_20px_rgba(244,63,94,0.1)]"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

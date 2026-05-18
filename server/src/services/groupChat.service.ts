@@ -129,7 +129,17 @@ export class GroupChatService {
     if (memberIndex === -1) throw new Error("Not a member");
 
     const username = group.members[memberIndex].username;
+    const isCreatorLeaving = (clerkId === group.creatorId);
+
     group.members.splice(memberIndex, 1);
+
+    let newAdmin: any = null;
+    if (isCreatorLeaving && group.members.length > 0) {
+      const sortedRemaining = [...group.members].sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+      newAdmin = sortedRemaining[0];
+      group.creatorId = newAdmin.userId;
+    }
+
     await group.save();
 
     // Create leave message
@@ -149,7 +159,67 @@ export class GroupChatService {
 
     groupSseManager.broadcast(groupId, {
       type: "member_left",
-      userId: clerkId
+      userId: clerkId,
+    });
+
+    if (newAdmin) {
+      const adminChangeMsg = await GroupMessage.create({
+        groupId: group._id,
+        userId: "system",
+        username: "System",
+        role: "system",
+        content: `Admin status transferred to ${newAdmin.username}`,
+        type: "event",
+      });
+
+      groupSseManager.broadcast(groupId, {
+        type: "message",
+        message: adminChangeMsg,
+      });
+
+      groupSseManager.broadcast(groupId, {
+        type: "admin_changed",
+        creatorId: newAdmin.userId,
+      });
+    }
+
+    return { success: true };
+  }
+
+  static async removeMember(groupId: string, adminClerkId: string, memberClerkId: string) {
+    const group = await GroupChat.findById(groupId);
+    if (!group) throw new Error("Group not found");
+
+    if (group.creatorId !== adminClerkId) {
+      throw new Error("Unauthorized: Only the group admin can remove members");
+    }
+
+    const memberIndex = group.members.findIndex((m) => m.userId === memberClerkId);
+    if (memberIndex === -1) throw new Error("User is not a member of this group");
+
+    const username = group.members[memberIndex].username;
+    group.members.splice(memberIndex, 1);
+    await group.save();
+
+    // Create system removal event message
+    const removeMsg = await GroupMessage.create({
+      groupId: group._id,
+      userId: "system",
+      username: "System",
+      role: "system",
+      content: `Admin removed ${username} from the group`,
+      type: "event",
+    });
+
+    groupSseManager.broadcast(groupId, {
+      type: "message",
+      message: removeMsg,
+    });
+
+    groupSseManager.broadcast(groupId, {
+      type: "member_left",
+      userId: memberClerkId,
+      reason: "removed",
     });
 
     return { success: true };
@@ -322,4 +392,31 @@ export class GroupChatService {
   static async getUserGroups(clerkId: string) {
     return await GroupChat.find({ "members.userId": clerkId }).sort({ updatedAt: -1 });
   }
+
+  static async getUserCreatedGroups(clerkId: string) {
+    return await GroupChat.find({ creatorId: clerkId }).sort({ updatedAt: -1 });
+  }
+
+  static async deleteGroup(groupId: string, clerkId: string) {
+    const group = await GroupChat.findById(groupId);
+    if (!group) {
+      throw new Error("Group not found");
+    }
+    if (group.creatorId !== clerkId) {
+      throw new Error("Unauthorized: Only the creator can delete this group");
+    }
+
+    // Broadcast to all active SSE clients that the group is deleted
+    groupSseManager.broadcast(groupId, {
+      type: "group_deleted",
+      groupId,
+    });
+
+    // Delete group and its messages
+    await GroupChat.findByIdAndDelete(groupId);
+    await GroupMessage.deleteMany({ groupId });
+
+    return { success: true };
+  }
 }
+

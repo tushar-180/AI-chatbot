@@ -34,6 +34,20 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
     }
   };
 
+  const handleRemoveMember = async (memberId: string, username: string) => {
+    if (!currentUser) return;
+    try {
+      await api.post(`/group/${groupId}/remove-member`, { 
+        memberId, 
+        userId: currentUser.id 
+      });
+      toast.success(`Removed ${username} from the group`);
+    } catch (err) {
+      console.error("Failed to remove member:", err);
+      toast.error("Failed to remove member");
+    }
+  };
+
   if (!group) return null;
 
   return (
@@ -133,9 +147,17 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
                     </span>
                   </div>
                   {member.userId === group.creatorId && (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-bold uppercase tracking-tighter">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[8px] font-bold uppercase tracking-tighter flex-shrink-0">
                       Admin
                     </span>
+                  )}
+                  {member.userId !== group.creatorId && currentUser?.id === group.creatorId && (
+                    <button
+                      onClick={() => handleRemoveMember(member.userId, member.username)}
+                      className="opacity-0 group-hover:opacity-100 px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-600 hover:text-white transition-all text-[9px] font-bold uppercase tracking-wider cursor-pointer flex-shrink-0"
+                    >
+                      Remove
+                    </button>
                   )}
                 </div>
               ))}

@@ -61,6 +61,21 @@ export class GroupChatController {
     }
   }
 
+  static async removeMember(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const { memberId, userId } = req.body;
+      const adminClerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      if (!adminClerkId) return res.status(401).json({ error: "Unauthorized" });
+      if (!memberId) return res.status(400).json({ error: "Member ID is required" });
+
+      const result = await GroupChatService.removeMember(groupId, adminClerkId, memberId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async getGroupDetails(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
@@ -126,4 +141,32 @@ export class GroupChatController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  static async getUserCreatedGroups(req: Request, res: Response) {
+    try {
+      const userId = req.query.userId as string;
+      const clerkId = userId || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+
+      const groups = await GroupChatService.getUserCreatedGroups(clerkId);
+      res.json(groups);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async deleteGroup(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const { userId } = req.body;
+      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+
+      const result = await GroupChatService.deleteGroup(groupId, clerkId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
+

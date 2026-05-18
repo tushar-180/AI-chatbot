@@ -1,18 +1,22 @@
 import { useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useGroupStore } from "../store/useGroupStore";
 import { api, API_BASE_URL } from "@/lib/api";
 import { useUser } from "@clerk/react";
+import { toast } from "sonner";
 
 export const useGroupChat = () => {
   const { groupId } = useParams<{ groupId: string }>();
+  const navigate = useNavigate();
   const { user } = useUser();
+
   const { 
     groups, 
     setCurrentGroup, 
     setGroupMessages, 
     addGroupMessage, 
     updateGroupMembers,
+    updateGroup,
     setLoading 
   } = useGroupStore();
   
@@ -78,17 +82,31 @@ export const useGroupChat = () => {
         }
       } else if (data.type === "member_joined") {
         // Update members list
-        const group = groups.find(g => g._id === groupId);
+        const activeGroups = useGroupStore.getState().groups;
+        const group = activeGroups.find(g => g._id === groupId);
         if (group) {
           const updatedMembers = [...group.members, data.member];
           updateGroupMembers(groupId, updatedMembers);
         }
       } else if (data.type === "member_left") {
-        const group = groups.find(g => g._id === groupId);
+        if (data.userId === user?.id) {
+          eventSource.close();
+          toast.warning(data.reason === "removed" ? "You have been removed from this group by the admin." : "You have left the group.");
+          navigate("/chat");
+          return;
+        }
+        const activeGroups = useGroupStore.getState().groups;
+        const group = activeGroups.find(g => g._id === groupId);
         if (group) {
           const updatedMembers = group.members.filter(m => m.userId !== data.userId);
           updateGroupMembers(groupId, updatedMembers);
         }
+      } else if (data.type === "admin_changed") {
+        updateGroup(groupId, { creatorId: data.creatorId });
+      } else if (data.type === "group_deleted") {
+        eventSource.close();
+        toast.warning("This group chat was deleted by its creator.");
+        navigate("/chat");
       }
     };
 
@@ -103,7 +121,8 @@ export const useGroupChat = () => {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [groupId, user?.id, setCurrentGroup, setGroupMessages, addGroupMessage, setLoading, groups, updateGroupMembers]);
+  }, [groupId, user?.id, setCurrentGroup, setGroupMessages, addGroupMessage, setLoading, updateGroupMembers, updateGroup, navigate]);
+
 
   const sendMessage = async (content: string) => {
     if (!groupId || !content.trim() || !user?.id) return;

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useGroupStore } from "@/features/chat/store/useGroupStore";
-import { Loader2, X, CheckCircle2, UserPlus } from "lucide-react";
+import { Loader2, X, CheckCircle2, UserPlus, AlertCircle } from "lucide-react";
 import Sidebar from "@/features/chat/components/Sidebar";
+import ChatHeader from "@/features/chat/components/ChatHeader";
+import { useChatStore } from "@/features/chat/store/useChatStore";
 import { toast } from "sonner";
 import { useUser } from "@clerk/react";
 
@@ -12,9 +14,11 @@ const JoinGroupPage = () => {
   const [group, setGroup] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useUser();
   const addGroup = useGroupStore((state) => state.addGroup);
+  const { setSidebarOpen } = useChatStore();
 
   const isAlreadyMember = group?.members?.some((m: any) => m.userId === user?.id);
 
@@ -27,11 +31,11 @@ const JoinGroupPage = () => {
         })
         .catch((err) => {
           console.error("Fetch group error:", err);
-          toast.error("Invalid invite link");
-          navigate("/chat");
+          setError("This invite link is invalid, expired, or the group has been deleted by its creator.");
+          setLoading(false);
         });
     }
-  }, [inviteCode, navigate]);
+  }, [inviteCode]);
 
 
 
@@ -48,6 +52,46 @@ const JoinGroupPage = () => {
       setJoining(false);
     }
   };
+
+  if (error) {
+    return (
+      <div className="flex h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
+        <Sidebar />
+
+        <main className="relative flex h-screen flex-1 flex-col overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
+          <div className="relative flex flex-1 flex-col overflow-y-auto scroll-smooth">
+            <ChatHeader
+              currentChatId={null}
+              chatTitle="Group Invitation"
+              onMenuClick={() => setSidebarOpen(true)}
+            />
+
+            <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+              <div className="w-full max-w-md p-8 rounded-3xl bg-slate-900/40 border border-white/5 shadow-2xl backdrop-blur-md space-y-6 animate-in zoom-in-95 duration-300">
+                <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.15)]">
+                  <AlertCircle size={32} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-bold text-white tracking-wide">Invite Link Expired</h3>
+                  <p className="text-xs text-slate-400 leading-relaxed px-4">
+                    {error}
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <button
+                    onClick={() => navigate("/chat")}
+                    className="px-6 py-3 rounded-2xl bg-white text-black font-bold uppercase tracking-widest text-[10px] hover:scale-[1.02] hover:bg-slate-200 transition-all shadow-lg cursor-pointer"
+                  >
+                    Go to Home
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
