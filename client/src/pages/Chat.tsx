@@ -8,6 +8,8 @@ import InputArea from "@/features/chat/components/InputArea";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
+import { useChatList } from "@/features/chat/hooks/useChatList";
+import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
 import { useGroupStore } from "@/features/chat/store/useGroupStore";
 
@@ -22,6 +24,7 @@ const Chat = () => {
   const hasAutoStartedRef = useRef(false);
   const {
     currentChatId,
+    currentChat,
     messages,
     isNewChat,
     setSidebarOpen,
@@ -40,9 +43,11 @@ const Chat = () => {
     prefetchedChatId?: string;
     skipInitialFetch?: boolean;
   } | null;
+  const { unarchiveChat } = useChatList();
   const canAutoStartFromSeededMessages =
     pendingState?.skipInitialFetch === true &&
     pendingState?.prefetchedChatId === currentChatId;
+  const isArchived = currentChat?.isArchived || false;
 
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
@@ -67,16 +72,26 @@ const Chat = () => {
     skipFetch: canAutoStartFromSeededMessages,
   });
 
-  // 2. Manage Streaming Logic & Optimistic UI
+  // 2. Manage Web Search Quota
+  const {
+    quotaStatus,
+    isLoading: isQuotaLoading,
+    refreshQuota,
+  } = useWebSearchQuota();
+
+  // 3. Manage Streaming Logic & Optimistic UI
   const {
     streamMessage,
+    editMessage,
     stopGeneration,
     optimisticMessages,
     isStreaming,
     loading: isCurrentChatLoading,
-  } = useChatStream();
+  } = useChatStream({
+    onWebSearchComplete: refreshQuota,
+  });
 
-  // 3. Manage Input & Form Submission
+  // 4. Manage Input & Form Submission
   const {
     input,
     setInput,
@@ -94,7 +109,7 @@ const Chat = () => {
       }),
   });
 
-  // 4. Handle auto-start message from SharedChatPage
+  // 5. Handle auto-start message from SharedChatPage
   useEffect(() => {
     if (
       pendingState?.pendingInput &&
@@ -166,6 +181,12 @@ const Chat = () => {
               currentChatId={currentChatId}
               isNewChat={isNewChat}
               onSuggestionClick={setInput}
+              onEditMessage={(messageId, content) =>
+                editMessage(messageId, content, selectedProvider, {
+                  webSearchEnabled,
+                })
+              }
+              onEditStart={stopGeneration}
             />
           </div>
         </div>
@@ -186,6 +207,10 @@ const Chat = () => {
               onAttachmentsChange={setAttachments}
               webSearchEnabled={webSearchEnabled}
               onWebSearchToggle={setWebSearchEnabled}
+              isArchived={isArchived}
+              onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
+              quotaStatus={quotaStatus}
+              isQuotaLoading={isQuotaLoading}
             />
           </div>
         </div>

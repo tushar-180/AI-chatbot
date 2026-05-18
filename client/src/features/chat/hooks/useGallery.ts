@@ -22,7 +22,7 @@ export const useGallery = () => {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const res = await api.get(`/chat/gallery/${user.id}`);
+      const res = await api.get("/chat/gallery");
       console.log("Gallery", res.data);
       setItems(res.data);
       setError(null);

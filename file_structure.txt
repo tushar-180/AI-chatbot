@@ -1,0 +1,163 @@
+.
+├── AI_ARCHITECTURE.md
+├── client
+│   ├── components.json
+│   ├── eslint.config.js
+│   ├── file_structure.txt
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── public
+│   │   ├── faviconn.svg
+│   │   ├── favicon.png
+│   │   ├── icons.svg
+│   │   └── logo.png
+│   ├── src
+│   │   ├── App.tsx
+│   │   ├── components
+│   │   │   ├── auth
+│   │   │   │   └── ProtectedRoute.tsx
+│   │   │   └── ui
+│   │   │       ├── accordion.tsx
+│   │   │       ├── avatar.tsx
+│   │   │       ├── badge.tsx
+│   │   │       ├── button.tsx
+│   │   │       ├── card.tsx
+│   │   │       ├── dropdown-menu.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── ServerDownBanner.tsx
+│   │   │       ├── sonner.tsx
+│   │   │       ├── spotlight-demo.tsx
+│   │   │       └── spotlight.tsx
+│   │   ├── contexts
+│   │   │   └── ServerStatusContext.tsx
+│   │   ├── features
+│   │   │   ├── auth
+│   │   │   │   └── hooks
+│   │   │   │       └── useUserSync.ts
+│   │   │   └── chat
+│   │   │       ├── components
+│   │   │       │   ├── ChatHeader.tsx
+│   │   │       │   ├── CodeBlock.tsx
+│   │   │       │   ├── DeleteConfirmModal.tsx
+│   │   │       │   ├── GalleryModal.tsx
+│   │   │       │   ├── InputArea.tsx
+│   │   │       │   ├── Loading.tsx
+│   │   │       │   ├── MarkdownConfig.tsx
+│   │   │       │   ├── MemoryModal.tsx
+│   │   │       │   ├── MessageItem.tsx
+│   │   │       │   ├── MessageList.tsx
+│   │   │       │   ├── PersonalizationModal.tsx
+│   │   │       │   ├── ShareModal.tsx
+│   │   │       │   └── Sidebar.tsx
+│   │   │       ├── constants
+│   │   │       │   └── chat.constants.ts
+│   │   │       ├── hooks
+│   │   │       │   ├── useAvailableProviders.ts
+│   │   │       │   ├── useChatInput.ts
+│   │   │       │   ├── useChatList.ts
+│   │   │       │   ├── useChatMessages.ts
+│   │   │       │   ├── useChatStream.ts
+│   │   │       │   ├── useGallery.ts
+│   │   │       │   └── useVoiceInput.ts
+│   │   │       ├── services
+│   │   │       │   ├── chat.service.ts
+│   │   │       │   └── voiceInput
+│   │   │       │       ├── voiceError.service.ts
+│   │   │       │       ├── voiceProfanity.ts
+│   │   │       │       └── voiceRequestMicPermission.service.ts
+│   │   │       ├── store
+│   │   │       │   └── useChatStore.ts
+│   │   │       └── types
+│   │   │           └── chat.types.ts
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   ├── api.ts
+│   │   │   └── utils.ts
+│   │   ├── main.tsx
+│   │   └── pages
+│   │       ├── Auth.tsx
+│   │       ├── Chat.tsx
+│   │       ├── Landing.tsx
+│   │       └── SharedChatPage.tsx
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── CODE_FLOW.md
+├── file_structure.txt
+├── README.md
+├── render.yaml
+└── server
+    ├── file_structure.txt
+    ├── migrate-messages.js
+    ├── package.json
+    ├── package-lock.json
+    ├── src
+    │   ├── app.ts
+    │   ├── config
+    │   │   └── db.ts
+    │   ├── constants
+    │   │   ├── chat.constants.ts
+    │   │   └── prompt.constants.ts
+    │   ├── controllers
+    │   │   ├── ai.controller.ts
+    │   │   ├── chat.controller.ts
+    │   │   ├── sharedChat.controller.ts
+    │   │   └── user.controller.ts
+    │   ├── middleware
+    │   │   └── error.middleware.ts
+    │   ├── models
+    │   │   ├── Chat.model.ts
+    │   │   ├── SharedChat.model.ts
+    │   │   ├── UserMemory.model.ts
+    │   │   └── User.model.ts
+    │   ├── modules
+    │   │   └── web-search
+    │   │       ├── cache.ts
+    │   │       ├── confidence.ts
+    │   │       ├── index.ts
+    │   │       ├── queryResolver.ts
+    │   │       ├── rateLimiter.ts
+    │   │       ├── reranker.ts
+    │   │       ├── webSearch.prompts.ts
+    │   │       ├── webSearch.service.ts
+    │   │       ├── web_search.txt
+    │   │       └── webSearch.types.ts
+    │   ├── repositories
+    │   │   └── chat.repository.ts
+    │   ├── routes
+    │   │   ├── ai.routes.ts
+    │   │   ├── chat.routes.ts
+    │   │   ├── memory.routes.ts
+    │   │   ├── sharedChat.routes.ts
+    │   │   ├── upload.routes.ts
+    │   │   └── user.routes.ts
+    │   ├── server.ts
+    │   ├── services
+    │   │   ├── ai
+    │   │   │   ├── ai.factory.ts
+    │   │   │   ├── ai.interface.ts
+    │   │   │   ├── constants.ts
+    │   │   │   ├── providers
+    │   │   │   │   ├── claude.adapter.ts
+    │   │   │   │   ├── gemini.adapter.ts
+    │   │   │   │   ├── nvidia.adapter.ts
+    │   │   │   │   └── openai.adapter.ts
+    │   │   │   └── types.ts
+    │   │   ├── ai.service.ts
+    │   │   ├── chat.service.ts
+    │   │   ├── chatStreamRegistry.service.ts
+    │   │   ├── cloudinary.service.ts
+    │   │   ├── memory.service.ts
+    │   │   ├── sharedChat.service.ts
+    │   │   └── user.service.ts
+    │   ├── types
+    │   │   └── chat.types.ts
+    │   └── utils
+    │       ├── asyncHandler.ts
+    │       ├── chatHistory.ts
+    │       └── sse.ts
+    └── tsconfig.json
+
+36 directories, 124 files

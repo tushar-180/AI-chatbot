@@ -15,9 +15,9 @@ const sendControllerError = (res: Response, error: any, fallbackMessage: string)
 
 export const shareChat = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.clerkId;
     if (!userId) {
-      return res.status(401).json({ error: "Unauthorized: User ID is required" });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const chatId = req.params.chatId as string;
@@ -40,9 +40,9 @@ export const getSharedChat = asyncHandler(async (req: Request, res: Response) =>
 
 export const forkSharedChat = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const userId = req.headers["x-user-id"] as string;
+    const userId = req.clerkId;
     if (!userId) {
-      return res.status(401).json({ error: "Unauthorized: User ID is required" });
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
     const sharedChatId = req.params.sharedChatId as string;

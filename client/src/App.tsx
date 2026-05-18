@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Loading from "./features/chat/components/Loading";
-import { useUserSync } from "./features/auth/hooks/useUserSync";
+import { useAuthSetup } from "./features/auth/hooks/useUserSync";
 import { useServerStatus } from "./contexts/ServerStatusContext";
 import ServerDownBanner from "./components/ui/ServerDownBanner";
 
@@ -16,9 +16,9 @@ const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
 function App() {
   const { isSignedIn, isLoaded } = useUser();
   const { isDown, isRetrying, retry } = useServerStatus();
-
-  // Sync user with DB whenever authenticated
-  useUserSync();
+  
+  // Wire Clerk JWT into the axios instance
+  useAuthSetup();
 
   if (!isLoaded) return <Loading />;
 
