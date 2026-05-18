@@ -48,6 +48,7 @@ export const assistantMarkdownComponents = {
   ),
   li: (props: React.ComponentPropsWithoutRef<"li">) => {
     // Check if parent is ol by looking for counter style
+    
     return (
       <li
         className="relative pl-6 text-base leading-[1.85] tracking-[0.01em] before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-400/60 [ol_&]:before:content-[counter(item)'._'] [ol_&]:before:bg-transparent [ol_&]:before:text-indigo-400/80 [ol_&]:before:font-semibold [ol_&]:before:text-[0.9em] [ol_&]:before:top-0 [ol_&]:[counter-increment:item]"

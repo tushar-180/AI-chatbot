@@ -156,6 +156,8 @@ OUTPUT RULES (STRICTLY ENFORCED):
       .map((msg) => msg.content)
       .join("\n\n---\n\n");
 
+    let streamedText = "";
+
     try {
       const res = await this.ai.models.generateContentStream({
         model: this.model,
@@ -171,11 +173,40 @@ OUTPUT RULES (STRICTLY ENFORCED):
         }
         const text = chunk.text;
         if (text) {
+          streamedText += text;
           yield text;
         }
       }
     } catch (error: any) {
+      if (signal?.aborted) {
+        return;
+      }
+
       console.error("Gemini Adapter Stream Error:", error);
+
+      if (streamedText) {
+        return;
+      }
+
+      if (error?.message?.includes("Incomplete JSON segment")) {
+        const fallbackResponse = await this.ai.models.generateContent({
+          model: this.model,
+          contents,
+          config: {
+            systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
+          },
+        });
+        const text =
+          fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          fallbackResponse?.text ||
+          "";
+
+        if (text.trim()) {
+          yield text.trim();
+          return;
+        }
+      }
+
       throw new AIServiceError(error.message, error.status || 500);
     }
   }

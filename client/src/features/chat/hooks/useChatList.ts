@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useUser } from "@clerk/react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { useServerStatus } from "@/contexts/ServerStatusContext";
 export const useChatList = () => {
   const { user } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const fetchedUserIdRef = useRef<string | null>(null);
   const {
     chats,
@@ -29,6 +30,12 @@ export const useChatList = () => {
     setSidebarOpen,
     removeChat,
     updateChatTitle,
+    updateChatArchive,
+    updateChatPin,
+    viewingArchived,
+    setViewingArchived,
+    upsertChat,
+    currentChat,
   } = useChatStore();
 
   const createChat = () => {
@@ -69,20 +76,105 @@ export const useChatList = () => {
       throw err; // Propagate error to handle UI state in component
     }
   };
-  const selectChat = (chatId: string) => {
-    if (chatId === currentChatId) {
+
+  const archiveChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/archive`);
+      updateChatArchive(chatId, true);
+      toast.success("Chat archived successfully.");
+      
+      if (chatId === currentChatId) {
+        navigate("/chat");
+      }
+    } catch (err) {
+      console.error("Error archiving chat", err);
+      toast.error("Could not archive chat.");
+    }
+  };
+
+  const unarchiveChat = async (chatId: string) => {
+    try {
+      const chat = chats.find(c => c._id === chatId) || (currentChatId === chatId ? currentChat : null);
+      await api.post(`/chat/${chatId}/unarchive`);
+      
+      // If it was pinned, also unpin it on the server
+      if (chat?.isPinned) {
+        await api.post(`/chat/${chatId}/unpin`);
+      }
+      
+      updateChatArchive(chatId, false);
+      toast.success("Chat unarchived and restored.");
+    } catch (err) {
+      console.error("Error unarchiving chat", err);
+      toast.error("Could not unarchive chat.");
+    }
+  };
+  const pinChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/pin`);
+      updateChatPin(chatId, true);
+      toast.success("Chat pinned.");
+    } catch (err) {
+      console.error("Error pinning chat", err);
+      toast.error("Could not pin chat.");
+    }
+  };
+
+  const unpinChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/unpin`);
+      updateChatPin(chatId, false);
+      toast.success("Chat unpinned.");
+    } catch (err) {
+      console.error("Error unpinning chat", err);
+      toast.error("Could not unpin chat.");
+    }
+  };
+  const selectChat = async (chatId: string) => {
+    // If it's already the current chat, we still check if it's visible in the current view
+    const existingChat = chats.find((c) => c._id === chatId);
+
+    if (existingChat) {
+      if (chatId === currentChatId) {
+        setSidebarOpen(false);
+        return;
+      }
+      setIsNewChat(false);
+      setCurrentChat(chatId, existingChat);
+      setMessages([]);
       setSidebarOpen(false);
+      navigate(`/chat/${chatId}`);
       return;
     }
 
-    setIsNewChat(false);
-    setCurrentChat(chatId);
-    setMessages([]); // Clear messages immediately for smoother transition
-    setSidebarOpen(false);
-    navigate(`/chat/${chatId}`);
+    // If not in current list (maybe in other view or not loaded yet)
+    try {
+      const res = await api.get(`/chat/${chatId}`);
+      const chat = res.data;
+
+      // If the chat's archive status doesn't match our current view, switch views
+      if (chat && chat.isArchived !== viewingArchived) {
+        setViewingArchived(chat.isArchived);
+      }
+
+      setIsNewChat(false);
+      setCurrentChat(chatId, chat);
+      setMessages([]);
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}`);
+    } catch (err) {
+      console.error("Error selecting chat", err);
+      // Fallback for safety
+      setIsNewChat(false);
+      setCurrentChat(chatId);
+      setMessages([]);
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}`);
+    }
   };
 
   const { isDown } = useServerStatus();
+  const isSharedChatRoute = location.pathname.startsWith("/shared/");
 
   const fetchMoreChats = async () => {
     if (!user?.id || loading || isStreaming || !hasMore) return;
@@ -90,7 +182,7 @@ export const useChatList = () => {
     try {
       const nextPage = page + 1;
       const res = await api.get("/chat", {
-        params: { userId: user.id, page: nextPage, limit: 20 },
+        params: { page: nextPage, limit: 20, isArchived: viewingArchived },
       });
 
       const fetchedChats = res.data || [];
@@ -106,11 +198,12 @@ export const useChatList = () => {
   };
 
   useEffect(() => {
+    const fetchKey = `${user?.id}-${viewingArchived}`;
     if (
       !user?.id ||
       loading ||
       isStreaming ||
-      fetchedUserIdRef.current === user.id
+      fetchedUserIdRef.current === fetchKey
     ) {
       return;
     }
@@ -118,11 +211,11 @@ export const useChatList = () => {
     const fetchChats = async () => {
       try {
         const res = await api.get("/chat", {
-          params: { userId: user.id, page: 1, limit: 20 },
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
         });
 
         const fetchedChats = res.data || [];
-        fetchedUserIdRef.current = user.id;
+        fetchedUserIdRef.current = fetchKey;
         setChats(fetchedChats);
         setPage(1);
         setHasMore(fetchedChats.length === 20);
@@ -135,6 +228,7 @@ export const useChatList = () => {
         }
 
         const shouldAutoSelectFirstChat =
+          !isSharedChatRoute &&
           !currentChatId &&
           !isNewChat &&
           !loading &&
@@ -157,6 +251,7 @@ export const useChatList = () => {
   }, [
     user?.id,
     currentChatId,
+    isSharedChatRoute,
     isNewChat,
     loading,
     isStreaming,
@@ -165,7 +260,9 @@ export const useChatList = () => {
     setCurrentChat,
     setMessages,
     setPage,
+    setPage,
     setHasMore,
+    viewingArchived,
   ]);
 
   const deleteChats = async (chatIds: string[]) => {
@@ -200,8 +297,16 @@ export const useChatList = () => {
     deleteChat,
     deleteChats,
     renameChat,
+    archiveChat,
+    unarchiveChat,
+    pinChat,
+    unpinChat,
     selectChat,
     fetchMoreChats,
     hasMore,
+    viewingArchived,
+    setViewingArchived,
+    upsertChat,
+    currentChat,
   };
 };

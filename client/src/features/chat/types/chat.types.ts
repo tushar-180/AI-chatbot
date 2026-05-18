@@ -21,6 +21,8 @@ export type Chat = {
     title: string;
     shareId?: string;
     isPublic?: boolean;
+    isArchived?: boolean;
+    isPinned?: boolean;
     updatedAt?: string;
 };
 export type StreamEventPayload = {

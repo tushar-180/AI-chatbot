@@ -697,8 +697,18 @@ export const chatService = {
     };
   },
 
-  getAllChats(userId?: string, page: number = 1, limit: number = 20) {
-    return chatRepository.findAllByUserId(requireUserId(userId), page, limit);
+  getAllChats(
+    userId?: string,
+    page: number = 1,
+    limit: number = 20,
+    isArchived: boolean = false,
+  ) {
+    return chatRepository.findAllByUserId(
+      requireUserId(userId),
+      page,
+      limit,
+      isArchived,
+    );
   },
 
   getChatById(chatId: string) {
@@ -752,6 +762,54 @@ export const chatService = {
     }
 
     return gallery;
+  },
+
+  async archiveChat(chatId: string) {
+    const chat = await chatRepository.archiveChat(chatId);
+
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return chat;
+  },
+
+  async unarchiveChat(chatId: string) {
+    const chat = await chatRepository.unarchiveChat(chatId);
+
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return chat;
+  },
+
+  async pinChat(chatId: string) {
+    const chat = await chatRepository.pinChat(chatId);
+
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return chat;
+  },
+
+  async unpinChat(chatId: string) {
+    const chat = await chatRepository.unpinChat(chatId);
+
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return chat;
   },
 
   async editMessage({

@@ -5,7 +5,13 @@ import { toast } from "sonner";
 import { useUser } from "@clerk/react";
 import axios from "axios";
 
-export const useChatMessages = () => {
+interface UseChatMessagesOptions {
+  skipFetch?: boolean;
+}
+
+export const useChatMessages = ({
+  skipFetch = false,
+}: UseChatMessagesOptions = {}) => {
   const { currentChatId, isStreaming, streamingChatId, setMessages } =
     useChatStore();
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -19,6 +25,14 @@ export const useChatMessages = () => {
       queueMicrotask(() => {
         setMessagesLoading(false);
         setLoadedChatId(null);
+        setMessagesError(null);
+      });
+      return;
+    }
+
+    if (skipFetch) {
+      queueMicrotask(() => {
+        setMessagesLoading(false);
         setMessagesError(null);
       });
       return;
@@ -67,7 +81,7 @@ export const useChatMessages = () => {
       setMessagesError(null);
 
       try {
-        const messages = await chatService.fetchMessages(currentChatId, user.id);
+        const messages = await chatService.fetchMessages(currentChatId);
 
         if (!cancelled) {
           setMessages(messages);
@@ -104,6 +118,7 @@ export const useChatMessages = () => {
     currentChatId,
     isLoaded,
     isStreaming,
+    skipFetch,
     streamingChatId,
     loadedChatId,
     setMessages,
