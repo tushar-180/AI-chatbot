@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
 import { useGroupStore } from "@/features/chat/store/useGroupStore";
-import { Users, Loader2, X, CheckCircle2, UserPlus } from "lucide-react";
+import { Loader2, X, CheckCircle2, UserPlus } from "lucide-react";
 import Sidebar from "@/features/chat/components/Sidebar";
 import { toast } from "sonner";
 import { useUser } from "@clerk/react";
