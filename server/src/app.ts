@@ -15,7 +15,6 @@ import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
 
 const app = express();
-console.log("APP INITIALIZING - GROUP CHAT READY");
 
 const allowedOrigins = [
     "http://localhost:5173",

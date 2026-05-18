@@ -3,7 +3,6 @@ import { GroupChatController } from "../controllers/groupChat.controller";
 
 const router = Router();
 
-console.log("Group routes mounted");
 
 router.post("/create", GroupChatController.createGroup);
 router.get("/check",(req, res) => {

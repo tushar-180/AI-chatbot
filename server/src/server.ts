@@ -8,6 +8,6 @@ const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
   app.listen(PORT, () => {
-    console.log(`SERVER STARTED ON PORT ${PORT} - READY FOR GROUPS`);
+    console.log(`SERVER STARTED ON PORT ${PORT}`);
   });
 });
