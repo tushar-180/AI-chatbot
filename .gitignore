@@ -58,3 +58,7 @@ coverage/
 .eslintcache
 .stylelintcache
 .cache/
+
+
+AI_Agents.md
+GROUP_CHAT_WORKFLOW.md

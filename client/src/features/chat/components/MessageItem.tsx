@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { User, Globe, Pencil, Check, X } from "lucide-react";
+import { User, Globe, Pencil, Check, X, RotateCcw, ThumbsUp, ThumbsDown, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -26,6 +26,7 @@ interface Message {
   type?: "text" | "image" | "file" | "action";
   attachments?: Attachment[];
   isWebSearching?: boolean;
+  feedback?: "like" | "dislike" | null;
   tokens?: {
     promptTokens: number;
     completionTokens: number;
@@ -36,9 +37,10 @@ interface Message {
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  isAnyStreaming?: boolean;
   onEdit?: (content: string) => void;
   onEditStart?: () => void;
+  onRetry?: () => void;
+  onFeedback?: (feedback: "like" | "dislike" | null) => void;
   highlight?: string;
 }
 
@@ -212,13 +214,14 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, highlight }: MessageItemProps) => {
+const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback, highlight }: MessageItemProps) => {
     const { user } = useUser();
     const isUser = msg.role === "user";
     const isFailed = msg.status === "failed";
 
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(msg.content);
+    const [copied, setCopied] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const highlightedRef = useRef(false);
@@ -338,6 +341,12 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, highlight
             onEdit?.(editContent);
         }
         setIsEditing(false);
+    };
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(msg.content);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -482,7 +491,45 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, highlight
                                 <AttachmentList
                                     attachments={msg.attachments || []}
                                 />
+
                             </>
+                        )}
+
+                        {/* Assistant Action Buttons (ChatGPT Style) */}
+                        {!isUser && !isStreaming && (msg.content || isFailed) && (
+                            <div className="mt-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200">
+                                <button
+                                    onClick={handleCopy}
+                                    className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                                    title="Copy to clipboard"
+                                >
+                                    {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+                                </button>
+                                
+                                <button
+                                    onClick={() => onFeedback?.(msg.feedback === "like" ? null : "like")}
+                                    className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                                    title="Like"
+                                >
+                                    <ThumbsUp size={14} fill={msg.feedback === "like" ? "currentColor" : "none"} />
+                                </button>
+
+                                <button
+                                    onClick={() => onFeedback?.(msg.feedback === "dislike" ? null : "dislike")}
+                                    className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                                    title="Dislike"
+                                >
+                                    <ThumbsDown size={14} fill={msg.feedback === "dislike" ? "currentColor" : "none"} />
+                                </button>
+
+                                <button
+                                    onClick={onRetry}
+                                    className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                                    title="Regenerate response"
+                                >
+                                    <RotateCcw size={14} />
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -500,6 +547,7 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
     prev.message.isWebSearching === next.message.isWebSearching &&
+    prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens
   );

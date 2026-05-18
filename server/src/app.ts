@@ -9,6 +9,8 @@ import memoryRoutes from "./routes/memory.routes";
 import webSearchRoutes from "./routes/webSearch.routes";
 import sharedChatRoutes from "./routes/sharedChat.routes";
 import adminRoutes from "./routes/admin.routes";
+import { groupChatRoutes } from "./routes/groupChat.routes";
+import { GroupChatController } from "./controllers/groupChat.controller";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
@@ -16,11 +18,12 @@ import { requireAuth } from "./middleware/auth.middleware";
 const app = express();
 
 const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:4173",
-    "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
-    process.env.CLIENT_URL,
-    "https://khz5bstr-5173.inc1.devtunnels.ms",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  //"https://qpqhnchb-5173.inc1.devtunnels.ms",//ani
+  "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
+  process.env.CLIENT_URL,
+  "https://khz5bstr-5173.inc1.devtunnels.ms"
 ].filter(Boolean) as string[];
 
 app.use(
@@ -46,6 +49,12 @@ app.get("/health", (req, res) => {
     res.status(200).json({ ok: true });
 });
 
+app.get("/api/ping", (req, res) => {
+    res.status(200).json({ pong: true });
+});
+
+// Routes
+app.use("/api/group", groupChatRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
 app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/user", requireAuth, userRoutes);

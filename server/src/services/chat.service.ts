@@ -1,23 +1,24 @@
 import {
-    CHAT_TITLE_MAX_LENGTH,
-    DEFAULT_AI_PROVIDER,
-    DEFAULT_CHAT_TITLE,
+  CHAT_TITLE_MAX_LENGTH,
+  DEFAULT_AI_PROVIDER,
+  DEFAULT_CHAT_TITLE,
 } from "../constants/chat.constants";
 import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import { chatRepository } from "../repositories/chat.repository";
 import type {
-    Attachment,
-    ChatMessage,
-    CreateChatInput,
-    SendMessageInput,
-    EditMessageInput,
-    StopStreamInput,
-    StreamPayload,
+  Attachment,
+  ChatMessage,
+  CreateChatInput,
+  SendMessageInput,
+  EditMessageInput,
+  StopStreamInput,
+  StreamPayload,
 } from "../types/chat.types";
 import { getLimitedMessages, parseMultimedia } from "../utils/chatHistory";
 import {
-    type WebGroundingContext,
-    webSearchService,
+  type WebGroundingContext,
+  type SearchRejection,
+  webSearchService,
 } from "../modules/web-search";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
@@ -32,327 +33,333 @@ import {
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
 const createUserMessage = (
-    content: string,
-    userId: string,
-    provider?: string,
-    attachments?: Attachment[],
+  content: string,
+  userId: string,
+  provider?: string,
+  attachments?: Attachment[],
 ): ChatMessage => ({
-    role: "user",
-    userId,
-    content,
-    model: provider || DEFAULT_AI_PROVIDER,
-    status: "completed",
-    attachments: attachments || [],
-    type: attachments && attachments.length > 0 ? "image" : "text",
+  role: "user",
+  userId,
+  content,
+  model: provider || DEFAULT_AI_PROVIDER,
+  status: "completed",
+  attachments: attachments || [],
+  type: attachments && attachments.length > 0 ? "image" : "text",
 });
 
 const createAssistantMessage = (
-    content: string,
-    userId: string,
-    model: string,
-    requestId?: string,
-    status: ChatMessage["status"] = "completed",
-    metadata?: Record<string, unknown>,
+  content: string,
+  userId: string,
+  model: string,
+  requestId?: string,
+  status: ChatMessage["status"] = "completed",
+  metadata?: Record<string, unknown>,
 ): ChatMessage => ({
-    role: "assistant",
-    userId,
-    content,
-    model,
-    requestId,
-    status,
-    metadata,
+  role: "assistant",
+  userId,
+  content,
+  model,
+  requestId,
+  status,
+  metadata,
 });
 
 const createTitle = (message?: string) => {
-    return message
-        ? message.slice(0, CHAT_TITLE_MAX_LENGTH)
-        : DEFAULT_CHAT_TITLE;
+  return message ? message.slice(0, CHAT_TITLE_MAX_LENGTH) : DEFAULT_CHAT_TITLE;
 };
 
 const requireUserId = (userId?: string) => {
-    if (!userId) {
-        const error = new Error("userId is required");
-        error.name = "ValidationError";
-        throw error;
-    }
+  if (!userId) {
+    const error = new Error("userId is required");
+    error.name = "ValidationError";
+    throw error;
+  }
 
-    return userId;
+  return userId;
 };
 
 const requireMessage = (
-    message?: string,
-    messageText = "message is required",
+  message?: string,
+  messageText = "message is required",
 ) => {
-    const trimmedMessage = message?.trim();
+  const trimmedMessage = message?.trim();
 
-    if (!trimmedMessage) {
-        const error = new Error(messageText);
-        error.name = "ValidationError";
-        throw error;
-    }
+  if (!trimmedMessage) {
+    const error = new Error(messageText);
+    error.name = "ValidationError";
+    throw error;
+  }
 
-    return trimmedMessage;
+  return trimmedMessage;
 };
 
 const requireRequestId = (requestId?: string) => {
-    if (!requestId) {
-        const error = new Error("requestId is required");
-        error.name = "ValidationError";
-        throw error;
-    }
+  if (!requestId) {
+    const error = new Error("requestId is required");
+    error.name = "ValidationError";
+    throw error;
+  }
 
-    return requestId;
+  return requestId;
 };
 
 const requireChat = async (chatId: string) => {
-    const chat = await chatRepository.findById(chatId);
+  const chat = await chatRepository.findById(chatId);
 
-    if (!chat) {
-        const error = new Error("Chat not found");
-        error.name = "NotFoundError";
-        throw error;
-    }
+  if (!chat) {
+    const error = new Error("Chat not found");
+    error.name = "NotFoundError";
+    throw error;
+  }
 
-    return chat;
+  return chat;
 };
 
 const getAssistantMessageByRequestId = (
-    chat: Awaited<ReturnType<typeof requireChat>>,
-    requestId: string,
+  chat: Awaited<ReturnType<typeof requireChat>>,
+  requestId: string,
 ) =>
-    (chat.messages as ChatMessage[]).find(
-        (message) =>
-            message.role === "assistant" && message.requestId === requestId,
-    );
+  (chat.messages as ChatMessage[]).find(
+    (message) =>
+      message.role === "assistant" && message.requestId === requestId,
+  );
 
-const buildGroundingMetadata = (webGrounding: WebGroundingContext | null) => {
-    if (!webGrounding) return undefined;
-
-    return {
-        grounded: true,
-        query: webGrounding.query,
-        resolvedQuery: webGrounding.resolvedQuery,
-        normalizedQuery: webGrounding.normalizedQuery,
-        isFollowUpQuery: webGrounding.isFollowUpQuery,
-        liveDataQuery: webGrounding.liveDataQuery,
-        confidence: webGrounding.confidence,
-        debug: webGrounding.debug,
-        sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
-            id,
-            title,
-            url,
-            hostname,
-        })),
-    };
+const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchRejection | null) => {
+  if (!webGrounding || 'rejected' in webGrounding) return undefined;
+  return {
+    grounded: true,
+    query: webGrounding.query,
+    resolvedQuery: webGrounding.resolvedQuery,
+    normalizedQuery: webGrounding.normalizedQuery,
+    liveDataQuery: webGrounding.liveDataQuery,
+    confidence: webGrounding.confidence,
+    debug: webGrounding.debug,
+    sources: webGrounding.sources.map(({ id, title, url, hostname }) => ({
+      id,
+      title,
+      url,
+      hostname,
+    })),
+  };
 };
 
 const finalizeGroundedResponse = (
-    response: string,
-    webGrounding: WebGroundingContext | null,
+  response: string,
+  webGrounding: WebGroundingContext | null,
 ) => {
-    if (!webGrounding?.citationsMarkdown) {
-        return { content: response, appendedCitations: "" };
-    }
+  if (!webGrounding?.citationsMarkdown) {
+    return { content: response, appendedCitations: "" };
+  }
 
-    const alreadyHasSources = webGrounding.sources.some((source) =>
-        response.includes(source.url),
-    );
+  const alreadyHasSources = webGrounding.sources.some((source) =>
+    response.includes(source.url),
+  );
 
-    if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
-        return { content: response, appendedCitations: "" };
-    }
+  if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
+    return { content: response, appendedCitations: "" };
+  }
 
-    const appendedCitations = webGrounding.citationsMarkdown;
-    return {
-        content: `${response.trimEnd()}${appendedCitations}`,
-        appendedCitations,
-    };
+  const appendedCitations = webGrounding.citationsMarkdown;
+  return {
+    content: `${response.trimEnd()}${appendedCitations}`,
+    appendedCitations,
+  };
 };
 
 const buildPromptMessages = async (
-    userId: string,
-    chatMessages: ChatMessage[],
-    latestUserMessage?: string,
-    webSearchEnabled = false,
-    provider?: string,
+  userId: string,
+  chatMessages: ChatMessage[],
+  latestUserMessage?: string,
+  webSearchEnabled = false,
+  provider?: string,
 ) => {
-    const promptMessages = getLimitedMessages(chatMessages);
-    const systemMessages: ChatMessage[] = [
-        {
-            role: "system",
-            content: BASE_SYSTEM_PROMPT,
-            userId,
-            status: "completed",
-        },
-    ];
+  const promptMessages = getLimitedMessages(chatMessages);
+  const systemMessages: ChatMessage[] = [
+    {
+      role: "system",
+      content: BASE_SYSTEM_PROMPT,
+      userId,
+      status: "completed",
+    },
+  ];
 
-    const personalizationContext =
-        await userService.getPersonalizationContext(userId);
-    if (personalizationContext) {
-        systemMessages.push({
-            role: "system",
-            content: personalizationContext,
-            userId,
-            status: "completed",
-        });
-    }
+  const personalizationContext = await userService.getPersonalizationContext(
+    userId,
+  );
+  if (personalizationContext) {
+    systemMessages.push({
+      role: "system",
+      content: personalizationContext,
+      userId,
+      status: "completed",
+    });
+  }
 
-    const memoryContext = await memoryService.getMemoryContext(
-        userId,
-        latestUserMessage,
+  const memoryContext = await memoryService.getMemoryContext(
+    userId,
+    latestUserMessage,
+  );
+  if (memoryContext) {
+    systemMessages.push({
+      role: "system",
+      content: memoryContext,
+      userId,
+      status: "completed",
+    });
+  }
+
+  let webGrounding: WebGroundingContext | null = null;
+  if (webSearchEnabled && latestUserMessage) {
+    const maybeGrounding = await webSearchService.buildGroundingContext(
+      latestUserMessage,
+      chatMessages,
     );
-    if (memoryContext) {
-        systemMessages.push({
-            role: "system",
-            content: memoryContext,
-            userId,
-            status: "completed",
-        });
+    if (maybeGrounding && "systemPrompt" in maybeGrounding) {
+      webGrounding = maybeGrounding as WebGroundingContext;
     }
+  }
+  if (webGrounding) {
+    systemMessages.push({
+      role: "system",
+      content: webGrounding.systemPrompt,
+      userId,
+      status: "completed",
+    });
+  }
 
-    let webGrounding: WebGroundingContext | null = null;
-    if (webSearchEnabled && latestUserMessage) {
-        const result = await webSearchService.buildGroundingContext(
-            latestUserMessage,
-            chatMessages,
-            userId,
-        );
-
-        // Handle quota/cooldown rejections gracefully
-        if (result && "rejected" in result) {
-            console.warn(
-                `[chat] Web search rejected: ${result.reason} — ${result.message}`,
-            );
-        } else {
-            webGrounding = result;
-        }
-    }
-    if (webGrounding) {
-        systemMessages.push({
-            role: "system",
-            content: webGrounding.systemPrompt,
-            userId,
-            status: "completed",
-        });
-    }
-
-    return {
-        promptMessages: [...systemMessages, ...promptMessages],
-        webGrounding,
-    };
+  return {
+    promptMessages: [...systemMessages, ...promptMessages],
+    webGrounding,
+  };
 };
 
 async function* streamAssistantResponse(
-    chat: Awaited<ReturnType<typeof requireChat>>,
-    requestId: string,
-    provider?: string,
-    includeChatId = false,
+  chat: Awaited<ReturnType<typeof requireChat>>,
+  requestId: string,
+  provider?: string,
+  includeChatId = false,
+  existingAssistantMessageId?: string,
 ): AsyncGenerator<StreamPayload> {
-    const aiProvider = aiService.getProvider(provider);
-    const providerName = aiProvider.getProviderName();
-    const chatId = getChatId(chat);
-    const lastUserMessage = (chat.messages as ChatMessage[])
-        .filter((m) => m.role === "user")
-        .pop();
-    const { promptMessages, webGrounding } = await buildPromptMessages(
-        String(chat.userId),
-        chat.messages as ChatMessage[],
-        lastUserMessage?.content,
-        Boolean(lastUserMessage?.metadata?.webSearchEnabled),
-        provider,
+  const aiProvider = aiService.getProvider(provider);
+  const providerName = aiProvider.getProviderName();
+  const chatId = getChatId(chat);
+
+  // If retrying, we filter out the message being retried from the prompt context
+  const messagesForPrompt = existingAssistantMessageId
+    ? (chat.messages as ChatMessage[]).filter(
+        (m) => (m as any).id !== existingAssistantMessageId,
+      )
+    : (chat.messages as ChatMessage[]);
+
+  const lastUserMessage = messagesForPrompt
+    .filter((m) => m.role === "user")
+    .pop();
+
+  const { promptMessages, webGrounding } = await buildPromptMessages(
+    String(chat.userId),
+    messagesForPrompt,
+    lastUserMessage?.content,
+    Boolean(lastUserMessage?.metadata?.webSearchEnabled),
+    provider,
+  );
+
+  let assistantMessageDoc;
+  if (existingAssistantMessageId) {
+    assistantMessageDoc = await chatRepository.updateMessage(
+      existingAssistantMessageId,
+      {
+        content: "",
+        status: "streaming",
+        requestId,
+        model: providerName,
+        metadata: buildGroundingMetadata(webGrounding),
+      },
+    );
+  } else {
+    // Create assistant message in its own collection
+    assistantMessageDoc = await chatRepository.saveMessage(chatId, {
+      role: "assistant",
+      userId: chat.userId,
+      content: "",
+      model: providerName,
+      requestId,
+      status: "streaming",
+      metadata: buildGroundingMetadata(webGrounding),
+    });
+  }
+
+  const messageId = (assistantMessageDoc as any)._id?.toString() || "";
+  const activeStream = chatStreamRegistry.create({
+    requestId,
+    chatId,
+    messageId,
+    model: providerName,
+  });
+
+  yield (includeChatId
+    ? { chatId, messageId, requestId, model: providerName, status: "streaming" }
+    : { messageId, requestId, model: providerName, status: "streaming" }) as StreamPayload;
+
+  let fullResponse = "";
+  let receivedFirstChunk = false;
+  let firstTokenTimedOut = false;
+
+  try {
+    const stream = aiProvider.generateStreamResponse(
+      promptMessages,
+      activeStream.abortController.signal,
     );
 
-    // Create assistant message in its own collection
-    const assistantMessageDoc = await chatRepository.saveMessage(chatId, {
-        role: "assistant",
-        userId: chat.userId,
-        content: "",
-        model: providerName,
-        requestId,
-        status: "streaming",
-        metadata: buildGroundingMetadata(webGrounding),
-    });
-
-    const activeStream = chatStreamRegistry.create({
-        requestId,
-        chatId,
-        messageId: (assistantMessageDoc as any)._id?.toString() || "",
-        model: providerName,
-    });
-
-    yield includeChatId
-        ? { chatId, requestId, model: providerName, status: "streaming" }
-        : { requestId, model: providerName, status: "streaming" };
-
-    let fullResponse = "";
-    let receivedFirstChunk = false;
-    let firstTokenTimedOut = false;
+    // 30s timeout for first token
+    const timeout = setTimeout(() => {
+      if (!receivedFirstChunk) {
+        console.error(`AI generation timed out for requestId: ${requestId}`);
+        firstTokenTimedOut = true;
+        activeStream.abortController.abort();
+      }
+    }, 30000);
 
     try {
-        const stream = aiProvider.generateStreamResponse(
-            promptMessages,
-            activeStream.abortController.signal,
-        );
-
-        // 30s timeout for first token
-        const timeout = setTimeout(() => {
-            if (!receivedFirstChunk) {
-                console.error(
-                    `AI generation timed out for requestId: ${requestId}`,
-                );
-                firstTokenTimedOut = true;
-                activeStream.abortController.abort();
-            }
-        }, 30000);
-
-        try {
-            for await (const chunk of stream) {
-                if (activeStream.abortController.signal.aborted) {
-                    break;
-                }
-
-                if (!receivedFirstChunk) {
-                    receivedFirstChunk = true;
-                    firstTokenTimedOut = false;
-                    clearTimeout(timeout);
-                }
-
-                fullResponse += chunk;
-                chatStreamRegistry.updateResponse(
-                    requestId,
-                    fullResponse,
-                    chunk,
-                );
-                yield { chunk, requestId, status: "streaming" };
-            }
-        } finally {
-            clearTimeout(timeout);
+      for await (const chunk of stream) {
+        if (activeStream.abortController.signal.aborted) {
+          break;
         }
 
-        const groundedResponse = finalizeGroundedResponse(
-            fullResponse,
-            webGrounding,
-        );
-        if (
-            groundedResponse.appendedCitations &&
-            !activeStream.abortController.signal.aborted
-        ) {
-            fullResponse = groundedResponse.content;
-            chatStreamRegistry.updateResponse(
-                requestId,
-                fullResponse,
-                groundedResponse.appendedCitations,
-            );
-            yield {
-                chunk: groundedResponse.appendedCitations,
-                requestId,
-                status: "streaming",
-            };
+        if (!receivedFirstChunk) {
+          receivedFirstChunk = true;
+          firstTokenTimedOut = false;
+          clearTimeout(timeout);
         }
 
-        const finalStatus = activeStream.abortController.signal.aborted
-            ? "stopped"
-            : "completed";
+        fullResponse += chunk;
+        chatStreamRegistry.updateResponse(requestId, fullResponse, chunk);
+        yield { chunk, requestId, status: "streaming" };
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const groundedResponse = finalizeGroundedResponse(fullResponse, webGrounding);
+    if (
+      groundedResponse.appendedCitations &&
+      !activeStream.abortController.signal.aborted
+    ) {
+      fullResponse = groundedResponse.content;
+      chatStreamRegistry.updateResponse(
+        requestId,
+        fullResponse,
+        groundedResponse.appendedCitations,
+      );
+      yield {
+        chunk: groundedResponse.appendedCitations,
+        requestId,
+        status: "streaming",
+      };
+    }
+
+    const finalStatus = activeStream.abortController.signal.aborted
+      ? "stopped"
+      : "completed";
 
         const promptText = serializePromptMessages(promptMessages);
         const promptAttachmentCount = promptMessages.reduce(
@@ -361,47 +368,43 @@ async function* streamAssistantResponse(
         );
         const tokens = calculateUsage(promptText, fullResponse, promptAttachmentCount);
 
-        // Update message doc in collection
-        await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
-            content: fullResponse,
-            status: finalStatus,
-            model: providerName,
-            attachments: [],
-            type: "text",
-            metadata: buildGroundingMetadata(webGrounding),
+    // Update message doc in collection
+    await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+      content: fullResponse,
+      status: finalStatus,
+      model: providerName,
+      attachments: [],
+      type: "text",
+      metadata: buildGroundingMetadata(webGrounding),
             tokens,
+    });
+
+    if (activeStream.abortController.signal.aborted) {
+      yield { done: true, chatId, requestId, status: "stopped" };
+      return;
+    }
+
+    chatStreamRegistry.complete(requestId);
+    yield { done: true, chatId, requestId, status: "completed" };
+
+    // Extract new memories in the background
+    const lastUserMessage = (chat.messages as ChatMessage[])
+      .filter((m) => m.role === "user")
+      .pop();
+    if (lastUserMessage) {
+      memoryService
+        .extractMemoriesFromMessage(chat.userId, lastUserMessage.content)
+        .catch((err) => {
+          console.error("Background memory extraction failed:", err);
         });
-
-        if (activeStream.abortController.signal.aborted) {
-            yield { done: true, chatId, requestId, status: "stopped" };
-            return;
-        }
-
-        chatStreamRegistry.complete(requestId);
-        yield { done: true, chatId, requestId, status: "completed" };
-
-        // Extract new memories in the background
-        const lastUserMessage = (chat.messages as ChatMessage[])
-            .filter((m) => m.role === "user")
-            .pop();
-        if (lastUserMessage) {
-            memoryService
-                .extractMemoriesFromMessage(
-                    chat.userId,
-                    lastUserMessage.content,
-                )
-                .catch((err) => {
-                    console.error("Background memory extraction failed:", err);
-                });
-        }
-    } catch (aiError) {
-        const isTimeout =
-            (aiError instanceof Error &&
-                aiError.message.includes("timed out")) ||
-            firstTokenTimedOut;
-        const errorMessage = isTimeout
-            ? "AI generation timed out. Please try again."
-            : "Server Error: AI failed to respond.";
+    }
+  } catch (aiError) {
+    const isTimeout =
+      (aiError instanceof Error && aiError.message.includes("timed out")) ||
+      firstTokenTimedOut;
+    const errorMessage = isTimeout
+      ? "AI generation timed out. Please try again."
+      : "Server Error: AI failed to respond.";
 
         if (activeStream.abortController.signal.aborted && !isTimeout) {
             const promptText = serializePromptMessages(promptMessages);
@@ -434,29 +437,29 @@ async function* streamAssistantResponse(
             tokens,
         });
 
-        chatStreamRegistry.fail(requestId, errorMessage);
-        yield { error: errorMessage, status: "failed" };
-    }
+    chatStreamRegistry.fail(requestId, errorMessage);
+    yield { error: errorMessage, status: "failed" };
+  }
 }
 
 export const chatService = {
-    async createChat({
-        userId,
-        message,
-        provider,
-        attachments,
-        webSearchEnabled,
-    }: CreateChatInput) {
-        const resolvedUserId = requireUserId(userId);
-        const trimmedMessage = message?.trim() || "";
+  async createChat({
+    userId,
+    message,
+    provider,
+    attachments,
+    webSearchEnabled,
+  }: CreateChatInput) {
+    const resolvedUserId = requireUserId(userId);
+    const trimmedMessage = message?.trim() || "";
 
-        const chat = chatRepository.create({
-            userId: resolvedUserId,
-            title: createTitle(trimmedMessage),
-        });
+    const chat = chatRepository.create({
+      userId: resolvedUserId,
+      title: createTitle(trimmedMessage),
+    });
 
-        await chat.save();
-        const chatId = chat._id.toString();
+    await chat.save();
+    const chatId = chat._id.toString();
 
         if (trimmedMessage || (attachments && attachments.length > 0)) {
             // Save User Message
@@ -478,28 +481,28 @@ export const chatService = {
             };
             await chatRepository.saveMessage(chatId, userMessage);
 
-            const aiProvider = aiService.getProvider(provider);
-            const providerName = aiProvider.getProviderName();
+      const aiProvider = aiService.getProvider(provider);
+      const providerName = aiProvider.getProviderName();
 
-            // Get history for context
-            const messages = [userMessage];
-            const { promptMessages, webGrounding } = await buildPromptMessages(
-                String(resolvedUserId),
-                messages,
-                trimmedMessage,
-                webSearchEnabled,
-                provider,
-            );
+      // Get history for context
+      const messages = [userMessage];
+      const { promptMessages, webGrounding } = await buildPromptMessages(
+        String(resolvedUserId),
+        messages,
+        trimmedMessage,
+        webSearchEnabled,
+        provider,
+      );
 
-            let reply = "";
-            try {
-                reply = await aiProvider.generateResponse(promptMessages);
-            } catch (err) {
-                console.error("AI Error in createChat:", err);
-                throw new Error("Server Error: AI failed to respond.");
-            }
+      let reply = "";
+      try {
+        reply = await aiProvider.generateResponse(promptMessages);
+      } catch (err) {
+        console.error("AI Error in createChat:", err);
+        throw new Error("Server Error: AI failed to respond.");
+      }
 
-            reply = finalizeGroundedResponse(reply, webGrounding).content;
+      reply = finalizeGroundedResponse(reply, webGrounding).content;
 
             // Save Assistant Message
             const assistantPromptText = serializePromptMessages(promptMessages);
@@ -518,38 +521,35 @@ export const chatService = {
                 tokens: assistantTokens,
             });
 
-            // Extract new memories in the background
-            if (trimmedMessage) {
-                memoryService
-                    .extractMemoriesFromMessage(resolvedUserId, trimmedMessage)
-                    .catch((err) => {
-                        console.error(
-                            "Background memory extraction failed:",
-                            err,
-                        );
-                    });
-            }
-        }
+      // Extract new memories in the background
+      if (trimmedMessage) {
+        memoryService
+          .extractMemoriesFromMessage(resolvedUserId, trimmedMessage)
+          .catch((err) => {
+            console.error("Background memory extraction failed:", err);
+          });
+      }
+    }
 
-        // Fetch the full chat with messages to return
-        return await chatRepository.findById(chatId);
-    },
+    // Fetch the full chat with messages to return
+    return await chatRepository.findById(chatId);
+  },
 
-    async *createChatStream(input: CreateChatInput) {
-        const resolvedUserId = requireUserId(input.userId);
-        const trimmedMessage = requireMessage(
-            input.message,
-            "message is required for streaming creation",
-        );
-        const requestId = requireRequestId(input.requestId);
+  async *createChatStream(input: CreateChatInput) {
+    const resolvedUserId = requireUserId(input.userId);
+    const trimmedMessage = requireMessage(
+      input.message,
+      "message is required for streaming creation",
+    );
+    const requestId = requireRequestId(input.requestId);
 
-        const chat = chatRepository.create({
-            userId: resolvedUserId,
-            title: createTitle(trimmedMessage),
-        });
+    const chat = chatRepository.create({
+      userId: resolvedUserId,
+      title: createTitle(trimmedMessage),
+    });
 
-        await chat.save();
-        const chatId = chat._id.toString();
+    await chat.save();
+    const chatId = chat._id.toString();
 
         // Save User Message
         const userMsg = createUserMessage(
@@ -570,26 +570,26 @@ export const chatService = {
         };
         await chatRepository.saveMessage(chatId, userMsg);
 
-        // Refetch to get messages for prompt
-        const fullChat = await chatRepository.findById(chatId);
+    // Refetch to get messages for prompt
+    const fullChat = await chatRepository.findById(chatId);
 
-        yield* streamAssistantResponse(
-            fullChat as any,
-            requestId,
-            input.provider,
-            true,
-        );
-    },
+    yield* streamAssistantResponse(
+      fullChat as any,
+      requestId,
+      input.provider,
+      true,
+    );
+  },
 
-    async sendMessage({
-        chatId,
-        message,
-        provider,
-        attachments,
-        webSearchEnabled,
-    }: SendMessageInput) {
-        const trimmedMessage = message?.trim() || "";
-        const chat = await requireChat(chatId);
+  async sendMessage({
+    chatId,
+    message,
+    provider,
+    attachments,
+    webSearchEnabled,
+  }: SendMessageInput) {
+    const trimmedMessage = message?.trim() || "";
+    const chat = await requireChat(chatId);
 
         // Save User Message
         const userMsg = createUserMessage(
@@ -610,34 +610,34 @@ export const chatService = {
         };
         await chatRepository.saveMessage(chatId, userMsg);
 
-        if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-            const newTitle = createTitle(trimmedMessage);
-            await chatRepository.updateTitle(chatId, newTitle);
-            chat.title = newTitle;
-        }
+    if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
+    }
 
-        const aiProvider = aiService.getProvider(provider);
-        const providerName = aiProvider.getProviderName();
+    const aiProvider = aiService.getProvider(provider);
+    const providerName = aiProvider.getProviderName();
 
-        // Fetch updated history
-        const updatedChat = await chatRepository.findById(chatId);
-        const { promptMessages, webGrounding } = await buildPromptMessages(
-            String(chat.userId),
-            updatedChat?.messages as ChatMessage[],
-            trimmedMessage,
-            webSearchEnabled,
-            provider,
-        );
+    // Fetch updated history
+    const updatedChat = await chatRepository.findById(chatId);
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
+      updatedChat?.messages as ChatMessage[],
+      trimmedMessage,
+      webSearchEnabled,
+      provider,
+    );
 
-        let reply = "";
-        try {
-            reply = await aiProvider.generateResponse(promptMessages);
-        } catch (err) {
-            console.error("AI Error in sendMessage:", err);
-            throw new Error("Server Error: AI failed to respond.");
-        }
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in sendMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
 
-        reply = finalizeGroundedResponse(reply, webGrounding).content;
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
 
         // Save Assistant Message
         const assistantPromptText = serializePromptMessages(promptMessages);
@@ -660,29 +660,29 @@ export const chatService = {
             tokens: assistantTokens,
         });
 
-        // Extract new memories in the background
-        if (trimmedMessage) {
-            memoryService
-                .extractMemoriesFromMessage(String(chat.userId), trimmedMessage)
-                .catch((err) => {
-                    console.error("Background memory extraction failed:", err);
-                });
-        }
+    // Extract new memories in the background
+    if (trimmedMessage) {
+      memoryService
+        .extractMemoriesFromMessage(String(chat.userId), trimmedMessage)
+        .catch((err) => {
+          console.error("Background memory extraction failed:", err);
+        });
+    }
 
-        return await chatRepository.findById(chatId);
-    },
+    return await chatRepository.findById(chatId);
+  },
 
-    async *streamMessage({
-        chatId,
-        message,
-        provider,
-        requestId,
-        attachments,
-        webSearchEnabled,
-    }: SendMessageInput) {
-        const trimmedMessage = message?.trim() || "";
-        const resolvedRequestId = requireRequestId(requestId);
-        const chat = await requireChat(chatId);
+  async *streamMessage({
+    chatId,
+    message,
+    provider,
+    requestId,
+    attachments,
+    webSearchEnabled,
+  }: SendMessageInput) {
+    const trimmedMessage = message?.trim() || "";
+    const resolvedRequestId = requireRequestId(requestId);
+    const chat = await requireChat(chatId);
 
         // Save User Message
         const userMsg = createUserMessage(
@@ -703,25 +703,25 @@ export const chatService = {
         };
         await chatRepository.saveMessage(chatId, userMsg);
 
-        if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
-            const newTitle = createTitle(trimmedMessage);
-            await chatRepository.updateTitle(chatId, newTitle);
-            chat.title = newTitle;
-        }
+    if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
+      const newTitle = createTitle(trimmedMessage);
+      await chatRepository.updateTitle(chatId, newTitle);
+      chat.title = newTitle;
+    }
 
-        // Refresh chat to include new user message
-        const updatedChat = await chatRepository.findById(chatId);
+    // Refresh chat to include new user message
+    const updatedChat = await chatRepository.findById(chatId);
 
-        yield* streamAssistantResponse(
-            updatedChat as any,
-            resolvedRequestId,
-            provider,
-        );
-    },
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+    );
+  },
 
-    async stopStream({ requestId, chatId }: StopStreamInput) {
-        const resolvedRequestId = requireRequestId(requestId);
-        const activeStream = chatStreamRegistry.get(resolvedRequestId);
+  async stopStream({ requestId, chatId }: StopStreamInput) {
+    const resolvedRequestId = requireRequestId(requestId);
+    const activeStream = chatStreamRegistry.get(resolvedRequestId);
 
         if (activeStream) {
             let tokens;
@@ -750,30 +750,26 @@ export const chatService = {
                 },
             );
 
-            chatStreamRegistry.stop(resolvedRequestId);
-            return {
-                stopped: true,
-                chatId: activeStream.chatId,
-                requestId: resolvedRequestId,
-            };
-        }
+      chatStreamRegistry.stop(resolvedRequestId);
+      return {
+        stopped: true,
+        chatId: activeStream.chatId,
+        requestId: resolvedRequestId,
+      };
+    }
 
-        if (chatId) {
-            await chatRepository.updateMessageByRequestId(
-                chatId,
-                resolvedRequestId,
-                {
-                    status: "stopped",
-                },
-            );
-        }
+    if (chatId) {
+      await chatRepository.updateMessageByRequestId(chatId, resolvedRequestId, {
+        status: "stopped",
+      });
+    }
 
-        return {
-            stopped: false,
-            chatId,
-            requestId: resolvedRequestId,
-        };
-    },
+    return {
+      stopped: false,
+      chatId,
+      requestId: resolvedRequestId,
+    };
+  },
 
   getAllChats(
     userId?: string,
@@ -793,214 +789,346 @@ export const chatService = {
     return await chatRepository.searchChats(requireUserId(userId), query);
   },
 
-    getChatById(chatId: string) {
-        return requireChat(chatId);
-    },
+  getChatById(chatId: string) {
+    return requireChat(chatId);
+  },
 
-    async deleteChat(chatId: string) {
-        const chat = await chatRepository.deleteById(chatId);
+  async deleteChat(chatId: string) {
+    const chat = await chatRepository.deleteById(chatId);
 
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
 
-        return chat;
-    },
+    return chat;
+  },
 
-    async updateChatTitle(chatId: string, title: string) {
-        const validatedTitle = requireMessage(title, "Title is required");
-        const chat = await chatRepository.updateTitle(chatId, validatedTitle);
+  async updateChatTitle(chatId: string, title: string) {
+    const validatedTitle = requireMessage(title, "Title is required");
+    const chat = await chatRepository.updateTitle(chatId, validatedTitle);
+    
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+    
+    return chat;
+  },
 
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
+  async getGallery(userId: string) {
+    const resolvedUserId = requireUserId(userId);
+    const messages = await chatRepository.findUserAttachments(resolvedUserId);
 
-        return chat;
-    },
+    const gallery = [];
+    for (const msg of messages) {
+      if (!msg.attachments) continue;
 
-    async getGallery(userId: string) {
-        const resolvedUserId = requireUserId(userId);
-        const messages =
-            await chatRepository.findUserAttachments(resolvedUserId);
-
-        const gallery = [];
-        for (const msg of messages) {
-            if (!msg.attachments) continue;
-
-            for (const att of msg.attachments) {
-                gallery.push({
-                    url: att.url,
-                    name: att.name,
-                    mimeType: att.mimeType,
-                    size: att.size,
-                    messageId: String((msg as any)._id),
-                    chatId: String((msg as any).chatId),
-                    createdAt: (msg as any).createdAt,
-                });
-            }
-        }
-
-        return gallery;
-    },
-
-    async archiveChat(chatId: string) {
-        const chat = await chatRepository.archiveChat(chatId);
-
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
-
-        return chat;
-    },
-
-    async unarchiveChat(chatId: string) {
-        const chat = await chatRepository.unarchiveChat(chatId);
-
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
-
-        return chat;
-    },
-
-    async pinChat(chatId: string) {
-        const chat = await chatRepository.pinChat(chatId);
-
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
-
-        return chat;
-    },
-
-    async unpinChat(chatId: string) {
-        const chat = await chatRepository.unpinChat(chatId);
-
-        if (!chat) {
-            const error = new Error("Chat not found");
-            error.name = "NotFoundError";
-            throw error;
-        }
-
-        return chat;
-    },
-
-    async editMessage({
-        chatId,
-        messageId,
-        content,
-        provider,
-        webSearchEnabled,
-    }: EditMessageInput) {
-        const trimmedMessage = requireMessage(content);
-        const chat = await requireChat(chatId);
-
-        // Delete all messages after this one
-        await chatRepository.deleteMessagesAfter(chatId, messageId);
-
-        // Update the message itself
-        await chatRepository.updateMessage(messageId, {
-            content: trimmedMessage,
-            metadata: {
-                webSearchEnabled: Boolean(webSearchEnabled),
-            },
+      for (const att of msg.attachments) {
+        gallery.push({
+          url: att.url,
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size,
+          messageId: String((msg as any)._id),
+          chatId: String((msg as any).chatId),
+          createdAt: (msg as any).createdAt,
         });
+      }
+    }
 
-        const aiProvider = aiService.getProvider(provider);
-        const providerName = aiProvider.getProviderName();
+    return gallery;
+  },
 
-        // Fetch updated history
-        const updatedChat = await chatRepository.findById(chatId);
-        const { promptMessages, webGrounding } = await buildPromptMessages(
-            String(chat.userId),
-            updatedChat?.messages as ChatMessage[],
-            trimmedMessage,
-            webSearchEnabled,
-            provider,
-        );
+  async archiveChat(chatId: string) {
+    const chat = await chatRepository.archiveChat(chatId);
 
-        let reply = "";
-        try {
-            reply = await aiProvider.generateResponse(promptMessages);
-        } catch (err) {
-            console.error("AI Error in editMessage:", err);
-            throw new Error("Server Error: AI failed to respond.");
-        }
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
 
-        reply = finalizeGroundedResponse(reply, webGrounding).content;
-        const { attachments: aiAttachments, type } = parseMultimedia(reply);
+    return chat;
+  },
 
-        // Update Assistant Message
-        await chatRepository.saveMessage(chatId, {
-            ...createAssistantMessage(
-                reply,
-                String(chat.userId),
-                providerName,
-                undefined,
-                "completed",
-                buildGroundingMetadata(webGrounding),
-            ),
-            attachments: aiAttachments,
-            type: type as any,
-        });
+  async unarchiveChat(chatId: string) {
+    const chat = await chatRepository.unarchiveChat(chatId);
 
-        // Check if it's the first message to update title
-        if (updatedChat?.messages?.[0]?.id === messageId) {
-            await chatRepository.update(chatId, {
-                title: createTitle(trimmedMessage),
-            });
-        }
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
 
-        return await chatRepository.findById(chatId);
-    },
+    return chat;
+  },
 
-    async *streamEditMessage({
-        chatId,
-        messageId,
-        content,
-        provider,
-        requestId,
-        webSearchEnabled,
-    }: EditMessageInput) {
-        const trimmedMessage = requireMessage(content);
-        const resolvedRequestId = requireRequestId(requestId);
-        const chat = await requireChat(chatId);
+  async pinChat(chatId: string) {
+    const chat = await chatRepository.pinChat(chatId);
 
-        // Delete all messages after this one
-        await chatRepository.deleteMessagesAfter(chatId, messageId);
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
 
-        // Update the message itself
-        await chatRepository.updateMessage(messageId, {
-            content: trimmedMessage,
-            metadata: {
-                webSearchEnabled: Boolean(webSearchEnabled),
-            },
-        });
+    return chat;
+  },
 
-        // Refresh chat to include updated user message
-        const updatedChat = await chatRepository.findById(chatId);
+  async unpinChat(chatId: string) {
+    const chat = await chatRepository.unpinChat(chatId);
 
-        // Check if it's the first message to update title
-        if (updatedChat?.messages?.[0]?.id === messageId) {
-            await chatRepository.update(chatId, {
-                title: createTitle(trimmedMessage),
-            });
-        }
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
 
-        yield* streamAssistantResponse(
-            updatedChat as any,
-            resolvedRequestId,
-            provider,
-        );
-    },
+    return chat;
+  },
+
+  async editMessage({
+    chatId,
+    messageId,
+    content,
+    provider,
+    webSearchEnabled,
+  }: EditMessageInput) {
+    const trimmedMessage = requireMessage(content);
+    const chat = await requireChat(chatId);
+
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, messageId);
+
+    // Update the message itself
+    await chatRepository.updateMessage(messageId, {
+      content: trimmedMessage,
+      metadata: {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      },
+    });
+
+    const aiProvider = aiService.getProvider(provider);
+    const providerName = aiProvider.getProviderName();
+
+    // Fetch updated history
+    const updatedChat = await chatRepository.findById(chatId);
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
+      updatedChat?.messages as ChatMessage[],
+      trimmedMessage,
+      webSearchEnabled,
+      provider,
+    );
+
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in editMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
+
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
+    const { attachments: aiAttachments, type } = parseMultimedia(reply);
+
+    // Update Assistant Message
+    await chatRepository.saveMessage(chatId, {
+      ...createAssistantMessage(
+          reply,
+          String(chat.userId),
+          providerName,
+          undefined,
+          "completed",
+          buildGroundingMetadata(webGrounding),
+      ),
+      attachments: aiAttachments,
+      type: type as any,
+    });
+
+    // Check if it's the first message to update title
+    if (updatedChat?.messages?.[0]?.id === messageId) {
+      await chatRepository.update(chatId, {
+        title: createTitle(trimmedMessage)
+      });
+    }
+
+    return await chatRepository.findById(chatId);
+  },
+
+  async *streamEditMessage({
+    chatId,
+    messageId,
+    content,
+    provider,
+    requestId,
+    webSearchEnabled,
+  }: EditMessageInput) {
+    const trimmedMessage = requireMessage(content);
+    const resolvedRequestId = requireRequestId(requestId);
+    const chat = await requireChat(chatId);
+
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, messageId);
+
+    // Update the message itself
+    await chatRepository.updateMessage(messageId, {
+      content: trimmedMessage,
+      metadata: {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      },
+    });
+
+    // Refresh chat to include updated user message
+    const updatedChat = await chatRepository.findById(chatId);
+
+    // Check if it's the first message to update title
+    if (updatedChat?.messages?.[0]?.id === messageId) {
+      await chatRepository.update(chatId, {
+        title: createTitle(trimmedMessage)
+      });
+    }
+
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+    );
+  },
+
+  async retryMessage({
+    chatId,
+    messageId,
+    provider,
+  }: {
+    chatId: string;
+    messageId: string;
+    provider?: string;
+  }) {
+    const chat = await requireChat(chatId);
+    let assistantMessage = (chat.messages as any[]).find(
+      (m) =>
+        (m.id === messageId ||
+          String(m._id) === messageId ||
+          m.requestId === messageId) &&
+        m.role === "assistant",
+    );
+
+    // Fallback for old messages with mismatched UUIDs: use the last assistant message
+    if (!assistantMessage && messageId.includes("-")) {
+      assistantMessage = (chat.messages as any[])
+        .filter((m) => m.role === "assistant")
+        .pop();
+    }
+
+    if (!assistantMessage) {
+      throw new Error("Assistant message not found for retry");
+    }
+
+    // Filter context to messages before this one
+    const contextMessages = (chat.messages as any[]).filter(
+      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
+    );
+
+    const lastUserMessage = contextMessages
+      .filter((m) => m.role === "user")
+      .pop();
+
+    const aiProvider = aiService.getProvider(provider);
+    const providerName = aiProvider.getProviderName();
+
+    const { promptMessages, webGrounding } = await buildPromptMessages(
+      String(chat.userId),
+      contextMessages,
+      lastUserMessage?.content,
+      Boolean(lastUserMessage?.metadata?.webSearchEnabled),
+      provider,
+    );
+
+    let reply = "";
+    try {
+      reply = await aiProvider.generateResponse(promptMessages);
+    } catch (err) {
+      console.error("AI Error in retryMessage:", err);
+      throw new Error("Server Error: AI failed to respond.");
+    }
+
+    reply = finalizeGroundedResponse(reply, webGrounding).content;
+
+    await chatRepository.updateMessage(messageId, {
+      content: reply,
+      status: "completed",
+      model: providerName,
+      metadata: buildGroundingMetadata(webGrounding),
+    });
+
+    return await chatRepository.findById(chatId);
+  },
+
+  async *streamRetryMessage({
+    chatId,
+    messageId,
+    provider,
+    requestId,
+  }: {
+    chatId: string;
+    messageId: string;
+    provider?: string;
+    requestId: string;
+  }) {
+    const resolvedRequestId = requireRequestId(requestId);
+    const chat = await requireChat(chatId);
+
+    console.log("Retrying messageId:", messageId);
+    console.log("Chat messages count:", chat.messages.length);
+    console.log("Last 2 messages:", chat.messages.slice(-2).map((m: any) => ({ id: m.id, _id: m._id, requestId: m.requestId, role: m.role })));
+
+    let assistantMessage = (chat.messages as any[]).find(
+      (m) =>
+        (m.id === messageId ||
+          String(m._id) === messageId ||
+          m.requestId === messageId) &&
+        m.role === "assistant",
+    );
+
+    // Fallback for old messages with mismatched UUIDs: use the last assistant message
+    if (!assistantMessage && messageId.includes("-")) {
+      console.log("Using fallback: Finding last assistant message in chat");
+      assistantMessage = (chat.messages as any[])
+        .filter((m) => m.role === "assistant")
+        .pop();
+    }
+
+    if (!assistantMessage) {
+      console.log("FAILED TO FIND MESSAGE. IDs in chat:", chat.messages.map((m: any) => m.id || m._id));
+      throw new Error("Assistant message not found for retry");
+    }
+
+    // Filter chat messages to only include those before the message being retried
+    const filteredMessages = (chat.messages as any[]).filter(
+      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
+    );
+
+    const updatedChat = {
+      ...chat,
+      messages: filteredMessages,
+    };
+
+    yield* streamAssistantResponse(
+      updatedChat as any,
+      resolvedRequestId,
+      provider,
+      false,
+      messageId,
+    );
+  },
+
+  async updateMessageFeedback(messageId: string, feedback: "like" | "dislike" | null) {
+    return await chatRepository.updateMessage(messageId, { feedback });
+  },
+
+
 };

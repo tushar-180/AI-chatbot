@@ -348,3 +348,38 @@ export const streamEditMessage = async (req: Request, res: Response) => {
     }
   }
 };
+
+export const retryMessage = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const chat = await chatService.retryMessage({
+      chatId: String(req.params.id),
+      messageId: String(req.params.messageId),
+      ...req.body,
+    });
+
+    return res.json(chat);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to retry message");
+  }
+});
+
+export const streamRetryMessage = async (req: Request, res: Response) => {
+  try {
+    await pipeStreamResponse(
+      req,
+      res,
+      chatService.streamRetryMessage({
+        chatId: String(req.params.id),
+        messageId: String(req.params.messageId),
+        ...req.body,
+      }),
+    );
+  } catch (error) {
+    console.log("Error in streamRetryMessage:", error);
+    if (!res.headersSent) {
+      sendControllerError(res, error, "Failed to initiate retry stream");
+    } else {
+      res.end();
+    }
+  }
+};

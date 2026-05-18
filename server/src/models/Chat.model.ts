@@ -122,6 +122,7 @@ export type ChatMessage = {
   model?: string;
   requestId?: string;
   status: "streaming" | "stopped" | "completed" | "failed";
+  feedback?: "like" | "dislike" | null;
   tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;

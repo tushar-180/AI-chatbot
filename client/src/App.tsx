@@ -11,6 +11,8 @@ const Landing = lazy(() => import("./pages/Landing"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Auth = lazy(() => import("./pages/Auth"));
 const SharedChatPage = lazy(() => import("./pages/SharedChatPage"));
+const GroupChat = lazy(() => import("./pages/GroupChat"));
+const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
 const Admin = lazy(() => import("./pages/Admin"));
 function App() {
   const { isSignedIn, isLoaded } = useUser();
@@ -75,6 +77,24 @@ function App() {
                 element={<SharedChatPage />}
               />
 
+              {/* Group Chat Routes */}
+              <Route
+                path="/group/:groupId"
+                element={
+                  <ProtectedRoute>
+                    <GroupChat />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/join/:inviteCode"
+                element={
+                  <ProtectedRoute>
+                    <JoinGroupPage />
+                  </ProtectedRoute>
+                }
+              />
+
               {/* Public Auth Route */}
               <Route
                 path="/auth"
@@ -82,7 +102,7 @@ function App() {
                   !isSignedIn ? <Auth /> : <Navigate to="/chat" replace />
                 }
               />
-
+              
               {/* Catch all - redirect to landing */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
