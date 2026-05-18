@@ -695,7 +695,11 @@ const Sidebar = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 w-full p-2 rounded-2xl transition-all group text-left border border-transparent hover:bg-slate-800/50 data-[state=open]:bg-white/10 outline-none focus:ring-0">
-                <div className="h-9 w-9 rounded-xl overflow-hidden border border-white/5 transition-colors shadow-inner">
+                <div className={`h-9 w-9 rounded-xl overflow-hidden transition-all shadow-inner ${
+                  isAdmin 
+                    ? "border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/20" 
+                    : "border border-white/5"
+                }`}>
                   {user?.imageUrl ? (
                     <img
                       src={user.imageUrl}
@@ -712,9 +716,11 @@ const Sidebar = () => {
                   <p className="text-sm font-semibold text-white truncate leading-tight">
                     {user?.fullName || "User"}
                   </p>
-                  <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-[0.2em] mt-0.5 opacity-80">
-                    Premium
-                  </p>
+                  {isAdmin && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">
+                      Admin
+                    </span>
+                  )}
                 </div>
                 <MoreVertical
                   size={16}
@@ -732,9 +738,9 @@ const Sidebar = () => {
               {isAdmin && (
                 <DropdownMenuItem
                   onClick={() => navigate("/admin")}
-                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-indigo-400 focus:bg-indigo-500/10 focus:text-indigo-400 bg-indigo-500/5 border border-indigo-500/10 mb-1.5 transition-all cursor-pointer font-bold"
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-amber-400 focus:bg-amber-500/10 focus:text-amber-400 bg-amber-500/5 border border-amber-500/10 mb-1.5 transition-all cursor-pointer"
                 >
-                  <Shield size={16} className="text-indigo-400" />
+                  <Shield size={16} className="text-amber-400 animate-pulse" />
                   <span>Admin Panel</span>
                 </DropdownMenuItem>
               )}

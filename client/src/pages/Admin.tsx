@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useUser } from "@clerk/react";
+import Loading from "@/features/chat/components/Loading";
 import { api } from "@/lib/api";
 import {
   ArrowLeft,
@@ -12,7 +13,6 @@ import {
   ChevronUp,
   ChevronDown,
   Brain,
-  Loader2,
   Activity,
   UserCheck,
   BarChart3
@@ -155,21 +155,7 @@ const Admin: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center gap-4 text-center relative overflow-hidden">
-        {/* Background glow effects */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/4 w-[300px] h-[300px] bg-emerald-500/5 rounded-full blur-[100px] pointer-events-none" />
-        
-        <div className="relative flex items-center justify-center p-8 bg-slate-900/30 backdrop-blur-2xl border border-white/5 rounded-3xl shadow-2xl">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-        </div>
-        <div className="space-y-1">
-          <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white">Velora Security</h3>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Retrieving system analytics...</p>
-        </div>
-      </div>
-    );
+    return <Loading message="Securing Connection..." />;
   }
 
   if (!stats) {
