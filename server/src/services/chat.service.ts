@@ -128,7 +128,7 @@ const buildGroundingMetadata = (webGrounding: WebGroundingContext | null) => {
         query: webGrounding.query,
         resolvedQuery: webGrounding.resolvedQuery,
         normalizedQuery: webGrounding.normalizedQuery,
-        reusedPreviousQuery: webGrounding.reusedPreviousQuery,
+        isFollowUpQuery: webGrounding.isFollowUpQuery,
         liveDataQuery: webGrounding.liveDataQuery,
         confidence: webGrounding.confidence,
         debug: webGrounding.debug,

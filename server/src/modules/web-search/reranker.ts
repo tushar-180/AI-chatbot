@@ -156,7 +156,7 @@ const COMBINED_WEIGHTS = {
 };
 
 // ---------------------------------------------------------------------------
-//  Main reranking (no structuredScore, no domain‑authority hardcoding)
+//  Main reranking (no domain‑authority hardcoding)
 // ---------------------------------------------------------------------------
 export const heuristicRerank = (
     candidates: SearchCandidate[],
@@ -187,7 +187,6 @@ export const heuristicRerank = (
         return {
             ...candidate,
             freshnessScore,
-            // structuredScore is intentionally omitted (set to 0 by the type)
             combinedScore,
         };
     });

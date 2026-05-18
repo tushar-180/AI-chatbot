@@ -56,11 +56,12 @@ export interface InputAreaProps {
     webSearchEnabled: boolean;
     quotaStatus?: {
         allowed: boolean;
-        scope: "ok" | "global" | "user" | "cooldown";
+        scope: "ok" | "global" | "user" | "cooldown" | "monthly";
         reason?:
             | "global_quota_exceeded"
             | "user_quota_exceeded"
-            | "cooldown_active";
+            | "cooldown_active"
+            | "monthly_credits_exhausted";
         message?: string;
         retryAfterMs?: number;
     } | null;
@@ -209,9 +210,7 @@ const ModelSelector = ({
             <WebSearchToggle
                 enabled={webSearchEnabled}
                 onToggle={onWebSearchToggle}
-                disabled={
-                    isQuotaLoading || (quotaStatus && !quotaStatus.allowed)
-                }
+                disabled={isQuotaLoading || quotaStatus?.allowed === false}
                 reason={
                     isQuotaLoading
                         ? "Loading..."
@@ -220,7 +219,11 @@ const ModelSelector = ({
                               ? "Global daily limit reached"
                               : quotaStatus.scope === "user"
                                 ? "Daily user limit reached"
-                                : "Cooldown active"
+                                : quotaStatus.scope === "monthly" ||
+                                    quotaStatus.reason ===
+                                        "monthly_credits_exhausted"
+                                  ? "Monthly credits exhausted"
+                                  : "Cooldown active"
                           : undefined
                 }
             />

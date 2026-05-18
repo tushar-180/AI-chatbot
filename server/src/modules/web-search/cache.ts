@@ -35,14 +35,14 @@ const set = async (k: string, v: any, ttlMs: number) => {
 
 const safeParse = <T>(value: unknown): T => {
     if (value == null) return value as T;
-    if (typeof value === "string") {
-        try {
-            return JSON.parse(value) as T;
-        } catch {
-            return value as T;
-        }
+    if (typeof value !== "string") return value as T;
+
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        // Legacy values may already be deserialized by the Redis client.
+        return value as T;
     }
-    return value as T;
 };
 
 const get = async <T>(k: string): Promise<T | null> => {
@@ -52,10 +52,11 @@ const get = async <T>(k: string): Promise<T | null> => {
     // 1. If it's a base64 string (compressed), decompress it
     if (typeof data === "string") {
         try {
-            // Attempt decompress; if it fails, fall through to safeParse
+            // Compressed cache entries are the current format. If inflate fails, keep the
+            // legacy fallback below for older plain-JSON Redis entries.
             return await decompress<T>(data);
         } catch {
-            // Might be old uncompressed JSON
+            // Might be old uncompressed JSON.
         }
     }
 

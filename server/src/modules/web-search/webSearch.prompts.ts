@@ -1,11 +1,10 @@
 import type { SearchSource } from "./webSearch.types";
 
-const now = new Date();
-
 export const WEB_GROUNDING_SYSTEM_PROMPT = (
     query: string,
     sources: SearchSource[],
 ) => {
+    const now = new Date();
     const currentDate = now.toISOString().split("T")[0];
 
     // Pre‑compute metadata needed by the LLM (no authority hint)

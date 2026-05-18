@@ -4,11 +4,12 @@ import { api } from "@/lib/api";
 
 export interface QuotaStatus {
     allowed: boolean;
-    scope: "ok" | "global" | "user" | "cooldown";
+    scope: "ok" | "global" | "user" | "cooldown" | "monthly";
     reason?:
         | "global_quota_exceeded"
         | "user_quota_exceeded"
-        | "cooldown_active";
+        | "cooldown_active"
+        | "monthly_credits_exhausted";
     message?: string;
     retryAfterMs?: number;
     remainingGlobal?: number;

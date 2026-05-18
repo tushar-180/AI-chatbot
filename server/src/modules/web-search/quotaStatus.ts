@@ -6,8 +6,9 @@ export type QuotaUIStatus =
           reason:
               | "global_quota_exceeded"
               | "user_quota_exceeded"
-              | "cooldown_active";
-          scope: "global" | "user" | "cooldown";
+              | "cooldown_active"
+              | "monthly_credits_exhausted";
+          scope: "global" | "user" | "cooldown" | "monthly";
           message: string;
           retryAfterMs?: number;
       }

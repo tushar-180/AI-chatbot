@@ -18,6 +18,7 @@ import { WEB_GROUNDING_SYSTEM_PROMPT } from "./webSearch.prompts";
 
 import type {
     SearchCandidate,
+    SearchImage,
     SearchRejection,
     SearchSource,
     WebGroundingContext,
@@ -27,7 +28,7 @@ const MAX_SEARCH_RESULTS = 10;
 const MAX_SOURCE_COUNT = 5;
 const MAX_RAW_CONTENT_CHARS = 10000;
 const LIVE_QUERY_TTL_MS = 10 * 60 * 1000;
-const STABLE_QUERY_TTL_MS = 12 * 60 * 60 * 1000;
+const STABLE_QUERY_TTL_MS = 2 * 60 * 60 * 1000;
 
 const logPrefix = "[web-search]";
 
@@ -66,13 +67,33 @@ const deduplicateByHostname = (candidates: SearchCandidate[]) => {
 };
 
 // ── Tavily search with retry ────────────────────────────────
+type TavilySearchResult =
+    | { success: true; candidates: SearchCandidate[], images?: SearchImage[] }
+    | {
+          success: false;
+          reason:
+              | "api_key_missing"
+              | "rate_limit_exceeded"
+              | "provider_error"
+              | "empty_response";
+          message: string;
+      };
+
 const searchTavily = async (
     query: string,
     wantsImages = false,
     retries = 2,
-): Promise<SearchCandidate[]> => {
+): Promise<TavilySearchResult> => {
     const apiKey = process.env.TAVILY_API_KEY;
-    if (!apiKey) return [];
+    if (!apiKey) {
+        return {
+            success: false,
+            reason: "api_key_missing",
+            message: "Tavily API key is missing or not configured.",
+        };
+    }
+
+    let lastError: any = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
@@ -85,7 +106,8 @@ const searchTavily = async (
                 includeImages: wantsImages,
                 includeImageDescriptions: wantsImages,
             });
-            const results = resp.results || [];
+
+            const results = resp && Array.isArray(resp.results) ? resp.results : [];
             console.log(
                 `${logPrefix} query: ${query}${attempt > 0 ? ` (retry ${attempt})` : ""}`,
             );
@@ -93,7 +115,15 @@ const searchTavily = async (
                 console.log(`[${i + 1}] : title: ${r.title}\n      ${r.url}`);
             });
 
-            return results.map((r: any) => ({
+            if (results.length === 0) {
+                return {
+                    success: false,
+                    reason: "empty_response",
+                    message: `Tavily returned no search results for query: "${query}".`,
+                };
+            }
+
+            const candidates = results.map((r: any) => ({
                 title: String(r.title || ""),
                 url: String(r.url || ""),
                 hostname: getHostname(r.url),
@@ -103,7 +133,21 @@ const searchTavily = async (
                 publishedAt: r.publishedDate || null,
                 lastModified: null,
             }));
-        } catch (e) {
+
+            const rawImages = wantsImages ? (resp.images ?? []) : [];
+            const images = rawImages
+                .map((img: any) => ({
+                    url: String(img.url || ""),
+                    description: img.description || null,
+                }))
+                .filter(i => i.url.length > 0);
+            return {
+                success: true,
+                candidates,
+                ...(images.length > 0 && { images }),
+            };
+        } catch (e: any) {
+            lastError = e;
             console.warn(
                 JSON.stringify({
                     logPrefix,
@@ -113,13 +157,52 @@ const searchTavily = async (
                     time: Date.now(),
                 }),
             );
-            if (attempt === retries) return [];
+            if (attempt === retries) {
+                break;
+            }
             await new Promise((resolve) =>
                 setTimeout(resolve, 300 * Math.pow(2, attempt)),
             ); // 300, 600, 1200 ms
         }
     }
-    return [];
+
+    // Classify the last encountered error
+    const errString = String(lastError || "").toLowerCase();
+    const isRateLimit =
+        errString.includes("429") ||
+        errString.includes("rate limit") ||
+        errString.includes("limit exceeded") ||
+        errString.includes("too many requests") ||
+        errString.includes("quota");
+
+    const isApiKeyError =
+        errString.includes("401") ||
+        errString.includes("403") ||
+        errString.includes("unauthorized") ||
+        errString.includes("invalid api key") ||
+        errString.includes("unauthenticated");
+
+    if (isRateLimit) {
+        return {
+            success: false,
+            reason: "rate_limit_exceeded",
+            message: "Tavily rate limit or credit quota exceeded.",
+        };
+    }
+
+    if (isApiKeyError) {
+        return {
+            success: false,
+            reason: "api_key_missing",
+            message: "Tavily API key is invalid or unauthorized.",
+        };
+    }
+
+    return {
+        success: false,
+        reason: "provider_error",
+        message: lastError ? String(lastError.message || lastError) : "Failed to search Tavily.",
+    };
 };
 
 // ── Main service ─────────────────────────────────────────────
@@ -150,7 +233,8 @@ export const webSearchService = {
         // 3. Build the resolved query (Async LLM-powered)
         const resolved = await resolveSearchQuery(trimmed, chatMessages);
 
-        // 4. If the resolved query matches our last search and we have it in cache, return that.
+        // 4. If the follow-up resolver points back to the same effective search, reuse the
+        // previous grounding cache directly instead of re-querying Tavily.
         if (
             pointer &&
             (pointer.resolvedQuery === resolved.resolvedQuery ||
@@ -170,12 +254,19 @@ export const webSearchService = {
         if (cachedGrounding) return cachedGrounding;
 
         // 5. Fetch search candidates
-        let candidates = await getSearchCache(resolved.cacheKey);
-        let cacheTier: "grounding" | "search" | "none" = candidates
-            ? "search"
-            : "none";
+        // Cache tiers are intentionally separate:
+        // - grounding: full context already built
+        // - search: Tavily results cached, but ranking/prompt assembly still runs
+        // - none: real Tavily fetch, which is the only path that should spend quota/cooldown
+        let candidates: SearchCandidate[] = [];
+        let cacheTier: "grounding" | "search" | "none" = "none";
+        let images: SearchImage[] | undefined; // add this up top
 
-        if (!candidates) {
+        const cachedCandidates = await getSearchCache(resolved.cacheKey);
+        if (cachedCandidates) {
+            candidates = cachedCandidates;
+            cacheTier = "search";
+        } else {
             const quota = await checkQuota(userId);
             if (!quota.allowed) {
                 return {
@@ -186,11 +277,26 @@ export const webSearchService = {
                 };
             }
 
-            candidates = await searchTavily(
+            const searchResult = await searchTavily(
                 resolved.resolvedQuery,
                 resolved.wantsImages,
             );
+
+            if (!searchResult.success) {
+                return {
+                    rejected: true,
+                    reason: searchResult.reason,
+                    message: searchResult.message,
+                };
+            }
+
+            candidates = searchResult.candidates;
+            images = searchResult.images;
+            cacheTier = "none";
+
             if (candidates.length > 0) {
+                // Cache successful Tavily responses so equivalent or follow-up turns can reuse
+                // provider results without spending another external search.
                 await setSearchCache(
                     resolved.cacheKey,
                     candidates,
@@ -238,7 +344,6 @@ export const webSearchService = {
             snippetFallback: !c.rawContent,
             score: c.combinedScore || 0,
             freshnessScore: c.freshnessScore,
-            structuredScore: c.structuredScore,
             publishedAt: c.publishedAt,
             lastModified: c.lastModified,
         }));
@@ -247,9 +352,12 @@ export const webSearchService = {
             query: resolved.rawQuery,
             resolvedQuery: resolved.resolvedQuery,
             normalizedQuery: resolved.normalizedQuery,
-            reusedPreviousQuery: resolved.reusedPreviousQuery,
+            // This means the current search depends on prior chat context, not that the text
+            // of the prior query was literally reused.
+            isFollowUpQuery: resolved.isFollowUpQuery,
             liveDataQuery: resolved.liveDataQuery,
             sources: finalSources,
+            images,
             systemPrompt: WEB_GROUNDING_SYSTEM_PROMPT(
                 resolved.resolvedQuery,
                 finalSources,
@@ -270,8 +378,11 @@ export const webSearchService = {
             },
         });
 
-        await recordSearch(userId);
-        if (userId) await setCooldown(userId);
+        // Only real external Tavily searches should count against quota/cooldown.
+        if (cacheTier === "none") {
+            await recordSearch(userId);
+            if (userId) await setCooldown(userId);
+        }
 
         await setGroundingCache(
             resolved.cacheKey,

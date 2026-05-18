@@ -45,34 +45,75 @@ export const resolveSearchQuery = async (
     const prompt = QUERY_RESOLUTION_PROMPT(trimmedMessage, history);
 
     // Using Gemini 3.1 Flash Lite for fast and accurate query resolution
-    const provider = aiService.getProvider("gemini:gemini-3.1-flash-lite");
+    let provider = aiService.getProvider("gemini:gemini-3.1-flash-lite");
 
     let resolvedQuery = trimmedMessage;
-    let reusedPreviousQuery = false;
+    let isFollowUpQuery = false;
     let liveDataQuery = false;
     let wantsImages = false;
 
     try {
-        const response = await provider.generateResponse([
-            { role: "user", content: prompt },
-        ]);
+        let response: string;
+        try {
+            response = await provider.generateResponse([
+                { role: "user", content: prompt },
+            ]);
+        } catch (primaryError) {
+            // Fallback to Gemini 2.0 Flash
+            console.warn(
+                "[queryResolver] Primary provider failed, attempting fallback to gemini-2.0-flash:",
+                primaryError,
+            );
+            provider = aiService.getProvider("gemini:gemini-2.0-flash");
+            response = await provider.generateResponse([
+                { role: "user", content: prompt },
+            ]);
+        }
 
-        // Clean the response to ensure it's valid JSON (LLMs sometimes add markdown blocks)
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        const jsonStr = jsonMatch ? jsonMatch[0] : response.trim();
+        // ── Robust JSON extraction ──────────────────────────────
+        // 1. Strip common markdown code fences
+        const cleanResponse = response
+            .replace(/```json\s*/gi, '')
+            .replace(/```\s*/g, '')
+            .trim();
 
-        const result = JSON.parse(jsonStr);
+        let result: any = null;
+        try {
+            // 2. Try direct parsing first
+            result = JSON.parse(cleanResponse);
+        } catch {
+            // 3. Fallback: locate the first balanced JSON object
+            const start = cleanResponse.indexOf('{');
+            if (start !== -1) {
+                let depth = 0;
+                for (let i = start; i < cleanResponse.length; i++) {
+                    if (cleanResponse[i] === '{') depth++;
+                    else if (cleanResponse[i] === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            try {
+                                result = JSON.parse(cleanResponse.slice(start, i + 1));
+                            } catch {
+                                // keep result null if slice isn't valid JSON
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
 
-        if (result.searchQuery && result.searchQuery.length > 2) {
+        // 4. Apply extracted values if we got a valid searchQuery
+        if (result && result.searchQuery && result.searchQuery.length > 2) {
             resolvedQuery = result.searchQuery;
-            reusedPreviousQuery = !!result.isFollowUp;
+            isFollowUpQuery = !!result.isFollowUp;
             liveDataQuery = !!result.isLiveData;
             wantsImages = !!result.wantsImages;
 
             console.log("[queryResolver] Gemini resolved query:", {
                 original: trimmedMessage,
                 resolved: resolvedQuery,
-                isFollowUp: reusedPreviousQuery,
+                isFollowUp: isFollowUpQuery,
                 isLiveData: liveDataQuery,
                 wantsImages: wantsImages,
             });
@@ -82,7 +123,7 @@ export const resolveSearchQuery = async (
             "[queryResolver] LLM query resolution failed, falling back to raw message:",
             error,
         );
-        liveDataQuery = false;
+        // liveDataQuery is already false by default, no need to reassign
     }
 
     const normalizedQuery = normalizeQuery(resolvedQuery);
@@ -94,7 +135,7 @@ export const resolveSearchQuery = async (
         cacheKey: liveDataQuery
             ? `live:${normalizedQuery}`
             : `stable:${normalizedQuery}`,
-        reusedPreviousQuery,
+        isFollowUpQuery,
         liveDataQuery,
         wantsImages,
     };
