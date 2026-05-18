@@ -77,9 +77,19 @@ export const chatRepository = {
   },
 
   async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    const message = await Message.findByIdAndUpdate(messageId, updateData, {
+    // Try to update by _id first, if that fails (e.g. it's a UUID), try by requestId
+    let message = await Message.findByIdAndUpdate(messageId, updateData, {
       returnDocument: "after",
     });
+
+    if (!message) {
+      message = await Message.findOneAndUpdate(
+        { requestId: messageId },
+        updateData,
+        { returnDocument: "after" },
+      );
+    }
+
     if (message?.chatId) {
       await this.touchChat(String(message.chatId));
     }
@@ -122,8 +132,8 @@ export const chatRepository = {
     await this.touchChat(chatId);
   },
 
-  async update(chatId: string, data: Partial<{ title: string }>) {
-    return await Chat.findByIdAndUpdate(chatId, data, { new: true })
+  async update(chatId: string, data: any) {
+    return await Chat.findByIdAndUpdate(chatId, data, { new: true });
   },
 
   async updateTitle(chatId: string, title: string) {
@@ -134,6 +144,22 @@ export const chatRepository = {
     );
   },
 
+  async findByShareId(shareId: string) {
+    const chat = await Chat.findOne({ shareId });
+    if (!chat) return null;
+
+    const messages = await Message.find({ chatId: chat._id }).sort({ createdAt: 1 });
+    
+    const formattedMessages = messages.map((msg) => ({
+      ...msg.toObject(),
+      id: msg._id.toString(),
+    }));
+
+    return {
+      ...chat.toObject(),
+      messages: formattedMessages,
+    };
+  },
   async archiveChat(chatId: string) {
     return await Chat.findByIdAndUpdate(
       chatId,
