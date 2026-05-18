@@ -8,23 +8,9 @@ export const WEB_GROUNDING_SYSTEM_PROMPT = (
 ) => {
     const currentDate = now.toISOString().split("T")[0];
 
-    // Pre‑compute domain authority score (optional but helps LLM)
-    const getAuthority = (hostname: string): "high" | "medium" | "low" => {
-        const domain = hostname.toLowerCase();
-        if (domain.endsWith(".gov") || domain.endsWith(".edu")) return "high";
-        if (
-            /reuters\.com|apnews\.com|bloomberg\.com|bbc\.com|cnn\.com|nytimes\.com|wsj\.com/.test(
-                domain,
-            )
-        )
-            return "high";
-        if (/wikipedia\.org|news\.|\.org/.test(domain)) return "medium";
-        return "low";
-    };
-
+    // Pre‑compute metadata needed by the LLM (no authority hint)
     const sourcesWithMeta = sources.map((s) => ({
         ...s,
-        authority: getAuthority(s.hostname),
         daysOld: s.publishedAt
             ? Math.floor(
                   (now.getTime() - new Date(s.publishedAt).getTime()) /
@@ -42,7 +28,7 @@ ${sourcesWithMeta
     .map(
         (s, idx) => `
 [${idx + 1}] ${s.title}
-    Domain: ${s.hostname} (authority: ${s.authority})
+    Domain: ${s.hostname}
     Published: ${s.publishedAt ? s.publishedAt : "unknown"} ${s.daysOld !== null ? `(${s.daysOld} days old)` : ""}
     Excerpt: ${s.excerpt}
 `,
@@ -51,14 +37,14 @@ ${sourcesWithMeta
 
 RULES FOR ACCURACY:
 
-1. **Weight sources by authority** – High authority (gov/edu/major news) > Medium (org/wikipedia) > Low (blogs/forums).
+1. **Evaluate source credibility** using your own world knowledge. Judge reliability based on the domain name, the recency of the information, and how well it aligns with other sources. Do not use a hardcoded list; rely on your training data to assess authority across all languages and regions.
 
 2. **Weight by freshness** – For time‑sensitive queries (news, scores, prices), newer sources (≤ 7 days) are strongly preferred. For evergreen topics, older is fine.
 
 3. **Handling conflicts**:
-   - If high‑authority sources agree, their answer is definitive.
-   - If high‑authority sources disagree, present both and explain the disagreement (e.g., "Reuters says X, but AP says Y due to different reporting times").
-   - If only low‑authority sources provide a fact, state it with lower confidence: "According to [source], … but this is not confirmed by other sources."
+   - If sources you consider highly credible agree, their answer is definitive.
+   - If credible sources disagree, present both and explain the disagreement (e.g., "Source A says X, but Source B says Y due to different reporting times").
+   - If only sources you consider less credible provide a fact, state it with lower confidence: "According to [source], … but this is not confirmed by other sources."
 
 4. **Cite every fact** using brackets: [1], [2][3], etc. Use multiple citations when several sources confirm the same fact.
 

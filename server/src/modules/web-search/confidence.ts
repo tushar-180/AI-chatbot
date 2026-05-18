@@ -30,22 +30,21 @@ export const estimateConfidence = (params: {
     const percentFullExtraction =
         sources.length > 0 ? fullExtractionSources.length / sources.length : 0;
 
-    const avgStructured = average(sources.map((s) => s.structuredScore ?? 0.5));
+    // Freshness and relevance scores come from the reranker (no authority metric)
     const avgFreshness = average(sources.map((s) => s.freshnessScore ?? 0.5));
     const avgRerankScore = average(sources.map((s) => s.score ?? 0));
 
+    // Revised weights (no hardcoded authority)
     const WEIGHTS = {
-        authority: 0.3,
-        freshness: 0.22,
-        relevance: 0.28,
+        freshness: 0.3,
+        relevance: 0.5,
         extraction: 0.2,
     };
 
     let score =
-        WEIGHTS.authority * avgStructured +
-        WEIGHTS.freshness * avgFreshness +
-        WEIGHTS.relevance * avgRerankScore;
+        WEIGHTS.freshness * avgFreshness + WEIGHTS.relevance * avgRerankScore;
 
+    // Adjust for extraction quality
     if (percentFullExtraction >= 0.8) {
         score += WEIGHTS.extraction * 0.15;
     } else if (percentFullExtraction >= 0.5) {
@@ -54,6 +53,7 @@ export const estimateConfidence = (params: {
         score -= WEIGHTS.extraction * 0.15;
     }
 
+    // Source count bonus (multiple sources increase confidence)
     const sourceCountBonus = Math.min(0.1, (sources.length - 1) * 0.04);
     score += sourceCountBonus;
 
@@ -84,22 +84,23 @@ export const estimateConfidence = (params: {
         );
     }
 
-    if (avgStructured >= 0.7) {
-        reasons.push(
-            "Sources come from well‑established, authoritative domains.",
-        );
+    // Replace authority reasons with ranking score insights
+    if (avgRerankScore >= 0.7) {
+        reasons.push("Search engine ranking confidence is high.");
     }
+
     if (avgFreshness >= 0.75) {
         reasons.push("Information is recent, improving trustworthiness.");
     }
+
     if (sources.length >= 2) {
         reasons.push(
             "Multiple independent sources corroborate the information.",
         );
     }
 
-    if (avgStructured < 0.4 && avgFreshness < 0.4) {
-        reasons.push("Sources are limited in both authority and freshness.");
+    if (avgFreshness < 0.4 && avgRerankScore < 0.4) {
+        reasons.push("Sources are limited in both relevance and freshness.");
     }
 
     return {

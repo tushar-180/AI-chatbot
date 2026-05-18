@@ -29,7 +29,8 @@
     "mongoose": "^9.4.1",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
-    "openai": "^6.34.0"
+    "openai": "^6.34.0",
+    "tldts": "^7.0.30"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

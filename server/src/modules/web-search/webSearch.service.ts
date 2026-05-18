@@ -1,4 +1,6 @@
 import { tavily } from "@tavily/core";
+import { parse } from "tldts";
+
 import type { ChatMessage } from "../../types/chat.types";
 import {
     getGroundingCache,
@@ -9,10 +11,7 @@ import {
     setLastSearchPointer,
 } from "./cache";
 import { withEstimatedConfidence } from "./confidence";
-import {
-    resolveSearchQuery,
-    normalizeQuery,
-} from "./queryResolver";
+import { resolveSearchQuery } from "./queryResolver";
 import { checkQuota, recordSearch, setCooldown } from "./rateLimiter";
 import { heuristicRerank } from "./reranker";
 import { WEB_GROUNDING_SYSTEM_PROMPT } from "./webSearch.prompts";
@@ -22,7 +21,6 @@ import type {
     SearchRejection,
     SearchSource,
     WebGroundingContext,
-    ResolvedSearchQuery,
 } from "./webSearch.types";
 
 const MAX_SEARCH_RESULTS = 10;
@@ -47,10 +45,12 @@ const cleanRawContent = (t: string) =>
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, MAX_RAW_CONTENT_CHARS);
-const normalizeRootDomain = (h: string) => {
-    const parts = h.toLowerCase().split(".");
-    return parts.length < 2 ? h.toLowerCase() : parts.slice(-2).join(".");
+
+const normalizeRootDomain = (hostname: string) => {
+    const parsed = parse(hostname);
+    return parsed.domain ?? hostname;
 };
+
 const deduplicateByHostname = (candidates: SearchCandidate[]) => {
     const seen = new Map<string, SearchCandidate>();
     for (const c of candidates) {
@@ -64,7 +64,6 @@ const deduplicateByHostname = (candidates: SearchCandidate[]) => {
     }
     return [...seen.values()];
 };
-
 
 // ── Tavily search with retry ────────────────────────────────
 const searchTavily = async (
@@ -93,6 +92,7 @@ const searchTavily = async (
             results.forEach((r: any, i: number) => {
                 console.log(`[${i + 1}] : title: ${r.title}\n      ${r.url}`);
             });
+
             return results.map((r: any) => ({
                 title: String(r.title || ""),
                 url: String(r.url || ""),
@@ -151,7 +151,11 @@ export const webSearchService = {
         const resolved = await resolveSearchQuery(trimmed, chatMessages);
 
         // 4. If the resolved query matches our last search and we have it in cache, return that.
-        if (pointer && (pointer.resolvedQuery === resolved.resolvedQuery || pointer.cacheKey === resolved.cacheKey)) {
+        if (
+            pointer &&
+            (pointer.resolvedQuery === resolved.resolvedQuery ||
+                pointer.cacheKey === resolved.cacheKey)
+        ) {
             const cached = await getGroundingCache(pointer.cacheKey);
             if (cached) {
                 console.log(
@@ -182,7 +186,10 @@ export const webSearchService = {
                 };
             }
 
-            candidates = await searchTavily(resolved.resolvedQuery, resolved.wantsImages);
+            candidates = await searchTavily(
+                resolved.resolvedQuery,
+                resolved.wantsImages,
+            );
             if (candidates.length > 0) {
                 await setSearchCache(
                     resolved.cacheKey,

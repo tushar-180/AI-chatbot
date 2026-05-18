@@ -1,9 +1,9 @@
 import MiniSearch from "minisearch";
 import { differenceInDays, parseISO, isValid } from "date-fns";
-import type { SearchCandidate, SearchSource } from "./webSearch.types";
+import type { SearchCandidate } from "./webSearch.types";
 
 // ---------------------------------------------------------------------------
-//  Freshness scoring
+//  Freshness scoring (no changes)
 // ---------------------------------------------------------------------------
 export const detectFreshnessScore = (params: {
     publishedAt?: string | null;
@@ -27,48 +27,26 @@ export const detectFreshnessScore = (params: {
 };
 
 // ---------------------------------------------------------------------------
-//  Domain / page structure authority
-// ---------------------------------------------------------------------------
-export const detectStructuredPageScore = (
-    candidate: SearchCandidate,
-): number => {
-    const hostname = candidate.hostname.toLowerCase();
-    // High authority TLDs
-    if (/(gov|edu|org|nic|ac)$/.test(hostname)) return 0.9;
-    
-    // Global and widely trusted sources
-    if (
-        /(wikipedia\.org|reuters\.com|apnews\.com|bloomberg\.com|bbc\.com|nytimes\.com|wsj\.com|aljazeera\.com)/.test(
-            hostname,
-        )
-    ) {
-        return 0.85;
-    }
-    
-    // Recognise other mainstream news / media / information hubs
-    if (/(\.news\.|\.media\.|\.info\.|\.org\.)/.test(hostname)) return 0.65;
-    return 0.55; 
-};
-
-// ---------------------------------------------------------------------------
-//  URL / snippet signals
+//  Language‑agnostic URL / snippet signals (hardcoded patterns removed)
 // ---------------------------------------------------------------------------
 const urlSignal = (url: string): number => {
     try {
         const u = new URL(url);
-        const path = u.pathname.toLowerCase();
-        // Social / share pages are usually low value
-        if (
-            /(share|photo|video|post|status|comment|like|feed|login|signup)/.test(path)
-        ) {
-            return 0.25;
-        }
-        // Article / news / blog paths indicate structured content
-        // Note: Many non-English sites still use these English keywords in URLs
-        if (/(article|news|blog|story|report|wiki|detail|view|20\d{2})/.test(path)) {
-            return 0.9;
-        }
-        return 0.6;
+        const path = u.pathname;
+
+        // Path depth indicates structured content (e.g., /section/article/id)
+        const segments = path.split("/").filter(Boolean);
+        const depth = segments.length;
+
+        // Bonus for paths containing a year-like pattern (universal)
+        const hasYear = /\b(19|20)\d{2}\b/.test(path);
+
+        // More depth → more likely to be a substantive article
+        let score = Math.min(depth / 4, 0.8); // caps at 0.8
+
+        if (hasYear) score += 0.1;
+
+        return Math.min(score, 0.9); // overall max 0.9
     } catch {
         return 0.5;
     }
@@ -77,17 +55,19 @@ const urlSignal = (url: string): number => {
 const snippetSignal = (snippet: string): number => {
     if (!snippet) return 0.2;
     const lenScore = Math.min(snippet.length / 300, 1);
-    
+
     // Check for numerical data (useful for factual queries across languages)
     const numericDensity =
         (snippet.match(/\d/g)?.length ?? 0) / Math.max(snippet.length, 1);
-    
+
     // Check for structure (dates, percentages, or list-like patterns)
-    const hasStructuredData = /\d{4}|\d+\s?%|[\d.]+\s?[\p{L}]{1,5}/u.test(snippet);
-    
+    const hasStructuredData = /\d{4}|\d+\s?%|[\d.]+\s?[\p{L}]{1,5}/u.test(
+        snippet,
+    );
+
     // Entity detection (capitalized words) - works for many scripts
     const entityHints = (snippet.match(/\p{Lu}\p{Ll}+/gu)?.length ?? 0) / 10;
-    
+
     return (
         lenScore * 0.45 +
         Math.min(numericDensity * 2, 0.25) +
@@ -101,7 +81,7 @@ const extractabilityScore = (c: SearchCandidate): number => {
 };
 
 // ---------------------------------------------------------------------------
-//  BM25 scoring via MiniSearch
+//  BM25 scoring via MiniSearch (no changes)
 // ---------------------------------------------------------------------------
 const computeBM25Scores = (
     candidates: SearchCandidate[],
@@ -136,7 +116,7 @@ const computeBM25Scores = (
 };
 
 // ---------------------------------------------------------------------------
-//  Tokenization with Unicode support
+//  Tokenization with Unicode support (no changes)
 // ---------------------------------------------------------------------------
 const tokenize = (text: string): Set<string> => {
     const words = text
@@ -165,17 +145,19 @@ const areDuplicates = (a: SearchCandidate, b: SearchCandidate): boolean => {
 };
 
 // ---------------------------------------------------------------------------
-//  Main reranking
+//  Combined weights (no hardcoded domain authority)
+//  Weights: provider score (35%), BM25 (30%), extractability (15%), freshness (20%)
 // ---------------------------------------------------------------------------
-
 const COMBINED_WEIGHTS = {
-    providerScore: 0.3,
+    providerScore: 0.35,
     bm25: 0.3,
     extractability: 0.15,
-    freshness: 0.15,
-    structured: 0.1,
+    freshness: 0.2,
 };
 
+// ---------------------------------------------------------------------------
+//  Main reranking (no structuredScore, no domain‑authority hardcoding)
+// ---------------------------------------------------------------------------
 export const heuristicRerank = (
     candidates: SearchCandidate[],
     query: string,
@@ -192,7 +174,6 @@ export const heuristicRerank = (
             lastModified: candidate.lastModified,
             liveDataQuery,
         });
-        const structuredScore = detectStructuredPageScore(candidate);
         const providerScore = candidate.searchProviderScore ?? 0;
         const extractScore = extractabilityScore(candidate);
         const bm25Score = bm25Scores[index] ?? 0;
@@ -201,13 +182,12 @@ export const heuristicRerank = (
             COMBINED_WEIGHTS.providerScore * providerScore +
             COMBINED_WEIGHTS.bm25 * bm25Score +
             COMBINED_WEIGHTS.extractability * extractScore +
-            COMBINED_WEIGHTS.freshness * freshnessScore +
-            COMBINED_WEIGHTS.structured * structuredScore;
+            COMBINED_WEIGHTS.freshness * freshnessScore;
 
         return {
             ...candidate,
             freshnessScore,
-            structuredScore,
+            // structuredScore is intentionally omitted (set to 0 by the type)
             combinedScore,
         };
     });
