@@ -120,33 +120,7 @@ export const chatRepository = {
 
       return finalResults;
 
-      /* 
-      // TO IMPLEMENT TRUE ATLAS SEARCH HIGHLIGHTING:
-      return await Chat.aggregate([
-        {
-          $search: {
-            index: "default",
-            text: {
-              query: query,
-              path: ["title", "messages.content"],
-              fuzzy: {}
-            },
-            highlight: {
-              path: ["title", "messages.content"]
-            }
-          }
-        },
-        { $match: { userId } },
-        { $limit: 20 },
-        {
-          $project: {
-            title: 1,
-            updatedAt: 1,
-            highlights: { $meta: "searchHighlights" }
-          }
-        }
-      ]);
-      */
+     
     } catch (err) {
       console.error("Search failed:", err);
       return [];
@@ -167,7 +141,20 @@ export const chatRepository = {
       userId: messageData.userId,
       ...messageData,
     });
-    await this.touchChat(chatId);
+    
+    if (messageData.tokens) {
+      await Chat.findByIdAndUpdate(chatId, {
+        $inc: {
+          "tokens.promptTokens": messageData.tokens.promptTokens || 0,
+          "tokens.completionTokens": messageData.tokens.completionTokens || 0,
+          "tokens.totalTokens": messageData.tokens.totalTokens || 0,
+        },
+        $set: { updatedAt: new Date() },
+      });
+    } else {
+      await this.touchChat(chatId);
+    }
+    
     return message;
   },
 
@@ -176,7 +163,18 @@ export const chatRepository = {
       returnDocument: "after",
     });
     if (message?.chatId) {
-      await this.touchChat(String(message.chatId));
+      if (updateData.tokens) {
+        await Chat.findByIdAndUpdate(String(message.chatId), {
+          $inc: {
+            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
+            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
+            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
+        });
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
     }
     return message;
   },
@@ -202,7 +200,20 @@ export const chatRepository = {
       returnDocument: "after",
       },
     );
-    await this.touchChat(chatId);
+    if (message?.chatId) {
+      if (updateData.tokens) {
+        await Chat.findByIdAndUpdate(String(message.chatId), {
+          $inc: {
+            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
+            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
+            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
+        });
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
+    }
     return message;
   },
 

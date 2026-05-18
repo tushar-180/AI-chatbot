@@ -22,6 +22,7 @@ import { toast } from "sonner";
 interface GlobalModelUse {
   model: string;
   count: number;
+  tokens: number;
 }
 
 interface UserStat {
@@ -35,11 +36,17 @@ interface UserStat {
   role: string;
   favoriteModel: string;
   totalChats: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 interface AdminStats {
   totalUsersCount: number;
   totalChatsCount: number;
+  totalTokens: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
   globalModelUsage: GlobalModelUse[];
   usersList: UserStat[];
 }
@@ -49,7 +56,7 @@ const Admin: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [sortField, setSortField] = useState<"name" | "chats" | "joined">("chats");
+  const [sortField, setSortField] = useState<"name" | "chats" | "joined" | "tokens">("chats");
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
   const handleRoleChange = async (targetClerkId: string, newRole: "user" | "admin") => {
@@ -122,6 +129,9 @@ const Admin: React.FC = () => {
       } else if (sortField === "joined") {
         aVal = new Date(a.createdAt).getTime();
         bVal = new Date(b.createdAt).getTime();
+      } else if (sortField === "tokens") {
+        aVal = a.totalTokens || 0;
+        bVal = b.totalTokens || 0;
       }
 
       if (aVal < bVal) return sortAsc ? -1 : 1;
@@ -132,7 +142,7 @@ const Admin: React.FC = () => {
     return result;
   }, [stats, searchQuery, sortField, sortAsc]);
 
-  const handleSort = (field: "name" | "chats" | "joined") => {
+  const handleSort = (field: "name" | "chats" | "joined" | "tokens") => {
     if (sortField === field) {
       setSortAsc(!sortAsc);
     } else {
@@ -181,8 +191,11 @@ const Admin: React.FC = () => {
     );
   }
 
-  // Get highest used model globally
-  const topModel = stats.globalModelUsage.length > 0 ? stats.globalModelUsage[0].model : "N/A";
+  // Get highest used model globally by frequency of usage (count)
+  const topModelItem = stats.globalModelUsage.length > 0
+    ? [...stats.globalModelUsage].sort((a, b) => b.count - a.count)[0]
+    : null;
+  const topModel = topModelItem ? topModelItem.model : "N/A";
   const activeModelsCount = stats.globalModelUsage.length;
 
   return (
@@ -218,7 +231,7 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Analytics Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
           
           {/* Card 1: Users */}
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-white/10 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
@@ -246,7 +259,23 @@ const Admin: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 3: Top Model */}
+          {/* Card 3: Total Tokens */}
+          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-white/10 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
+            <div className="space-y-2 min-w-0 flex-1">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Total Tokens</p>
+              <h3 className="text-2xl font-display font-bold text-white leading-none group-hover:text-emerald-400 transition-colors truncate" title={`Prompt: ${stats.totalPromptTokens?.toLocaleString()} | Completion: ${stats.totalCompletionTokens?.toLocaleString()}`}>
+                {stats.totalTokens?.toLocaleString()}
+              </h3>
+              <p className="text-[9px] text-slate-500 font-mono truncate">
+                P: {stats.totalPromptTokens?.toLocaleString()} | C: {stats.totalCompletionTokens?.toLocaleString()}
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-110 transition-transform ml-2">
+              <BarChart3 size={20} />
+            </div>
+          </div>
+
+          {/* Card 4: Top Model */}
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-white/10 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2 min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Global Top Model</p>
@@ -259,15 +288,15 @@ const Admin: React.FC = () => {
             </div>
           </div>
 
-          {/* Card 4: Active Models */}
+          {/* Card 5: Active Models */}
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-white/10 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Active Models</p>
-              <h3 className="text-3xl font-display font-bold text-white leading-none group-hover:text-emerald-400 transition-colors">
+              <h3 className="text-3xl font-display font-bold text-white leading-none group-hover:text-amber-400 transition-colors">
                 {activeModelsCount}
               </h3>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
               <Cpu size={20} />
             </div>
           </div>
@@ -297,16 +326,16 @@ const Admin: React.FC = () => {
             ) : (
               <div className="space-y-5 flex-1 justify-center flex flex-col">
                 {stats.globalModelUsage.map((m) => {
-                  const totalCountsSum = stats.globalModelUsage.reduce((sum, item) => sum + item.count, 0);
-                  const percentage = totalCountsSum > 0 
-                    ? Math.round((m.count / totalCountsSum) * 100) 
+                  const totalTokensSum = stats.globalModelUsage.reduce((sum, item) => sum + (item.tokens || 0), 0);
+                  const percentage = totalTokensSum > 0 
+                    ? Math.round(((m.tokens || 0) / totalTokensSum) * 100) 
                     : 0;
 
                   return (
                     <div key={m.model} className="space-y-2">
                       <div className="flex justify-between items-center text-xs">
                         <span className="font-semibold text-slate-300 truncate max-w-[180px]">{getModelShortName(m.model)}</span>
-                        <span className="font-mono text-slate-500">{m.count} msgs ({percentage}%)</span>
+                        <span className="font-mono text-slate-500">{m.count} msgs ({m.tokens ? m.tokens.toLocaleString() : 0} tkns)</span>
                       </div>
                       <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
                         <div
@@ -349,7 +378,7 @@ const Admin: React.FC = () => {
                   placeholder="Filter users..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/5 rounded-2xl py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 outline-none focus:border-white/10 transition-all"
+                  className="w-full bg-slate-900 border border-white/5 rounded-2xl py-2 py-2 pl-10 pr-4 text-xs text-white placeholder-slate-500 outline-none focus:border-white/10 transition-all"
                 />
                 <Search size={14} className="absolute left-3.5 top-3 text-slate-500 group-focus-within:text-white transition-colors" />
               </div>
@@ -378,13 +407,19 @@ const Admin: React.FC = () => {
                         {sortField === "chats" && (sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
                       </div>
                     </th>
+                    <th className="pb-3 text-right cursor-pointer select-none hover:text-white transition-colors" onClick={() => handleSort("tokens")}>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span>Tokens</span>
+                        {sortField === "tokens" && (sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                      </div>
+                    </th>
                     <th className="pb-3 text-right">Fav Model</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {filteredAndSortedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-600 text-xs font-semibold uppercase tracking-widest">
+                      <td colSpan={5} className="py-8 text-center text-slate-600 text-xs font-semibold uppercase tracking-widest">
                         No matches found
                       </td>
                     </tr>
@@ -438,6 +473,14 @@ const Admin: React.FC = () => {
                           <td className="py-4 text-right pr-3">
                             <span className="text-sm font-semibold text-white font-mono">{u.totalChats}</span>
                             <p className="text-[9px] text-slate-500 font-medium font-mono">{totalContribution}% contribution</p>
+                          </td>
+                          <td className="py-4 text-right pr-3">
+                            <span className="text-sm font-semibold text-white font-mono" title={`Prompt: ${u.promptTokens?.toLocaleString()} | Completion: ${u.completionTokens?.toLocaleString()}`}>
+                              {u.totalTokens?.toLocaleString() || 0}
+                            </span>
+                            <p className="text-[9px] text-slate-500 font-medium font-mono font-sans">
+                              P: {((u.promptTokens || 0) / 1000).toFixed(1)}k | C: {((u.completionTokens || 0) / 1000).toFixed(1)}k
+                            </p>
                           </td>
                           <td className="py-4 text-right">
                             <span className={`inline-block px-2.5 py-1 rounded-xl text-[9px] font-bold uppercase tracking-wider border ${getModelBadgeClass(u.favoriteModel)}`}>

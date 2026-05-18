@@ -26,6 +26,11 @@ interface Message {
   type?: "text" | "image" | "file" | "action";
   attachments?: Attachment[];
   isWebSearching?: boolean;
+  tokens?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 interface MessageItemProps {
@@ -143,29 +148,65 @@ const MessageAvatar = ({
 const MessageMetadata = ({
   isUser,
   model,
+  tokens,
+  isStreaming,
+  content,
 }: {
   isUser: boolean;
   model?: string;
-}) => (
-  <div
-    className={`flex items-center gap-2.5 ${
-      isUser ? "flex-row-reverse" : "flex-row"
-    }`}
-  >
-    <span
-      className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
-        isUser ? "text-slate-400" : "text-slate-500"
-      } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+  tokens?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  isStreaming?: boolean;
+  content?: string;
+}) => {
+  const estimatedCompletionTokens = content ? Math.ceil(content.length / 4) : 0;
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 ${
+        isUser ? "flex-row-reverse" : "flex-row"
+      }`}
     >
-      {isUser ? "You" : "Velora"}
-    </span>
-    {!isUser && model && (
-      <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
-        {formatModelName(model)}
+      <span
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
+          isUser ? "text-slate-400" : "text-slate-500"
+        } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+      >
+        {isUser ? "You" : "Velora"}
       </span>
-    )}
-  </div>
-);
+      {!isUser && model && (
+        <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+          {formatModelName(model)}
+        </span>
+      )}
+      {/* Real-time thinking / generation status tracker */}
+      {!isUser && isStreaming && (
+        <>
+          {!content ? (
+            <span className="flex items-center rounded-md border border-indigo-500/20 bg-indigo-500/5 px-2 py-0.5 text-[9px] font-mono text-indigo-400/90 animate-pulse">
+              Thinking...
+            </span>
+          ) : (
+            <span className="flex items-center rounded-md border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-[9px] font-mono text-indigo-400 animate-pulse">
+              {estimatedCompletionTokens} tokens generating...
+            </span>
+          )}
+        </>
+      )}
+      {/* Finalized tokens badge shown after generation completes */}
+      {!isUser && !isStreaming && tokens && tokens.completionTokens > 0 && (
+        <span
+          className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[9px] font-mono text-slate-500"
+        >
+          {tokens.completionTokens?.toLocaleString()} tokens
+        </span>
+      )}
+    </div>
+  );
+};
 
 /**
  * MessageItem component
@@ -334,7 +375,13 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, highlight
                 >
                     {!isFailed && (
                         <div className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-                            <MessageMetadata isUser={isUser} model={msg.model} />
+                            <MessageMetadata 
+                                isUser={isUser} 
+                                model={msg.model} 
+                                tokens={msg.tokens} 
+                                isStreaming={isStreaming} 
+                                content={msg.content}
+                            />
                             
                             {isUser && !isEditing && (
                                 <button
@@ -453,7 +500,8 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
     prev.message.isWebSearching === next.message.isWebSearching &&
-    prev.highlight === next.highlight
+    prev.highlight === next.highlight &&
+    prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens
   );
 };
 

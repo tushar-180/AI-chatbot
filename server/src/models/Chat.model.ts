@@ -1,4 +1,14 @@
 import mongoose from "mongoose";
+import { TokenUsage } from "../utils/tokenCounter";
+
+const tokenUsageSchema = new mongoose.Schema(
+  {
+    promptTokens: { type: Number, default: 0 },
+    completionTokens: { type: Number, default: 0 },
+    totalTokens: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
 
 const messageSchema = new mongoose.Schema(
   {
@@ -53,6 +63,10 @@ const messageSchema = new mongoose.Schema(
       default: "completed",
       required: true,
     },
+    tokens: {
+      type: tokenUsageSchema,
+      default: () => ({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
+    },
   },
   { timestamps: true },
 );
@@ -84,6 +98,10 @@ const chatSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    tokens: {
+      type: tokenUsageSchema,
+      default: () => ({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
+    },
   },
   { timestamps: true },
 );
@@ -104,9 +122,11 @@ export type ChatMessage = {
   model?: string;
   requestId?: string;
   status: "streaming" | "stopped" | "completed" | "failed";
+  tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
 };
 
 export const Chat = mongoose.model("Chat", chatSchema);
 export const Message = mongoose.model("Message", messageSchema);
+

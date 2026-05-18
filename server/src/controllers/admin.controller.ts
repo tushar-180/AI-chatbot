@@ -5,21 +5,21 @@ import { Chat, Message } from "../models/Chat.model";
 
 const normalizeModelName = (modelName: string): string => {
   if (!modelName) return "None";
-  
+
   // 1. Split by ':' to get provider and path
   const parts = modelName.split(":");
   if (parts.length < 2) {
     const slashParts = modelName.split("/");
     return slashParts[slashParts.length - 1].trim();
   }
-  
+
   const provider = parts[0].trim();
   const path = parts[parts.length - 1].trim();
-  
+
   // 2. Take the last segment of the path (split by '/')
   const pathParts = path.split("/");
   const cleanModel = pathParts[pathParts.length - 1].trim();
-  
+
   return `${provider}:${cleanModel}`;
 };
 
@@ -31,34 +31,60 @@ export const adminController = {
       const totalChatsCount = await Chat.countDocuments();
       const totalMessagesCount = await Message.countDocuments();
 
-      // 2. Fetch global model usage analytics (keeps top model stat active)
+      // 1.5 Fetch global token counts
+      const totalTokensResult = await Message.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalTokens: { $sum: "$tokens.totalTokens" },
+            promptTokens: { $sum: "$tokens.promptTokens" },
+            completionTokens: { $sum: "$tokens.completionTokens" }
+          }
+        }
+      ]);
+      const totalTokens = totalTokensResult[0]?.totalTokens || 0;
+      const totalPromptTokens = totalTokensResult[0]?.promptTokens || 0;
+      const totalCompletionTokens = totalTokensResult[0]?.completionTokens || 0;
+
+      // 2. Fetch global model usage analytics and tokens (keeps top model stat active)
       const globalModelUsage = await Message.aggregate([
         { $match: { model: { $exists: true, $ne: null } } },
-        { $group: { _id: "$model", count: { $sum: 1 } } }
+        {
+          $group: {
+            _id: "$model",
+            count: { $sum: 1 },
+            tokens: { $sum: "$tokens.totalTokens" }
+          }
+        },
       ]);
 
-      // Normalize and group model usage counts in JS to prevent double-counting
-      const modelCountsMap = new Map<string, number>();
+      // Normalize and group model usage counts & tokens in JS to prevent double-counting
+      const modelCountsMap = new Map<string, { count: number; tokens: number }>();
       for (const item of globalModelUsage) {
         const normalized = normalizeModelName(item._id);
-        const current = modelCountsMap.get(normalized) || 0;
-        modelCountsMap.set(normalized, current + item.count);
+        const current = modelCountsMap.get(normalized) || { count: 0, tokens: 0 };
+        modelCountsMap.set(normalized, {
+          count: current.count + item.count,
+          tokens: current.tokens + (item.tokens || 0)
+        });
       }
 
       const mappedGlobalModelUsage = Array.from(modelCountsMap.entries())
-        .map(([model, count]) => ({ model, count }))
-        .sort((a, b) => b.count - a.count);
+        .map(([model, info]) => ({
+          model,
+          count: info.count,
+          tokens: info.tokens
+        }))
+        .sort((a, b) => b.tokens - a.tokens); // Sort by total tokens used
 
       // 3. Count total chats per user
-      const chatStats = await Chat.aggregate([
-        { $group: { _id: "$userId", count: { $sum: 1 } } }
-      ]);
-      const chatStatsMap = new Map(chatStats.map(stat => [stat._id, stat.count]));
+      const chatStats = await Chat.aggregate([{ $group: { _id: "$userId", count: { $sum: 1 } } }]);
+      const chatStatsMap = new Map(chatStats.map((stat) => [stat._id, stat.count]));
 
       // 4. Aggregate favorite model per user based on messages, with normalization
       const userStats = await Message.aggregate([
         { $match: { model: { $exists: true, $ne: null } } },
-        { $group: { _id: { userId: "$userId", model: "$model" }, count: { $sum: 1 } } }
+        { $group: { _id: { userId: "$userId", model: "$model" }, count: { $sum: 1 } } },
       ]);
 
       // Normalize and find user-specific favorite model
@@ -66,16 +92,16 @@ export const adminController = {
         favoriteModel: string;
         favoriteModelCount: number;
       }
-      
+
       const userModelCounts = new Map<string, Map<string, number>>();
       for (const item of userStats) {
         const userId = item._id.userId;
         const normalized = normalizeModelName(item._id.model);
-        
+
         if (!userModelCounts.has(userId)) {
           userModelCounts.set(userId, new Map<string, number>());
         }
-        
+
         const modelMap = userModelCounts.get(userId)!;
         const current = modelMap.get(normalized) || 0;
         modelMap.set(normalized, current + item.count);
@@ -85,27 +111,50 @@ export const adminController = {
       for (const [userId, modelMap] of userModelCounts.entries()) {
         let favModel = "None";
         let maxCount = 0;
-        
+
         for (const [model, count] of modelMap.entries()) {
           if (count > maxCount) {
             maxCount = count;
             favModel = model;
           }
         }
-        
+
         modelStatsMap.set(userId, {
           favoriteModel: favModel,
-          favoriteModelCount: maxCount
+          favoriteModelCount: maxCount,
         });
       }
+
+      // 4.5 Aggregate token counts per user
+      const userTokenStats = await Message.aggregate([
+        {
+          $group: {
+            _id: "$userId",
+            totalTokens: { $sum: "$tokens.totalTokens" },
+            promptTokens: { $sum: "$tokens.promptTokens" },
+            completionTokens: { $sum: "$tokens.completionTokens" }
+          }
+        }
+      ]);
+      const userTokenStatsMap = new Map(
+        userTokenStats.map((stat) => [
+          stat._id,
+          {
+            totalTokens: stat.totalTokens || 0,
+            promptTokens: stat.promptTokens || 0,
+            completionTokens: stat.completionTokens || 0
+          }
+        ])
+      );
 
       // 5. Fetch all users from database
       const allUsers = await User.find({}).sort({ createdAt: -1 });
 
       // 6. Merge user profiles with aggregated stats
-      const usersList = allUsers.map(user => {
+      const usersList = allUsers.map((user) => {
         const favoriteModelInfo = modelStatsMap.get(user.clerkId);
         const totalChats = chatStatsMap.get(user.clerkId) || 0;
+        const tokenStats = userTokenStatsMap.get(user.clerkId) || { totalTokens: 0, promptTokens: 0, completionTokens: 0 };
         return {
           clerkId: user.clerkId,
           email: user.email,
@@ -117,15 +166,21 @@ export const adminController = {
           role: user.get("role") || "user",
           favoriteModel: favoriteModelInfo ? favoriteModelInfo.favoriteModel : "None",
           totalChats: totalChats,
+          totalTokens: tokenStats.totalTokens,
+          promptTokens: tokenStats.promptTokens,
+          completionTokens: tokenStats.completionTokens,
         };
       });
 
       return res.status(200).json({
         totalUsersCount,
         totalChatsCount,
-        totalMessagesCount, // we can keep totalMessagesCount internally just in case for calculations
+        totalMessagesCount,
+        totalTokens,
+        totalPromptTokens,
+        totalCompletionTokens,
         globalModelUsage: mappedGlobalModelUsage,
-        usersList
+        usersList,
       });
     } catch (error) {
       console.error("[adminController.getStats] Error:", error);
@@ -163,12 +218,12 @@ export const adminController = {
         message: `Successfully updated user role to ${role}`,
         user: {
           clerkId: updatedUser.clerkId,
-          role: updatedUser.role
-        }
+          role: updatedUser.role,
+        },
       });
     } catch (error) {
       console.error("[adminController.updateUserRole] Error:", error);
       return res.status(500).json({ error: "Failed to update user role" });
     }
-  })
+  }),
 };
