@@ -6,15 +6,18 @@ import userRoutes from "./routes/user.routes";
 import uploadRoutes from "./routes/upload.routes";
 import memoryRoutes from "./routes/memory.routes";
 import sharedChatRoutes from "./routes/sharedChat.routes";
+import { groupChatRoutes } from "./routes/groupChat.routes";
+import { GroupChatController } from "./controllers/groupChat.controller";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 
 const app = express();
+console.log("APP INITIALIZING - GROUP CHAT READY");
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
-  "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
+  "https://44g0q4j6-5173.inc1.devtunnels.ms",
   process.env.CLIENT_URL,
   "https://khz5bstr-5173.inc1.devtunnels.ms"
 ].filter(Boolean) as string[];
@@ -38,6 +41,12 @@ app.get("/health", (req, res) => {
   res.status(200).json({ ok: true });
 });
 
+app.get("/api/ping", (req, res) => {
+  res.status(200).json({ pong: true });
+});
+
+// Routes
+app.use("/api/group", groupChatRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/user", userRoutes);

@@ -243,7 +243,6 @@ const InputArea = ({
     formData.append("image", file);
 
     try {
-      
       const res = await api.post("/upload/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });

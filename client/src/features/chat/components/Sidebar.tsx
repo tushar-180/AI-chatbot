@@ -1,7 +1,10 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
-import type { Chat } from "@/features/chat/types/chat.types";
+import {
+  useGroupStore,
+} from "../store/useGroupStore";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   X,
@@ -15,9 +18,23 @@ import {
   Brain,
   Sparkles,
   Share,
+  Users,
+  Link as LinkIcon,
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import ShareModal from "./ShareModal";
+import CreateGroupModal from "./CreateGroupModal";
+import GroupLinkModal from "./GroupLinkModal";
+import { api } from "@/lib/api";
+import { useUser } from "@clerk/react";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarGroup,
+  AvatarGroupCount,
+  AvatarImage,
+} from "@/components/ui/avatar";
+
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const MemoryModal = lazy(() => import("./MemoryModal"));
@@ -27,21 +44,27 @@ const PersonalizationModal = lazy(() => import("./PersonalizationModal"));
  * Sidebar Component
  * Manages the list of chat threads and navigation.
  */
-interface ChatItemProps {
-  chat: Chat;
-  currentChatId: string | null;
+interface UnifiedItem {
+  _id: string;
+  title: string;
+  updatedAt: string;
+  itemType: "chat" | "group";
+}
+
+interface ItemProps {
+  item: UnifiedItem;
   isActive: boolean;
   isSelectionMode: boolean;
   isSelected: boolean;
-  onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
+  onSelect: (item: UnifiedItem) => void;
+  onDelete: (id: string, type: "chat" | "group") => void;
   onRename: (id: string, title: string) => Promise<void>;
   onToggleSelect: (id: string) => void;
 }
 
-const SidebarChatItem = memo(
+const SidebarItem = memo(
   ({
-    chat,
+    item,
     isActive,
     isSelectionMode,
     isSelected,
@@ -49,15 +72,44 @@ const SidebarChatItem = memo(
     onDelete,
     onRename,
     onToggleSelect,
-  }: ChatItemProps) => {
+  }: ItemProps) => {
     const [isEditing, setIsEditing] = useState(false);
-    const [editValue, setEditValue] = useState(chat.title || "");
+    const [editValue, setEditValue] = useState(item.title || "");
     const [showMenu, setShowMenu] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+    const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+    const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
+
+    const { groups } = useGroupStore();
+    const group = groups.find((g) => g._id === item._id);
+    const inviteCode = group?.inviteCode || "";
 
     const itemRef = useRef<HTMLDivElement>(null);
     const [openUpwards, setOpenUpwards] = useState(false);
     const menuButtonRef = useRef<HTMLDivElement>(null);
+
+    const handleStartEdit = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setIsEditing(true);
+      setShowMenu(false);
+      setEditValue(item.title || "");
+    };
+
+    const handleCancel = useCallback((e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setIsEditing(false);
+      setEditValue(item.title || "");
+    }, [item.title]);
+
+    const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
+      e?.stopPropagation();
+      if (!editValue.trim() || editValue === item.title) {
+        handleCancel();
+        return;
+      }
+      await onRename(item._id, editValue);
+      setIsEditing(false);
+    };
 
     useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -76,7 +128,7 @@ const SidebarChatItem = memo(
       return () => {
         document.removeEventListener("mousedown", handleClickOutside);
       };
-    }, [showMenu, isEditing]);
+    }, [showMenu, isEditing, handleCancel]);
 
     useEffect(() => {
       if (showMenu && menuButtonRef.current) {
@@ -86,37 +138,14 @@ const SidebarChatItem = memo(
       }
     }, [showMenu]);
 
-    const handleStartEdit = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      setIsEditing(true);
-      setShowMenu(false);
-      setEditValue(chat.title || "");
-    };
-
-    const handleCancel = (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setIsEditing(false);
-      setEditValue(chat.title || "");
-    };
-
-    const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
-      e?.stopPropagation();
-      if (!editValue.trim() || editValue === chat.title) {
-        handleCancel();
-        return;
-      }
-      await onRename(chat._id, editValue);
-      setIsEditing(false);
-    };
-
     return (
       <div
         ref={itemRef}
         onClick={() => {
           if (isSelectionMode) {
-            onToggleSelect(chat._id);
+            if (item.itemType === "chat") onToggleSelect(item._id);
           } else if (!isEditing) {
-            onSelect(chat._id);
+            onSelect(item);
           }
         }}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
@@ -128,7 +157,7 @@ const SidebarChatItem = memo(
         }`}
       >
         <div className="flex flex-1 items-center gap-3 min-w-0">
-          {isSelectionMode && (
+          {isSelectionMode && item.itemType === "chat" && (
             <div
               className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
@@ -139,6 +168,34 @@ const SidebarChatItem = memo(
               {isSelected && <Check size={10} strokeWidth={4} />}
             </div>
           )}
+
+          {item.itemType === "group" && (
+            group ? (
+              <AvatarGroup className="flex-shrink-0">
+                {group.members.slice(0, 2).map((member) => (
+                  <Avatar key={member.userId} className="h-5 w-5 ring-1 ring-slate-950">
+                    {member.userImage && (
+                      <AvatarImage src={member.userImage} alt={member.username} className="object-cover" />
+                    )}
+                    <AvatarFallback className="text-[8px] font-bold bg-zinc-800 text-zinc-300 flex items-center justify-center">
+                      {member.username.substring(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {group.members.length > 2 && (
+                  <AvatarGroupCount className="h-5 w-5 text-[8px] bg-emerald-500/10 text-emerald-500 ring-1 ring-slate-950 font-bold border-none">
+                    +{group.members.length - 2}
+                  </AvatarGroupCount>
+                )}
+              </AvatarGroup>
+            ) : (
+              <Users
+                size={14}
+                className={isActive ? "text-emerald-600" : "text-emerald-500/50"}
+              />
+            )
+          )}
+
           {isEditing ? (
             <input
               autoFocus
@@ -153,7 +210,7 @@ const SidebarChatItem = memo(
             />
           ) : (
             <span className="block truncate font-medium tracking-tight">
-              {chat.title || "Untitled Session"}
+              {item.title || "Untitled Session"}
             </span>
           )}
         </div>
@@ -214,36 +271,68 @@ const SidebarChatItem = memo(
                         : "top-full mt-2 origin-top-right"
                     }`}
                   >
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsShareModalOpen(true);
-                        setShowMenu(false);
-                      }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
-                    >
-                      <Share size={16} />
-                      <span>Share</span>
-                    </button>
+                    {item.itemType === "chat" && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsShareModalOpen(true);
+                            setShowMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                        >
+                          <Share size={16} />
+                          <span>Share</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsGroupModalOpen(true);
+                            setShowMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                        >
+                          <Users size={16} />
+                          <span>Create Group</span>
+                        </button>
+
+                        <button
+                          onClick={handleStartEdit}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                        >
+                          <Edit2 size={12} />
+                          <span>Rename</span>
+                        </button>
+                      </>
+                    )}
+
+                    {item.itemType === "group" && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setIsGroupLinkModalOpen(true);
+                          setShowMenu(false);
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                      >
+                        <LinkIcon size={12} />
+                        <span>Group Link</span>
+                      </button>
+                    )}
 
                     <button
-                      onClick={handleStartEdit}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all"
-                    >
-                      <Edit2 size={12} />
-                      <span>Rename</span>
-                    </button>
-                    
-                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowMenu(false);
-                        onDelete(chat._id);
+                        onDelete(item._id, item.itemType);
                       }}
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all"
                     >
                       <Trash2 size={12} />
-                      <span>Delete</span>
+                      <span>
+                        {item.itemType === "group" ? "Leave Group" : "Delete"}
+                      </span>
                     </button>
                   </div>
                 )}
@@ -252,11 +341,26 @@ const SidebarChatItem = memo(
           </div>
         )}
 
-        {chat._id && (
-          <ShareModal
-            isOpen={isShareModalOpen}
-            onClose={() => setIsShareModalOpen(false)}
-            chatId={chat._id}
+        {item.itemType === "chat" && (
+          <>
+            <ShareModal
+              isOpen={isShareModalOpen}
+              onClose={() => setIsShareModalOpen(false)}
+              chatId={item._id}
+            />
+            <CreateGroupModal
+              isOpen={isGroupModalOpen}
+              onClose={() => setIsGroupModalOpen(false)}
+              chatId={item._id}
+            />
+          </>
+        )}
+
+        {item.itemType === "group" && (
+          <GroupLinkModal
+            isOpen={isGroupLinkModalOpen}
+            onClose={() => setIsGroupLinkModalOpen(false)}
+            inviteCode={inviteCode}
           />
         )}
       </div>
@@ -266,6 +370,10 @@ const SidebarChatItem = memo(
 
 const Sidebar = () => {
   const { sidebarOpen, setSidebarOpen } = useChatStore();
+  const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup } =
+    useGroupStore();
+  const { user } = useUser();
+  const navigate = useNavigate();
   const {
     chats,
     currentChatId,
@@ -277,8 +385,12 @@ const Sidebar = () => {
     fetchMoreChats,
     hasMore,
   } = useChatList();
+
   const [showRecent, setShowRecent] = useState(true);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteConfig, setDeleteConfig] = useState<{
+    id: string;
+    type: "chat" | "group";
+  } | null>(null);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [personalizationOpen, setPersonalizationOpen] = useState(false);
@@ -289,6 +401,28 @@ const Sidebar = () => {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Merge and sort chats and groups
+  const unifiedList = useMemo(() => {
+    const combined: UnifiedItem[] = [
+      ...chats.map((c) => ({
+        _id: c._id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        itemType: "chat" as const,
+      })),
+      ...groups.map((g) => ({
+        _id: g._id,
+        title: g.title,
+        updatedAt: g.updatedAt,
+        itemType: "group" as const,
+      })),
+    ];
+    return combined.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  }, [chats, groups]);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === chats.length) {
@@ -320,6 +454,19 @@ const Sidebar = () => {
     setShowBulkDeleteConfirm(false);
   };
 
+  const handleLeaveGroup = async (groupId: string) => {
+    try {
+      await api.post(`/group/${groupId}/leave`, { userId: user?.id });
+      removeGroup(groupId);
+      if (currentGroupId === groupId) {
+        setCurrentGroup(null);
+        navigate("/chat");
+      }
+    } catch (err) {
+      console.error("Failed to leave group:", err);
+    }
+  };
+
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -327,7 +474,7 @@ const Sidebar = () => {
           fetchMoreChats();
         }
       },
-      { threshold: 1.0 }
+      { threshold: 1.0 },
     );
 
     if (observerTarget.current) {
@@ -336,6 +483,16 @@ const Sidebar = () => {
 
     return () => observer.disconnect();
   }, [hasMore, fetchMoreChats]);
+
+  useEffect(() => {
+    if (user?.id) {
+      api
+        .get("/group/user-groups", { params: { userId: user.id } })
+        .then((res) => {
+          setGroups(res.data);
+        });
+    }
+  }, [user?.id, setGroups]);
 
   return (
     <>
@@ -354,7 +511,7 @@ const Sidebar = () => {
       `}
       >
         <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3 group">
+          <div className="flex items-center gap-3 group text-white">
             <img
               src="/logo.png"
               alt="Velora Logo"
@@ -414,7 +571,7 @@ const Sidebar = () => {
               className="flex items-center gap-2 cursor-pointer group"
             >
               <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
-                Session History
+                Recent Chats
               </span>
               <span className="text-slate-700 text-xs group-hover:text-white transition">
                 {showRecent ? (
@@ -474,7 +631,7 @@ const Sidebar = () => {
             </div>
           )}
 
-          {chats.length === 0 ? (
+          {unifiedList.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
                 Empty
@@ -484,16 +641,27 @@ const Sidebar = () => {
             showRecent && (
               <div className="min-h-0 flex-1 overflow-y-auto pr-2">
                 <div className="flex flex-col gap-3">
-                  {chats.map((chat) => (
-                    <SidebarChatItem
-                      key={chat._id}
-                      chat={chat}
-                      currentChatId={currentChatId}
-                      isActive={currentChatId === chat._id}
+                  {unifiedList.map((item) => (
+                    <SidebarItem
+                      key={item._id}
+                      item={item}
+                      isActive={
+                        item.itemType === "chat"
+                          ? currentChatId === item._id
+                          : currentGroupId === item._id
+                      }
                       isSelectionMode={isSelectionMode}
-                      isSelected={selectedIds.has(chat._id)}
-                      onSelect={selectChat}
-                      onDelete={(id) => setDeleteId(id)}
+                      isSelected={selectedIds.has(item._id)}
+                      onSelect={(target) => {
+                        if (target.itemType === "chat") {
+                          selectChat(target._id);
+                        } else {
+                          setCurrentGroup(target._id);
+                          setSidebarOpen(false);
+                          navigate(`/group/${target._id}`);
+                        }
+                      }}
+                      onDelete={(id, type) => setDeleteConfig({ id, type })}
                       onRename={renameChat}
                       onToggleSelect={toggleSelect}
                     />
@@ -502,7 +670,7 @@ const Sidebar = () => {
                   <div ref={observerTarget} className="h-4 w-full" />
                   {hasMore && (
                     <div className="flex justify-center p-4">
-                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                     </div>
                   )}
                 </div>
@@ -514,24 +682,43 @@ const Sidebar = () => {
 
       <Suspense fallback={null}>
         <DeleteConfirmModal
-          isOpen={!!deleteId || showBulkDeleteConfirm}
+          isOpen={!!deleteConfig || showBulkDeleteConfirm}
           onClose={() => {
-            setDeleteId(null);
+            setDeleteConfig(null);
             setShowBulkDeleteConfirm(false);
           }}
           onConfirm={() => {
-            if (deleteId) {
-              deleteChat(deleteId);
-              setDeleteId(null);
+            if (deleteConfig) {
+              if (deleteConfig.type === "chat") {
+                deleteChat(deleteConfig.id);
+              } else {
+                handleLeaveGroup(deleteConfig.id);
+              }
+              setDeleteConfig(null);
             } else if (showBulkDeleteConfirm) {
               confirmBulkDelete();
             }
           }}
-          title={showBulkDeleteConfirm ? "Delete Multiple Chats" : undefined}
+          purpose={
+            showBulkDeleteConfirm
+              ? `Delete ${selectedIds.size} Chats`
+              : deleteConfig?.type === "group"
+                ? "Leave"
+                : "Delete"
+          }
+          title={
+            showBulkDeleteConfirm
+              ? "Delete Multiple Chats"
+              : deleteConfig?.type === "group"
+                ? "Leave Group"
+                : undefined
+          }
           message={
             showBulkDeleteConfirm
               ? `Are you sure you want to delete ${selectedIds.size} selected chats? This action cannot be undone.`
-              : undefined
+              : deleteConfig?.type === "group"
+                ? "Are you sure you want to leave this group chat?"
+                : undefined
           }
         />
 

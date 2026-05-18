@@ -118,10 +118,39 @@ OUTPUT RULES (STRICTLY ENFORCED):
     };
   }
 
-  async generateResponse(messages: AIMessage[]): Promise<string> {
-    const contents = await this.formatContents(messages);
+  private collapseConsecutiveRoles(messages: AIMessage[]): AIMessage[] {
+    const collapsed: AIMessage[] = [];
+    for (const msg of messages.filter((entry) => entry.role !== "system")) {
+      const last = collapsed.length > 0 ? collapsed[collapsed.length - 1] : null;
+      if (last && last.role === msg.role) {
+        if (msg.role === "user") {
+          const currentName = msg.username || msg.userId || msg.role;
+          last.content = `${last.content}\n\n[${currentName}]: ${msg.content}`;
+        } else {
+          last.content = `${last.content}\n\n${msg.content}`;
+        }
+        if (msg.attachments && msg.attachments.length > 0) {
+          last.attachments = [...(last.attachments || []), ...msg.attachments];
+        }
+      } else {
+        const finalContent =
+          msg.role === "user" && msg.username
+            ? `[${msg.username}]: ${msg.content}`
+            : msg.content;
+        collapsed.push({
+          ...msg,
+          content: finalContent
+        });
+      }
+    }
+    return collapsed;
+  }
 
+  async generateResponse(messages: AIMessage[]): Promise<string> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
+    const collapsedMessages = this.collapseConsecutiveRoles(messages);
+    const contents = await this.formatContents(collapsedMessages);
+
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
       .join("\n\n---\n\n");
@@ -149,9 +178,10 @@ OUTPUT RULES (STRICTLY ENFORCED):
     messages: AIMessage[],
     signal?: AbortSignal,
   ): AsyncIterable<string> {
-    const contents = await this.formatContents(messages);
-
     const systemMessages = messages.filter((msg) => msg.role === "system");
+    const collapsedMessages = this.collapseConsecutiveRoles(messages);
+    const contents = await this.formatContents(collapsedMessages);
+
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
       .join("\n\n---\n\n");

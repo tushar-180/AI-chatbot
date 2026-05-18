@@ -5,6 +5,7 @@ type DeleteConfirmModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  purpose?: string;
   title?: string;
   message?: string;
 };
@@ -13,6 +14,7 @@ export default function DeleteConfirmModal({
   isOpen,
   onClose,
   onConfirm,
+  purpose="Delete",
   title = "Delete chat?",
   message = "This will delete the chat.",
 }: DeleteConfirmModalProps) {
@@ -34,7 +36,7 @@ export default function DeleteConfirmModal({
 
   const modalContent = (
     <div 
-      className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div 
@@ -58,7 +60,7 @@ export default function DeleteConfirmModal({
             onClick={onConfirm}
             className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
           >
-            Delete
+            {purpose}
           </button>
         </div>
       </div>

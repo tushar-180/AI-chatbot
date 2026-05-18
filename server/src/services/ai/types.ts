@@ -4,6 +4,7 @@ export interface AIMessage {
   role: AIRole;
   content: string;
   userId?: string;
+  username?: string;
   model?: string;
   attachments?: {
     url: string;
