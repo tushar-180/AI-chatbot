@@ -12,7 +12,7 @@ import { useGroupStore } from "@/features/chat/store/useGroupStore";
 const GroupChat = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const { setSidebarOpen, setCurrentChat } = useChatStore();
-  const { sendMessage } = useGroupChat();
+  const { sendMessage, stopStream, isStreaming } = useGroupChat();
   const { setCurrentGroup } = useGroupStore();
 
   useEffect(() => {
@@ -46,7 +46,7 @@ const GroupChat = () => {
 
         <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
           <div className="pointer-events-auto">
-            <GroupInputArea onSubmit={sendMessage} />
+            <GroupInputArea onSubmit={sendMessage} isStreaming={isStreaming} onStop={stopStream} />
           </div>
         </div>
 

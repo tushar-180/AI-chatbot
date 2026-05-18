@@ -19,6 +19,10 @@ export type GroupMessage = {
   status?: "streaming" | "stopped" | "completed" | "failed";
   type: "text" | "image" | "file" | "action" | "event";
   createdAt: string;
+  metadata?: {
+    webSearchEnabled?: boolean;
+    [key: string]: any;
+  };
 };
 
 export type GroupChat = {
@@ -35,6 +39,7 @@ type GroupState = {
   currentGroupId: string | null;
   groupMessages: GroupMessage[];
   loading: boolean;
+  isAiThinking: boolean;
 
   setGroups: (groups: GroupChat[]) => void;
   addGroup: (group: GroupChat) => void;
@@ -44,6 +49,7 @@ type GroupState = {
   ) => void;
   addGroupMessage: (message: GroupMessage) => void;
   setLoading: (loading: boolean) => void;
+  setIsAiThinking: (isAiThinking: boolean) => void;
   removeGroup: (id: string) => void;
   updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
   updateGroup: (groupId: string, updates: Partial<GroupChat>) => void;
@@ -56,6 +62,7 @@ export const useGroupStore = create<GroupState>()(
       currentGroupId: null,
       groupMessages: [],
       loading: false,
+      isAiThinking: false,
 
       setGroups: (groups) => set({ groups }),
       addGroup: (group) =>
@@ -75,6 +82,7 @@ export const useGroupStore = create<GroupState>()(
           groupMessages: [...state.groupMessages, message],
         })),
       setLoading: (loading) => set({ loading }),
+      setIsAiThinking: (isAiThinking) => set({ isAiThinking }),
       removeGroup: (id) =>
         set((state) => ({
           groups: state.groups.filter((g) => g._id !== id),

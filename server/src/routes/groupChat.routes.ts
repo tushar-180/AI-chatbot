@@ -14,6 +14,7 @@ router.get("/invite/:inviteCode", GroupChatController.getGroupByInviteCode);
 router.post("/join/:inviteCode", GroupChatController.joinGroup);
 router.get("/:groupId/messages", GroupChatController.getGroupDetails);
 router.post("/:groupId/message", GroupChatController.sendMessage);
+router.post("/:groupId/stop", GroupChatController.stopStream);
 router.get("/:groupId/events", GroupChatController.subscribeToGroup);
 router.post("/:groupId/leave", GroupChatController.leaveGroup);
 router.post("/:groupId/remove-member", GroupChatController.removeMember);

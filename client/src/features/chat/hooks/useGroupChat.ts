@@ -13,11 +13,13 @@ export const useGroupChat = () => {
   const { 
     groups, 
     setCurrentGroup, 
+    groupMessages,
     setGroupMessages, 
     addGroupMessage, 
     updateGroupMembers,
     updateGroup,
-    setLoading 
+    setLoading,
+    setIsAiThinking
   } = useGroupStore();
   
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -45,6 +47,9 @@ export const useGroupChat = () => {
       if (data.type === "message") {
         addGroupMessage(data.message);
       } else if (data.type === "ai_stream") {
+        if (useGroupStore.getState().isAiThinking) {
+          setIsAiThinking(false);
+        }
         if (data.done) {
           // Replace streaming message with final message
           setGroupMessages((prev) => [
@@ -58,7 +63,12 @@ export const useGroupChat = () => {
             if (existing) {
               return prev.map((m) =>
                 m._id === data.tempId
-                  ? { ...m, content: m.content + data.chunk }
+                  ? { 
+                      ...m, 
+                      content: m.content + data.chunk,
+                      username: data.username || m.username,
+                      metadata: data.webSearchEnabled ? { webSearchEnabled: true } : m.metadata 
+                    }
                   : m
               );
             } else {
@@ -66,12 +76,13 @@ export const useGroupChat = () => {
                 _id: data.tempId,
                 groupId,
                 userId: "assistant",
-                username: "Velora",
+                username: data.username || "Velora",
                 role: "assistant" as const,
                 content: data.chunk,
                 status: "streaming" as const,
                 type: "text" as const,
                 createdAt: new Date().toISOString(),
+                metadata: data.webSearchEnabled ? { webSearchEnabled: true } : {},
               };
               return [
                 ...prev,
@@ -107,11 +118,14 @@ export const useGroupChat = () => {
         eventSource.close();
         toast.warning("This group chat was deleted by its creator.");
         navigate("/chat");
+      } else if (data.type === "ai_thinking") {
+        setIsAiThinking(data.isThinking);
       }
     };
 
     eventSource.onerror = (err) => {
       console.error("SSE Error:", err);
+      setIsAiThinking(false);
       eventSource.close();
     };
 
@@ -121,15 +135,20 @@ export const useGroupChat = () => {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [groupId, user?.id, setCurrentGroup, setGroupMessages, addGroupMessage, setLoading, updateGroupMembers, updateGroup, navigate]);
+  }, [groupId, user?.id, setCurrentGroup, setGroupMessages, addGroupMessage, setLoading, updateGroupMembers, updateGroup, navigate, setIsAiThinking]);
 
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = async (content: string, webSearchEnabled?: boolean) => {
     if (!groupId || !content.trim() || !user?.id) return;
+    const hasAiMention = /@([a-zA-Z0-9-:_/.]+)/.test(content);
+    if (hasAiMention) {
+      setIsAiThinking(true);
+    }
     try {
-      await api.post(`/group/${groupId}/message`, { content, userId: user.id });
+      await api.post(`/group/${groupId}/message`, { content, userId: user.id, webSearchEnabled });
     } catch (err) {
       console.error("Error sending message:", err);
+      setIsAiThinking(false);
     }
   };
 
@@ -143,9 +162,20 @@ export const useGroupChat = () => {
     }
   };
 
+  const stopStream = async () => {
+    if (!groupId) return;
+    try {
+      await api.post(`/group/${groupId}/stop`);
+    } catch (err) {
+      console.error("Error stopping stream:", err);
+    }
+  };
+
   return {
     sendMessage,
     leaveGroup,
+    stopStream,
+    isStreaming: groupMessages.some((m) => m.status === "streaming"),
     currentGroup: groups.find((g) => g._id === groupId),
   };
 };

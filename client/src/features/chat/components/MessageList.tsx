@@ -297,18 +297,6 @@ const MessageList = ({
               </div>
             ))}
 
-            {isStreaming &&
-              messages.length > 0 &&
-              messages[messages.length - 1].role === "user" && (
-                <div className="flex w-full justify-start duration-300">
-                  <div className="flex items-center gap-3 py-6">
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:100ms]" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:200ms]" />
-                  </div>
-                </div>
-              )}
-
             {/* SCROLL TO BOTTOM BUTTON */}
             {showScrollToBottom && messages.length > 0 && (
               <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">

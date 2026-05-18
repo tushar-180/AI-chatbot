@@ -93,11 +93,11 @@ export class GroupChatController {
   static async sendMessage(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { content, userId } = req.body;
+      const { content, userId, webSearchEnabled } = req.body;
       const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
-      const message = await GroupChatService.addMessage(groupId, clerkId, content);
+      const message = await GroupChatService.addMessage(groupId, clerkId, content, "user", Boolean(webSearchEnabled));
       res.json(message);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -163,6 +163,16 @@ export class GroupChatController {
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const result = await GroupChatService.deleteGroup(groupId, clerkId);
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async stopStream(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const result = await GroupChatService.stopGroupStream(groupId);
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

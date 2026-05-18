@@ -4,6 +4,9 @@ import { User } from "../models/User.model";
 import { groupSseManager } from "../utils/groupSse";
 import { aiService } from "./ai.service";
 import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
+import { webSearchService, type WebGroundingContext } from "../modules/web-search";
+import { groupStreamRegistry } from "./groupStreamRegistry.service";
+import type { ChatMessage } from "../types/chat.types";
 import crypto from "crypto";
 
 export class GroupChatService {
@@ -26,6 +29,7 @@ export class GroupChatService {
       status: message.status,
       type: message.type,
       createdAt: message.createdAt.toISOString(),
+      metadata: message.metadata,
     };
   }
 
@@ -229,7 +233,7 @@ export class GroupChatService {
     return await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
   }
 
-  static async addMessage(groupId: string, clerkId: string, content: string, role: "user" | "assistant" = "user") {
+  static async addMessage(groupId: string, clerkId: string, content: string, role: "user" | "assistant" = "user", webSearchEnabled = false) {
     const group = await GroupChat.findById(groupId);
     if (!group) throw new Error("Group not found");
 
@@ -251,16 +255,16 @@ export class GroupChatService {
       role,
       content,
       status: "completed",
+      metadata: webSearchEnabled ? { webSearchEnabled: true } : {},
     });
 
     groupSseManager.broadcast(groupId, {
       type: "message",
-      message,
+      message: this.serializeGroupMessage(message),
     });
 
     // Handle Agent Mention
-    const trimmed = content.trim();
-    const match = trimmed.match(/^(?:\*\*)?@([a-zA-Z0-9-:_/.]+)(?:\*\*)?/);
+    const match = content.match(/@([a-zA-Z0-9-:_/.]+)/);
     if (match) {
       const mention = match[1].toLowerCase();
       const allProviders = aiService.getAvailableProviders();
@@ -269,14 +273,18 @@ export class GroupChatService {
         return cleanName === mention || p.id.toLowerCase() === mention;
       });
       if (isAiMention) {
-        this.handleAiResponse(groupId, trimmed).catch(console.error);
+        groupSseManager.broadcast(groupId, {
+          type: "ai_thinking",
+          isThinking: true,
+        });
+        this.handleAiResponse(groupId, content, webSearchEnabled).catch(console.error);
       }
     }
 
     return message;
   }
 
-  static async handleAiResponse(groupId: string, userContent: string) {
+  static async handleAiResponse(groupId: string, userContent: string, webSearchEnabled = false) {
     const group = await GroupChat.findById(groupId);
     if (!group) return;
 
@@ -296,14 +304,32 @@ export class GroupChatService {
       username: msg.username
     }));
 
+    let webGrounding: WebGroundingContext | null = null;
+    if (webSearchEnabled) {
+      const maybeGrounding = await webSearchService.buildGroundingContext(
+        userContent,
+        promptMessages as ChatMessage[],
+      );
+      if (maybeGrounding && "systemPrompt" in maybeGrounding) {
+        webGrounding = maybeGrounding as WebGroundingContext;
+      }
+    }
+
     // Add system prompt
     promptMessages.unshift({
       role: "system",
       content: BASE_SYSTEM_PROMPT + "\n\nThis is a group chat. Differentiate users by their usernames if provided in context. You are Velora."
     });
 
+    if (webGrounding) {
+      promptMessages.unshift({
+        role: "system",
+        content: webGrounding.systemPrompt
+      });
+    }
+
     let targetProvider: string | undefined = undefined;
-    const mentionMatch = userContent.trim().match(/^(?:\*\*)?@([a-zA-Z0-9-:_/.]+)/);
+    const mentionMatch = userContent.match(/@([a-zA-Z0-9-:_/.]+)/);
     if (mentionMatch) {
       const mention = mentionMatch[1].toLowerCase();
       if (mention !== "velora" && mention !== "system") {
@@ -331,21 +357,51 @@ export class GroupChatService {
     let fullResponse = "";
     const tempId = crypto.randomUUID();
 
+    // Register active stream
+    const activeStream = groupStreamRegistry.create({
+      groupId,
+      tempId,
+      assistantUsername,
+      webSearchEnabled,
+    });
+
     try {
       const aiProvider = aiService.getProvider(targetProvider);
-      const stream = aiProvider.generateStreamResponse(promptMessages);
+      const stream = aiProvider.generateStreamResponse(promptMessages, activeStream.abortController.signal);
 
       for await (const chunk of stream) {
         fullResponse += chunk;
+        groupStreamRegistry.updateResponse(groupId, fullResponse);
         groupSseManager.broadcast(groupId, {
           type: "ai_stream",
           chunk,
           tempId,
-          done: false
+          done: false,
+          username: assistantUsername,
+          webSearchEnabled
         });
       }
 
       fullResponse = this.sanitizeAssistantResponse(fullResponse);
+
+      if (webGrounding?.citationsMarkdown) {
+        const alreadyHasSources = webGrounding.sources.some((source) =>
+          fullResponse.includes(source.url),
+        );
+        if (!alreadyHasSources && !/(^|\n)Sources:\s*$/im.test(fullResponse)) {
+          const citations = webGrounding.citationsMarkdown;
+          fullResponse = `${fullResponse.trimEnd()}${citations}`;
+          groupStreamRegistry.updateResponse(groupId, fullResponse);
+          groupSseManager.broadcast(groupId, {
+            type: "ai_stream",
+            chunk: citations,
+            tempId,
+            done: false,
+            username: assistantUsername,
+            webSearchEnabled
+          });
+        }
+      }
 
       // Save final message
       const aiMsg = await GroupMessage.create({
@@ -355,7 +411,10 @@ export class GroupChatService {
         role: "assistant",
         content: fullResponse,
         status: "completed",
+        metadata: webSearchEnabled ? { webSearchEnabled: true } : {},
       });
+
+      groupStreamRegistry.delete(groupId);
 
       groupSseManager.broadcast(groupId, {
         type: "ai_stream",
@@ -364,7 +423,13 @@ export class GroupChatService {
         message: this.serializeGroupMessage(aiMsg)
       });
 
-    } catch (err) {
+    } catch (err: any) {
+      // If it was aborted, don't write generic error block since we handled it in stopGroupStream
+      if (err?.name === "AbortError" || activeStream.abortController.signal.aborted) {
+        groupStreamRegistry.delete(groupId);
+        return;
+      }
+
       console.error("AI Group Generation Error:", err);
       
       const errorContent = `⚠️ **Failed to generate response.** The model \`${displayName}\` encountered an error or is temporarily unavailable. Please try again.`;
@@ -379,6 +444,8 @@ export class GroupChatService {
         status: "failed",
       });
 
+      groupStreamRegistry.delete(groupId);
+
       // Broadcast the error message to all SSE clients to clear the stream and show the error!
       groupSseManager.broadcast(groupId, {
         type: "ai_stream",
@@ -387,6 +454,40 @@ export class GroupChatService {
         message: this.serializeGroupMessage(errorMsg)
       });
     }
+  }
+
+  static async stopGroupStream(groupId: string) {
+    const activeStream = groupStreamRegistry.get(groupId);
+    if (!activeStream) {
+      return { stopped: false };
+    }
+
+    // Abort active generative query
+    groupStreamRegistry.stop(groupId);
+
+    const rawResponse = activeStream.fullResponse;
+    const fullResponse = this.sanitizeAssistantResponse(rawResponse) || "⚠️ Response generation stopped.";
+
+    // Save final partial message
+    const aiMsg = await GroupMessage.create({
+      groupId,
+      userId: "assistant",
+      username: activeStream.assistantUsername,
+      role: "assistant",
+      content: fullResponse,
+      status: "stopped",
+      metadata: activeStream.webSearchEnabled ? { webSearchEnabled: true } : {},
+    });
+
+    // Broadcast stopped message state
+    groupSseManager.broadcast(groupId, {
+      type: "ai_stream",
+      tempId: activeStream.tempId,
+      done: true,
+      message: this.serializeGroupMessage(aiMsg),
+    });
+
+    return { stopped: true };
   }
 
   static async getUserGroups(clerkId: string) {

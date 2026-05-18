@@ -104,6 +104,11 @@ const GroupMessageItem = ({ message: msg }: GroupMessageItemProps) => {
           <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
             {formatBadgeText(model)}
           </span>
+          {msg.metadata?.webSearchEnabled && (
+            <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+              web search
+            </span>
+          )}
         </span>
       );
     }
@@ -177,22 +182,31 @@ const GroupMessageItem = ({ message: msg }: GroupMessageItemProps) => {
                 </ReactMarkdown>
               </div>
             ) : (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
-                components={
-                  isAssistant
-                    ? assistantMarkdownComponents
-                    : userMarkdownComponents
-                }
-              >
-                {(msg.content || "").replace(/(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g, (match) => {
-                  const hasLeadingSpace = match.startsWith(" ") || match.startsWith("\n") || match.startsWith("\r");
+              <>
+                {!isAssistant && msg.metadata?.webSearchEnabled && (
+                  <div className="mb-2 flex items-center justify-start">
+                    <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+                      web search
+                    </span>
+                  </div>
+                )}
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={
+                    isAssistant
+                      ? assistantMarkdownComponents
+                      : userMarkdownComponents
+                  }
+                >
+                  {(msg.content || "").replace(/(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g, (match) => {
+                    const hasLeadingSpace = match.startsWith(" ") || match.startsWith("\n") || match.startsWith("\r");
                   const mentionText = match.trim();
                   return (hasLeadingSpace ? " " : "") + `<span class="text-emerald-400 font-medium">${mentionText}</span>`;
                 })}
               </ReactMarkdown>
-            )}
+            </>
+          )}
           </div>
         </div>
       </div>
