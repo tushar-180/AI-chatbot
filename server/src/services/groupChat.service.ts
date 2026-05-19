@@ -372,7 +372,10 @@ export class GroupChatService {
 
     try {
       const aiProvider = aiService.getProvider(targetProvider);
-      const stream = aiProvider.generateStreamResponse(promptMessages, activeStream.abortController.signal);
+      const stream = await aiProvider.generateStreamResponse(
+        promptMessages,
+        activeStream.abortController.signal,
+      );
 
       for await (const chunk of stream) {
         fullResponse += chunk;
