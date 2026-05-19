@@ -12,13 +12,12 @@ interface ChatHeaderProps {
 }
 
 const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) => {
-  const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
+  const currentChat = useChatStore((state) => state.currentChat);
   const streamingChatId = useChatStore((state) => state.streamingChatId);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  const currentChat = chats.find((chat) => chat._id === currentChatId);
-   chatTitle = chatTitle || currentChat?.title || "New Conversation";
+  chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 

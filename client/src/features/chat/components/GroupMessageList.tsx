@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import GroupMessageItem from "./GroupMessageItem";
 import { useGroupStore } from "../store/useGroupStore";
 import { Globe, ChevronDown } from "lucide-react";
@@ -9,11 +15,15 @@ interface GroupMessageListProps {
   onSourcesClick?: (sources: any[], activeId?: number) => void;
 }
 
-const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListProps) => {
-  const { groupMessages, loading, isAiThinking, isWebSearching } = useGroupStore();
+const GroupMessageList = ({
+  onCitationClick,
+  onSourcesClick,
+}: GroupMessageListProps) => {
+  const { groupMessages, loading, isAiThinking, isWebSearching } =
+    useGroupStore();
   const { groupId } = useParams<{ groupId: string }>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  
+
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const shouldAutoScrollRef = useRef(true);
   const prevMessageCountRef = useRef(0);
@@ -29,7 +39,8 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
     const container = getScrollContainer();
     if (!container) return true;
     return (
-      container.scrollHeight - container.scrollTop - container.clientHeight < 120
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      120
     );
   }, [getScrollContainer]);
 
@@ -62,7 +73,8 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
 
   // AUTO SCROLL ON MESSAGE CHANGES / CHAT SWITCH
   useLayoutEffect(() => {
-    const messageCountChanged = groupMessages.length !== prevMessageCountRef.current;
+    const messageCountChanged =
+      groupMessages.length !== prevMessageCountRef.current;
     const groupChanged = groupId !== prevGroupIdRef.current;
 
     // Reset scroll state on switching groups
@@ -73,7 +85,9 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
 
     if (
       groupChanged ||
-      (!loading && shouldAutoScrollRef.current && (messageCountChanged || isAiThinking))
+      (!loading &&
+        shouldAutoScrollRef.current &&
+        (messageCountChanged || isAiThinking))
     ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
@@ -86,7 +100,10 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
 
   // CONTINUOUS FOLLOW FOR STREAMING
   useEffect(() => {
-    if (shouldAutoScrollRef.current && (groupMessages.length > 0 || isAiThinking)) {
+    if (
+      shouldAutoScrollRef.current &&
+      (groupMessages.length > 0 || isAiThinking)
+    ) {
       scrollToBottom(true);
     }
   }, [groupMessages, isAiThinking, scrollToBottom]);
@@ -126,15 +143,18 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
         ) : (
           <>
             {groupMessages.map((msg) => (
-              <GroupMessageItem 
-                key={msg._id} 
-                message={msg} 
+              <GroupMessageItem
+                key={msg._id}
+                message={msg}
                 onCitationClick={onCitationClick}
                 onSourcesClick={onSourcesClick}
               />
             ))}
             {isAiThinking && (
-              <div key="group-active-thinking-loader" className="flex w-full justify-start duration-300 animate-in fade-in slide-in-from-bottom-2">
+              <div
+                key="group-active-thinking-loader"
+                className="flex w-full justify-start duration-300 animate-in fade-in slide-in-from-bottom-2"
+              >
                 <div className="flex max-w-[85%] flex-row gap-3 items-start">
                   <div className="flex shrink-0 items-center justify-center rounded-lg overflow-hidden h-7 w-7 bg-slate-900 border border-white/[0.05]">
                     <img
@@ -151,10 +171,7 @@ const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListP
                     <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] px-5 py-3.5 shadow-sm">
                       {isWebSearching ? (
                         <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-slate-400">
-                          <Globe
-                            size={14}
-                            className="animate-pulse"
-                          />
+                          <Globe size={14} className="animate-pulse" />
                           <span>Searching the web...</span>
                         </div>
                       ) : (

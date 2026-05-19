@@ -2,8 +2,9 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useGroupStore } from "../store/useGroupStore";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import {
   Plus,
   X,
@@ -41,6 +42,8 @@ import {
 import ShareModal from "./ShareModal";
 import CreateGroupModal from "./CreateGroupModal";
 import GroupLinkModal from "./GroupLinkModal";
+
+const DEFAULT_EPOCH = "1970-01-01T00:00:00.000Z";
 import {
   Avatar,
   AvatarFallback,
@@ -160,14 +163,24 @@ const SidebarItem = memo(
     useEffect(() => {
       if (showMenu && menuButtonRef.current) {
         const rect = menuButtonRef.current.getBoundingClientRect();
-        const spaceBelow = window.innerHeight - rect.bottom;
-        setOpenUpwards(spaceBelow < 160);
+        let spaceBelow = window.innerHeight - rect.bottom;
+
+        // Check if there's a scroll container clipping the menu
+        const scrollContainer = menuButtonRef.current.closest(".overflow-y-auto");
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect();
+          const containerSpaceBelow = containerRect.bottom - rect.bottom;
+          spaceBelow = Math.min(spaceBelow, containerSpaceBelow);
+        }
+
+        setOpenUpwards(spaceBelow < 250);
       }
     }, [showMenu]);
 
     return (
       <div
         ref={itemRef}
+        data-chat-id={item._id}
         onClick={() => {
           if (isSelectionMode) {
             if (item.itemType === "chat") onToggleSelect(item._id);
@@ -196,6 +209,16 @@ const SidebarItem = memo(
             </div>
           )}
 
+          {isPinned && !isEditing && (
+            <Pin 
+              size={12} 
+              strokeWidth={2.5} 
+              className={`shrink-0 transition-all rotate-[-35deg] ${
+                isActive ? "text-emerald-600" : "text-emerald-500"
+              }`} 
+            />
+          )}
+
           {item.itemType === "group" && (
             group ? (
               <AvatarGroup className="flex-shrink-0">
@@ -221,16 +244,6 @@ const SidebarItem = memo(
                 className={isActive ? "text-emerald-600" : "text-emerald-500/50"}
               />
             )
-          )}
-
-          {item.itemType === "chat" && isPinned && !isEditing && (
-            <Pin 
-              size={12} 
-              strokeWidth={2.5} 
-              className={`shrink-0 transition-all rotate-[-35deg] ${
-                isActive ? "text-black/30" : "text-slate-500/60"
-              }`} 
-            />
           )}
 
           {isEditing ? (
@@ -400,17 +413,53 @@ const SidebarItem = memo(
                     )}
 
                     {item.itemType === "group" && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsGroupLinkModalOpen(true);
-                          setShowMenu(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
-                      >
-                        <LinkIcon size={12} />
-                        <span>Group Link</span>
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsGroupLinkModalOpen(true);
+                            setShowMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                        >
+                          <LinkIcon size={12} />
+                          <span>Group Link</span>
+                        </button>
+
+                        <button
+                          onClick={handleStartEdit}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                        >
+                          <Edit2 size={12} />
+                          <span>Rename</span>
+                        </button>
+
+                        {isPinned ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUnpin(item._id);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          >
+                            <PinOff size={12} className="rotate-[-35deg]" />
+                            <span>Unpin</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPin(item._id);
+                              setShowMenu(false);
+                            }}
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          >
+                            <Pin size={12} className="rotate-[-35deg]" />
+                            <span>Pin</span>
+                          </button>
+                        )}
+                      </>
                     )}
 
                     <button
@@ -474,10 +523,9 @@ const SidebarItem = memo(
 
 const Sidebar = () => {
   const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
-  const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
+  const { sidebarOpen, setSidebarOpen } =
     useChatStore();
-  const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup } =
+  const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup, updateGroup } =
     useGroupStore();
   const { user } = useUser();
   const navigate = useNavigate();
@@ -497,7 +545,55 @@ const Sidebar = () => {
     hasMore,
     loading,
     viewingArchived,
-  } = useChatList();
+  } = useChatList({ shouldFetch: true });
+
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+
+  const handleRenameItem = async (id: string, title: string, itemType: "chat" | "group") => {
+    if (itemType === "chat") {
+      await renameChat(id, title);
+    } else {
+      try {
+        await api.patch(`/group/${id}`, { title, userId: user?.id });
+        updateGroup(id, { title });
+        toast.success("Group chat renamed successfully.");
+      } catch (err) {
+        console.error("Failed to rename group:", err);
+        toast.error("Could not rename group chat.");
+        throw err;
+      }
+    }
+  };
+
+  const handlePinItem = async (id: string, itemType: "chat" | "group") => {
+    if (itemType === "chat") {
+      await pinChat(id);
+    } else {
+      try {
+        await api.post(`/group/${id}/pin`, { userId: user?.id });
+        updateGroup(id, { isPinned: true, updatedAt: new Date().toISOString() });
+        toast.success("Group chat pinned.");
+      } catch (err) {
+        console.error("Failed to pin group:", err);
+        toast.error("Could not pin group chat.");
+      }
+    }
+  };
+
+  const handleUnpinItem = async (id: string, itemType: "chat" | "group") => {
+    if (itemType === "chat") {
+      await unpinChat(id);
+    } else {
+      try {
+        await api.post(`/group/${id}/unpin`, { userId: user?.id });
+        updateGroup(id, { isPinned: false, updatedAt: new Date().toISOString() });
+        toast.success("Group chat unpinned.");
+      } catch (err) {
+        console.error("Failed to unpin group:", err);
+        toast.error("Could not unpin group chat.");
+      }
+    }
+  };
 
   const [showRecent, setShowRecent] = useState(true);
   const [deleteConfig, setDeleteConfig] = useState<{
@@ -538,32 +634,19 @@ const Sidebar = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
-  const activeChatId = urlChatId || currentChatId;
-  const isSearchNavigation = new URLSearchParams(location.search).has("highlight");
-  const isStreamingActiveChat = Boolean(
-    activeChatId && isStreaming && streamingChatId === activeChatId,
-  );
-  const isSearchTargetActive = isSearchNavigation && urlChatId === activeChatId;
-  const shouldPromoteActiveChat = isSearchTargetActive || isStreamingActiveChat;
+
   const filteredChats = useMemo(() => {
     return chats
       .filter((c) => (c.isArchived ?? false) === viewingArchived)
       .sort((a, b) => {
         // 1. Pinned chats stay first.
-      if (a.isPinned && !b.isPinned) return -1;
+        if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
-  
-      // 2. Search-selected or currently streaming chats sit at the top of
-      // their section, below pinned chats.
-      if (shouldPromoteActiveChat) {
-        if (a._id === activeChatId) return -1;
-        if (b._id === activeChatId) return 1;
-      }
 
-      // 3. Finally, sort by update time (most recent first).
-      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return dateB - dateA;
+        // 2. Sort by update time (most recent first).
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateB - dateA;
       });
   }, [chats, viewingArchived]);
 
@@ -575,16 +658,16 @@ const Sidebar = () => {
       ...filteredChats.map((c) => ({
         _id: c._id,
         title: c.title,
-        updatedAt: c.updatedAt || new Date().toISOString(),
+        updatedAt: c.updatedAt || DEFAULT_EPOCH,
         itemType: "chat" as const,
         isPinned: c.isPinned,
       })),
       ...(!viewingArchived ? groups.map((g) => ({
         _id: g._id,
         title: g.title,
-        updatedAt: g.updatedAt || new Date().toISOString(),
+        updatedAt: g.updatedAt || DEFAULT_EPOCH,
         itemType: "group" as const,
-        isPinned: false, // Groups currently don't have pin status
+        isPinned: g.isPinned || false,
       })) : []),
     ];
     
@@ -593,18 +676,12 @@ const Sidebar = () => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
-      // 2. Search-selected or currently streaming chats sit at the top of their section, below pinned chats.
-      const isAActive = shouldPromoteActiveChat && a._id === activeChatId;
-      const isBActive = shouldPromoteActiveChat && b._id === activeChatId;
-      if (isAActive && !isBActive) return -1;
-      if (!isAActive && isBActive) return 1;
-
-      // 3. Finally, sort by update time (most recent first).
+      // 2. Sort by update time (most recent first).
       const dateA = new Date(a.updatedAt).getTime();
       const dateB = new Date(b.updatedAt).getTime();
       return dateB - dateA;
     });
-  }, [filteredChats, groups, viewingArchived, shouldPromoteActiveChat, activeChatId]);
+  }, [filteredChats, groups, viewingArchived]);
   const chatListScrollRef = useRef<HTMLDivElement>(null);
 
   const toggleSelectAll = useCallback(() => {
@@ -655,9 +732,14 @@ const Sidebar = () => {
 
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          fetchMoreChats();
+      async (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isFetchingMore && !loading) {
+          setIsFetchingMore(true);
+          try {
+            await fetchMoreChats();
+          } finally {
+            setIsFetchingMore(false);
+          }
         }
       },
       { threshold: 1.0 },
@@ -668,7 +750,7 @@ const Sidebar = () => {
     }
 
     return () => observer.disconnect();
-  }, [hasMore, fetchMoreChats]);
+  }, [hasMore, fetchMoreChats, isFetchingMore, loading]);
 
   useEffect(() => {
     if (user?.id) {
@@ -680,15 +762,24 @@ const Sidebar = () => {
     }
   }, [user?.id, setGroups]);
 
+  // Scroll active chat into view on initial mount/reload
   useEffect(() => {
-    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+    const activeId = urlChatId || urlGroupId;
+    if (!activeId || !chatListScrollRef.current) return;
 
-    const frame = window.requestAnimationFrame(() => {
-      chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    const timer = setTimeout(() => {
+      const activeElement = chatListScrollRef.current?.querySelector(
+        `[data-chat-id="${activeId}"]`
+      );
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
+      }
+    }, 200);
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
+    return () => clearTimeout(timer);
+  }, [urlChatId, urlGroupId, chats.length, groups.length]);
+
+
 
   return (
     <>
@@ -702,7 +793,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden
+        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
@@ -856,6 +947,14 @@ const Sidebar = () => {
                 ) : (
                   unifiedList.map((item) => {
                     const chat = chats.find((c) => c._id === item._id);
+                    const group = groups.find((g) => g._id === item._id);
+                    const isPinned = item.itemType === "chat"
+                      ? (chat?.isPinned || false)
+                      : (group?.isPinned || false);
+                    const isArchived = item.itemType === "chat"
+                      ? (chat?.isArchived || false)
+                      : false;
+
                     return (
                       <SidebarItem
                         key={item._id}
@@ -877,14 +976,14 @@ const Sidebar = () => {
                           }
                         }}
                         onDelete={(id, type) => setDeleteConfig({ id, type })}
-                        onRename={renameChat}
+                        onRename={(id, title) => handleRenameItem(id, title, item.itemType)}
                         onArchive={archiveChat}
                         onUnarchive={unarchiveChat}
-                        onPin={pinChat}
-                        onUnpin={unpinChat}
+                        onPin={(id) => handlePinItem(id, item.itemType)}
+                        onUnpin={(id) => handleUnpinItem(id, item.itemType)}
                         onToggleSelect={toggleSelect}
-                        isPinned={chat?.isPinned || false}
-                        isArchived={chat?.isArchived || false}
+                        isPinned={isPinned}
+                        isArchived={isArchived}
                       />
                     );
                   })
@@ -895,7 +994,7 @@ const Sidebar = () => {
                   <div ref={observerTarget} className="h-4 w-full mt-2" />
                 )}
 
-                {hasMore && loading && (
+                {hasMore && (loading || isFetchingMore) && (
                   <div className="flex justify-center p-4">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                   </div>

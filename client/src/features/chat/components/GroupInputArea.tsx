@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X } from "lucide-react";
+import { useParams } from "react-router-dom";
 import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -76,6 +77,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const { groupId } = useParams<{ groupId?: string }>();
+
+  // Clear typed input, attachments, and reset web search when switching group chats
+  useEffect(() => {
+    setInput("");
+    setAttachments([]);
+    setWebSearchEnabled(false);
+  }, [groupId]);
 
   const sharedTextStyles: React.CSSProperties = {
     lineHeight: "1.5rem",
@@ -594,7 +603,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               {/* Backdrop highlight overlay */}
               <div
                 ref={backdropRef}
-                className="absolute inset-0 pointer-events-none select-none overflow-y-auto scrollbar-hide whitespace-pre-wrap break-words px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 bg-transparent border border-transparent"
+                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 bg-transparent border border-transparent"
                 style={sharedTextStyles}
               >
                 {highlightMentions(input)}
@@ -608,7 +617,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 onScroll={handleScroll}
                 rows={1}
                 placeholder="Message group..."
-                className="relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent"
+                className="relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent"
                 style={sharedTextStyles}
               />
             </div>

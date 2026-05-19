@@ -4,17 +4,21 @@ import { User } from "../models/User.model";
 import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
 import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
-import { webSearchService, type WebGroundingContext } from "../modules/web-search";
+import {
+  webSearchService,
+  type WebGroundingContext,
+} from "../modules/web-search";
 import { groupStreamRegistry } from "./groupStreamRegistry.service";
 import type { ChatMessage } from "../types/chat.types";
+import type { AIMessage, AIRole } from "./ai/types";
+import { parseMultimedia } from "../utils/chatHistory";
 import crypto from "crypto";
 
 export class GroupChatService {
   private static sanitizeAssistantResponse(content: string) {
-    return content.replace(
-      /^(?:\s*\[(?:velora(?:\s*\([^\]]+\))?)\]:\s*)+/i,
-      "",
-    ).trim();
+    return content
+      .replace(/^(?:\s*\[(?:velora(?:\s*\([^\]]+\))?)\]:\s*)+/i, "")
+      .trim();
   }
 
   private static serializeGroupMessage(message: any) {
@@ -101,7 +105,12 @@ export class GroupChatService {
 
     const isMember = group.members.some((m) => m.userId === clerkId);
     if (!isMember) {
-      group.members.push({ userId: clerkId, username, userImage, joinedAt: new Date() });
+      group.members.push({
+        userId: clerkId,
+        username,
+        userImage,
+        joinedAt: new Date(),
+      });
       await group.save();
 
       // Create join message
@@ -118,10 +127,10 @@ export class GroupChatService {
         type: "message",
         message: joinMsg,
       });
-      
+
       groupSocketManager.broadcast(group._id.toString(), {
         type: "member_joined",
-        member: { userId: clerkId, username, userImage, joinedAt: new Date() }
+        member: { userId: clerkId, username, userImage, joinedAt: new Date() },
       });
     }
 
@@ -136,13 +145,16 @@ export class GroupChatService {
     if (memberIndex === -1) throw new Error("Not a member");
 
     const username = group.members[memberIndex].username;
-    const isCreatorLeaving = (clerkId === group.creatorId);
+    const isCreatorLeaving = clerkId === group.creatorId;
 
     group.members.splice(memberIndex, 1);
 
     let newAdmin: any = null;
     if (isCreatorLeaving && group.members.length > 0) {
-      const sortedRemaining = [...group.members].sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+      const sortedRemaining = [...group.members].sort(
+        (a, b) =>
+          new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime(),
+      );
       newAdmin = sortedRemaining[0];
       group.creatorId = newAdmin.userId;
     }
@@ -193,7 +205,11 @@ export class GroupChatService {
     return { success: true };
   }
 
-  static async removeMember(groupId: string, adminClerkId: string, memberClerkId: string) {
+  static async removeMember(
+    groupId: string,
+    adminClerkId: string,
+    memberClerkId: string,
+  ) {
     const group = await GroupChat.findById(groupId);
     if (!group) throw new Error("Group not found");
 
@@ -201,8 +217,11 @@ export class GroupChatService {
       throw new Error("Unauthorized: Only the group admin can remove members");
     }
 
-    const memberIndex = group.members.findIndex((m) => m.userId === memberClerkId);
-    if (memberIndex === -1) throw new Error("User is not a member of this group");
+    const memberIndex = group.members.findIndex(
+      (m) => m.userId === memberClerkId,
+    );
+    if (memberIndex === -1)
+      throw new Error("User is not a member of this group");
 
     const username = group.members[memberIndex].username;
     group.members.splice(memberIndex, 1);
@@ -236,7 +255,14 @@ export class GroupChatService {
     return await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
   }
 
-  static async addMessage(groupId: string, clerkId: string, content: string, role: "user" | "assistant" = "user", webSearchEnabled = false, attachments: any[] = []) {
+  static async addMessage(
+    groupId: string,
+    clerkId: string,
+    content: string,
+    role: "user" | "assistant" = "user",
+    webSearchEnabled = false,
+    attachments: any[] = [],
+  ) {
     const group = await GroupChat.findById(groupId);
     if (!group) throw new Error("Group not found");
 
@@ -272,24 +298,37 @@ export class GroupChatService {
     if (match) {
       const mention = match[1].toLowerCase();
       const allProviders = aiService.getAvailableProviders();
-      const isAiMention = mention === "velora" || allProviders.some(p => {
-        const cleanName = p.id.split(":").pop()?.split("/").pop()?.toLowerCase();
-        return cleanName === mention || p.id.toLowerCase() === mention;
-      });
+      const isAiMention =
+        mention === "velora" ||
+        allProviders.some((p) => {
+          const cleanName = p.id
+            .split(":")
+            .pop()
+            ?.split("/")
+            .pop()
+            ?.toLowerCase();
+          return cleanName === mention || p.id.toLowerCase() === mention;
+        });
       if (isAiMention) {
         groupSocketManager.broadcast(groupId, {
           type: "ai_thinking",
           isThinking: true,
           webSearchEnabled,
         });
-        this.handleAiResponse(groupId, content, webSearchEnabled).catch(console.error);
+        this.handleAiResponse(groupId, content, webSearchEnabled).catch(
+          console.error,
+        );
       }
     }
 
     return message;
   }
 
-  static async handleAiResponse(groupId: string, userContent: string, webSearchEnabled = false) {
+  static async handleAiResponse(
+    groupId: string,
+    userContent: string,
+    webSearchEnabled = false,
+  ) {
     const group = await GroupChat.findById(groupId);
     if (!group) return;
 
@@ -301,19 +340,32 @@ export class GroupChatService {
       .sort({ createdAt: -1 })
       .limit(50);
     const orderedMessages = messages.reverse();
-    
+
     // Build prompt
-    const promptMessages: { role: "user" | "assistant" | "system"; content: string; username?: string; }[] = orderedMessages.map(msg => ({
-      role: msg.role as "user" | "assistant" | "system",
-      content: msg.content,
-      username: msg.username
-    }));
+    const promptMessages: AIMessage[] = orderedMessages.map((msg) => {
+      const parsed = parseMultimedia(msg.content);
+      const attachments = [
+        ...(msg.attachments || []).map((att: any) => ({
+          url: att.url,
+          name: att.name,
+          mimeType: att.mimeType,
+          size: att.size,
+        })),
+        ...(parsed.attachments || []),
+      ];
+      return {
+        role: msg.role as AIRole,
+        content: parsed.content,
+        username: msg.username,
+        attachments: attachments.length > 0 ? attachments : undefined,
+      };
+    });
 
     let webGrounding: WebGroundingContext | null = null;
     if (webSearchEnabled) {
       const maybeGrounding = await webSearchService.buildGroundingContext(
         userContent,
-        promptMessages as ChatMessage[],
+        promptMessages as any as ChatMessage[],
       );
       if (maybeGrounding && "systemPrompt" in maybeGrounding) {
         webGrounding = maybeGrounding as WebGroundingContext;
@@ -323,13 +375,15 @@ export class GroupChatService {
     // Add system prompt
     promptMessages.unshift({
       role: "system",
-      content: BASE_SYSTEM_PROMPT + "\n\nThis is a group chat. Differentiate users by their usernames if provided in context. You are Velora."
+      content:
+        BASE_SYSTEM_PROMPT +
+        "\n\nThis is a group chat. Differentiate users by their usernames if provided in context. Never wrap usernames in brackets like [name]. You are Velora.",
     });
 
     if (webGrounding) {
       promptMessages.unshift({
         role: "system",
-        content: webGrounding.systemPrompt
+        content: webGrounding.systemPrompt,
       });
     }
 
@@ -339,8 +393,13 @@ export class GroupChatService {
       const mention = mentionMatch[1].toLowerCase();
       if (mention !== "velora" && mention !== "system") {
         const allProviders = aiService.getAvailableProviders();
-        const matchedProv = allProviders.find(p => {
-          const cleanName = p.id.split(":").pop()?.split("/").pop()?.toLowerCase();
+        const matchedProv = allProviders.find((p) => {
+          const cleanName = p.id
+            .split(":")
+            .pop()
+            ?.split("/")
+            .pop()
+            ?.toLowerCase();
           return cleanName === mention || p.id.toLowerCase() === mention;
         });
         if (matchedProv) {
@@ -355,8 +414,12 @@ export class GroupChatService {
       targetProvider = "gemini:gemini-3.1-flash-lite-preview";
     }
 
-    const cleanModelName = targetProvider.includes(":") ? targetProvider.split(":")[1] : targetProvider;
-    const displayName = cleanModelName.includes("/") ? cleanModelName.split("/").pop() || cleanModelName : cleanModelName;
+    const cleanModelName = targetProvider.includes(":")
+      ? targetProvider.split(":")[1]
+      : targetProvider;
+    const displayName = cleanModelName.includes("/")
+      ? cleanModelName.split("/").pop() || cleanModelName
+      : cleanModelName;
     const assistantUsername = `Velora (${displayName})`;
 
     let fullResponse = "";
@@ -378,6 +441,9 @@ export class GroupChatService {
       );
 
       for await (const chunk of stream) {
+        if (activeStream.abortController.signal.aborted) {
+          return;
+        }
         fullResponse += chunk;
         groupStreamRegistry.updateResponse(groupId, fullResponse);
         groupSocketManager.broadcast(groupId, {
@@ -386,8 +452,12 @@ export class GroupChatService {
           tempId,
           done: false,
           username: assistantUsername,
-          webSearchEnabled
+          webSearchEnabled,
         });
+      }
+
+      if (activeStream.abortController.signal.aborted) {
+        return;
       }
 
       fullResponse = this.sanitizeAssistantResponse(fullResponse);
@@ -406,7 +476,7 @@ export class GroupChatService {
             tempId,
             done: false,
             username: assistantUsername,
-            webSearchEnabled
+            webSearchEnabled,
           });
         }
       }
@@ -416,13 +486,15 @@ export class GroupChatService {
         metadata.webSearchEnabled = true;
       }
       if (webGrounding && webGrounding.sources.length > 0) {
-        metadata.sources = webGrounding.sources.map(({ id, title, url, hostname, snippet }) => ({
-          id,
-          title,
-          url,
-          hostname,
-          snippet,
-        }));
+        metadata.sources = webGrounding.sources.map(
+          ({ id, title, url, hostname, snippet }) => ({
+            id,
+            title,
+            url,
+            hostname,
+            snippet,
+          }),
+        );
       }
 
       // Save final message
@@ -442,18 +514,20 @@ export class GroupChatService {
         type: "ai_stream",
         tempId,
         done: true,
-        message: this.serializeGroupMessage(aiMsg)
+        message: this.serializeGroupMessage(aiMsg),
       });
-
     } catch (err: any) {
       // If it was aborted, don't write generic error block since we handled it in stopGroupStream
-      if (err?.name === "AbortError" || activeStream.abortController.signal.aborted) {
+      if (
+        err?.name === "AbortError" ||
+        activeStream.abortController.signal.aborted
+      ) {
         groupStreamRegistry.delete(groupId);
         return;
       }
 
       console.error("AI Group Generation Error:", err);
-      
+
       const errorContent = `⚠️ **Failed to generate response.** The model \`${displayName}\` encountered an error or is temporarily unavailable. Please try again.`;
 
       // Save the error message so it persists in the chat history
@@ -473,7 +547,7 @@ export class GroupChatService {
         type: "ai_stream",
         tempId,
         done: true,
-        message: this.serializeGroupMessage(errorMsg)
+        message: this.serializeGroupMessage(errorMsg),
       });
     }
   }
@@ -488,7 +562,9 @@ export class GroupChatService {
     groupStreamRegistry.stop(groupId);
 
     const rawResponse = activeStream.fullResponse;
-    const fullResponse = this.sanitizeAssistantResponse(rawResponse) || "⚠️ Response generation stopped.";
+    const fullResponse =
+      this.sanitizeAssistantResponse(rawResponse) ||
+      "⚠️ Response generation stopped.";
 
     // Save final partial message
     const aiMsg = await GroupMessage.create({
@@ -513,11 +589,55 @@ export class GroupChatService {
   }
 
   static async getUserGroups(clerkId: string) {
-    return await GroupChat.find({ "members.userId": clerkId }).sort({ updatedAt: -1 });
+    return await GroupChat.find({ "members.userId": clerkId }).sort({
+      isPinned: -1,
+      updatedAt: -1,
+    });
   }
 
   static async getUserCreatedGroups(clerkId: string) {
-    return await GroupChat.find({ creatorId: clerkId }).sort({ updatedAt: -1 });
+    return await GroupChat.find({ creatorId: clerkId }).sort({
+      isPinned: -1,
+      updatedAt: -1,
+    });
+  }
+
+  static async updateGroupTitle(
+    groupId: string,
+    title: string,
+    clerkId: string,
+  ) {
+    const group = await GroupChat.findById(groupId);
+    if (!group) throw new Error("Group not found");
+
+    const isMember = group.members.some((m) => m.userId === clerkId);
+    if (!isMember) {
+      throw new Error("Unauthorized: Only members can rename this group");
+    }
+
+    group.title = title;
+    await group.save();
+    return group;
+  }
+
+  static async pinGroup(groupId: string) {
+    const group = await GroupChat.findByIdAndUpdate(
+      groupId,
+      { isPinned: true, updatedAt: new Date() },
+      { new: true },
+    );
+    if (!group) throw new Error("Group not found");
+    return group;
+  }
+
+  static async unpinGroup(groupId: string) {
+    const group = await GroupChat.findByIdAndUpdate(
+      groupId,
+      { isPinned: false, updatedAt: new Date() },
+      { new: true },
+    );
+    if (!group) throw new Error("Group not found");
+    return group;
   }
 
   static async deleteGroup(groupId: string, clerkId: string) {

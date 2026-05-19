@@ -6,19 +6,24 @@ export class GroupChatController {
     console.log("Create Group called with:", req.body);
     try {
       const { chatId, userId } = req.body;
-      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       if (!chatId) return res.status(400).json({ error: "chatId is required" });
 
-      const group = await GroupChatService.createGroup(chatId as string, clerkId);
+      const group = await GroupChatService.createGroup(
+        chatId as string,
+        clerkId,
+      );
       res.json(group);
     } catch (error: any) {
       console.error("Error in createGroup:", error);
       res.status(500).json({ error: error.message });
     }
   }
-
 
   static async getGroupByInviteCode(req: Request, res: Response) {
     try {
@@ -35,7 +40,10 @@ export class GroupChatController {
     try {
       const inviteCode = req.params.inviteCode as string;
       const { userId } = req.body;
-      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const group = await GroupChatService.joinGroup(inviteCode, clerkId);
@@ -49,7 +57,10 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const { userId } = req.body;
-      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const result = await GroupChatService.leaveGroup(groupId, clerkId);
@@ -63,11 +74,19 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const { memberId, userId } = req.body;
-      const adminClerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const adminClerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!adminClerkId) return res.status(401).json({ error: "Unauthorized" });
-      if (!memberId) return res.status(400).json({ error: "Member ID is required" });
+      if (!memberId)
+        return res.status(400).json({ error: "Member ID is required" });
 
-      const result = await GroupChatService.removeMember(groupId, adminClerkId, memberId);
+      const result = await GroupChatService.removeMember(
+        groupId,
+        adminClerkId,
+        memberId,
+      );
       res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -78,7 +97,10 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const userId = req.query.userId as string;
-      const clerkId = userId || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        userId ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const messages = await GroupChatService.getGroupMessages(groupId);
@@ -92,22 +114,33 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const { content, userId, webSearchEnabled, attachments } = req.body;
-      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
-      const message = await GroupChatService.addMessage(groupId, clerkId, content, "user", Boolean(webSearchEnabled), attachments || []);
+      const message = await GroupChatService.addMessage(
+        groupId,
+        clerkId,
+        content,
+        "user",
+        Boolean(webSearchEnabled),
+        attachments || [],
+      );
       res.json(message);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   }
 
-
-
   static async getUserGroups(req: Request, res: Response) {
     try {
       const userId = req.query.userId as string;
-      const clerkId = userId || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        userId ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const groups = await GroupChatService.getUserGroups(clerkId);
@@ -120,7 +153,10 @@ export class GroupChatController {
   static async getUserCreatedGroups(req: Request, res: Response) {
     try {
       const userId = req.query.userId as string;
-      const clerkId = userId || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        userId ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const groups = await GroupChatService.getUserCreatedGroups(clerkId);
@@ -134,7 +170,10 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const { userId } = req.body;
-      const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
       const result = await GroupChatService.deleteGroup(groupId, clerkId);
@@ -153,5 +192,45 @@ export class GroupChatController {
       res.status(500).json({ error: error.message });
     }
   }
-}
 
+  static async updateGroupTitle(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const { title, userId } = req.body;
+      const clerkId =
+        (userId as string) ||
+        (req as any).auth?.userId ||
+        (req.headers["x-user-id"] as string);
+      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+
+      const group = await GroupChatService.updateGroupTitle(
+        groupId,
+        title,
+        clerkId,
+      );
+      res.json(group);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async pinGroup(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const group = await GroupChatService.pinGroup(groupId);
+      res.json(group);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async unpinGroup(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const group = await GroupChatService.unpinGroup(groupId);
+      res.json(group);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+}

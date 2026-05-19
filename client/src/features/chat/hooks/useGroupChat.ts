@@ -11,21 +11,23 @@ export const useGroupChat = () => {
   const navigate = useNavigate();
   const { user } = useUser();
 
-  const { 
-    groups, 
-    setCurrentGroup, 
+  const {
+    groups,
+    setCurrentGroup,
     groupMessages,
-    setGroupMessages, 
-    addGroupMessage, 
+    setGroupMessages,
+    addGroupMessage,
     updateGroupMembers,
     updateGroup,
     setLoading,
     setIsAiThinking,
-    setIsWebSearching
+    setIsWebSearching,
   } = useGroupStore();
-  
+
   const socketRef = useRef<Socket | null>(null);
-  const [typingUsers, setTypingUsers] = useState<Array<{ userId: string; username: string }>>([]);
+  const [typingUsers, setTypingUsers] = useState<
+    Array<{ userId: string; username: string }>
+  >([]);
 
   const displayedContentRef = useRef<string>("");
   const targetContentRef = useRef<string>("");
@@ -33,6 +35,7 @@ export const useGroupChat = () => {
   const activeStreamIdRef = useRef<string | null>(null);
   const isDoneRef = useRef<boolean>(false);
   const finalMessageRef = useRef<any>(null);
+  const stopRequestedRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!groupId || !user?.id) return;
@@ -46,16 +49,19 @@ export const useGroupChat = () => {
     activeStreamIdRef.current = null;
     isDoneRef.current = false;
     finalMessageRef.current = null;
+    stopRequestedRef.current = false;
     if (typewriterFrameRef.current !== null) {
       cancelAnimationFrame(typewriterFrameRef.current);
       typewriterFrameRef.current = null;
     }
 
     // Fetch initial messages
-    api.get(`/group/${groupId}/messages`, { params: { userId: user.id } }).then((res) => {
-      setGroupMessages(res.data.messages);
-      setLoading(false);
-    });
+    api
+      .get(`/group/${groupId}/messages`, { params: { userId: user.id } })
+      .then((res) => {
+        setGroupMessages(res.data.messages);
+        setLoading(false);
+      });
 
     // Setup Socket.io
     const socket = io(API_ORIGIN, {
@@ -67,19 +73,26 @@ export const useGroupChat = () => {
       withCredentials: true,
     });
 
-    socket.on("user_typing", (data: { userId: string; username: string; isTyping: boolean }) => {
-      setTypingUsers((prev) => {
-        if (data.isTyping) {
-          if (prev.some((u) => u.userId === data.userId)) return prev;
-          return [...prev, { userId: data.userId, username: data.username }];
-        } else {
-          return prev.filter((u) => u.userId !== data.userId);
-        }
-      });
-    });
+    socket.on(
+      "user_typing",
+      (data: { userId: string; username: string; isTyping: boolean }) => {
+        setTypingUsers((prev) => {
+          if (data.isTyping) {
+            if (prev.some((u) => u.userId === data.userId)) return prev;
+            return [...prev, { userId: data.userId, username: data.username }];
+          } else {
+            return prev.filter((u) => u.userId !== data.userId);
+          }
+        });
+      },
+    );
 
     socket.on("group_event", (data) => {
-      const startTypewriter = (tempId: string, username: string, webSearchEnabled?: boolean) => {
+      const startTypewriter = (
+        tempId: string,
+        username: string,
+        webSearchEnabled?: boolean,
+      ) => {
         if (typewriterFrameRef.current !== null) return;
 
         const tick = () => {
@@ -90,8 +103,14 @@ export const useGroupChat = () => {
             const remainingLength = target.length - current.length;
             // Catch up speed divisor: use slightly faster division once done to keep transition quick but smooth
             const divisor = isDoneRef.current ? 6 : 8;
-            const charsPerFrame = Math.max(1, Math.min(8, Math.ceil(remainingLength / divisor)));
-            displayedContentRef.current = target.substring(0, current.length + charsPerFrame);
+            const charsPerFrame = Math.max(
+              1,
+              Math.min(8, Math.ceil(remainingLength / divisor)),
+            );
+            displayedContentRef.current = target.substring(
+              0,
+              current.length + charsPerFrame,
+            );
 
             setGroupMessages((prev) => {
               const existing = prev.find((m) => m._id === tempId);
@@ -102,11 +121,13 @@ export const useGroupChat = () => {
                         ...m,
                         content: displayedContentRef.current,
                         username: username || m.username,
-                        metadata: webSearchEnabled ? { webSearchEnabled: true } : m.metadata,
+                        metadata: webSearchEnabled
+                          ? { webSearchEnabled: true }
+                          : m.metadata,
                         sources: m.sources,
                         isWebSearching: m.isWebSearching,
                       }
-                    : m
+                    : m,
                 );
               } else {
                 const streamingMessage = {
@@ -130,7 +151,7 @@ export const useGroupChat = () => {
             typewriterFrameRef.current = requestAnimationFrame(tick);
           } else {
             typewriterFrameRef.current = null;
-            
+
             // If the server was finished, commit the final message now that we have fully caught up!
             if (isDoneRef.current && finalMessageRef.current) {
               const finalMsg = finalMessageRef.current;
@@ -153,6 +174,7 @@ export const useGroupChat = () => {
       if (data.type === "message") {
         addGroupMessage(data.message);
       } else if (data.type === "ai_stream") {
+        if (stopRequestedRef.current) return;
         if (useGroupStore.getState().isAiThinking) {
           setIsAiThinking(false);
         }
@@ -183,12 +205,12 @@ export const useGroupChat = () => {
             if (existing) {
               return prev.map((m) =>
                 m._id === data.tempId
-                  ? { 
-                      ...m, 
+                  ? {
+                      ...m,
                       sources: data.sources,
                       isWebSearching: false,
                     }
-                  : m
+                  : m,
               );
             } else {
               const streamingMessage = {
@@ -223,7 +245,7 @@ export const useGroupChat = () => {
       } else if (data.type === "member_joined") {
         // Update members list
         const activeGroups = useGroupStore.getState().groups;
-        const group = activeGroups.find(g => g._id === groupId);
+        const group = activeGroups.find((g) => g._id === groupId);
         if (group) {
           const updatedMembers = [...group.members, data.member];
           updateGroupMembers(groupId, updatedMembers);
@@ -231,14 +253,20 @@ export const useGroupChat = () => {
       } else if (data.type === "member_left") {
         if (data.userId === user?.id) {
           socket.disconnect();
-          toast.warning(data.reason === "removed" ? "You have been removed from this group by the admin." : "You have left the group.");
+          toast.warning(
+            data.reason === "removed"
+              ? "You have been removed from this group by the admin."
+              : "You have left the group.",
+          );
           navigate("/chat");
           return;
         }
         const activeGroups = useGroupStore.getState().groups;
-        const group = activeGroups.find(g => g._id === groupId);
+        const group = activeGroups.find((g) => g._id === groupId);
         if (group) {
-          const updatedMembers = group.members.filter(m => m.userId !== data.userId);
+          const updatedMembers = group.members.filter(
+            (m) => m.userId !== data.userId,
+          );
           updateGroupMembers(groupId, updatedMembers);
         }
       } else if (data.type === "admin_changed") {
@@ -274,13 +302,39 @@ export const useGroupChat = () => {
         cancelAnimationFrame(typewriterFrameRef.current);
       }
     };
-  }, [groupId, user?.id, setCurrentGroup, setGroupMessages, addGroupMessage, setLoading, updateGroupMembers, updateGroup, navigate, setIsAiThinking, setIsWebSearching]);
+  }, [
+    groupId,
+    user?.id,
+    setCurrentGroup,
+    setGroupMessages,
+    addGroupMessage,
+    setLoading,
+    updateGroupMembers,
+    updateGroup,
+    navigate,
+    setIsAiThinking,
+    setIsWebSearching,
+  ]);
 
-
-  const sendMessage = async (content: string, webSearchEnabled?: boolean, attachments?: any[]) => {
-    if (!groupId || !content.trim() || !user?.id) return;
+  const sendMessage = async (
+    content: string,
+    webSearchEnabled?: boolean,
+    attachments?: any[],
+  ) => {
+    if (
+      !groupId ||
+      (!content.trim() && (!attachments || attachments.length === 0)) ||
+      !user?.id
+    )
+      return;
+    stopRequestedRef.current = false;
     try {
-      await api.post(`/group/${groupId}/message`, { content, userId: user.id, webSearchEnabled, attachments });
+      await api.post(`/group/${groupId}/message`, {
+        content,
+        userId: user.id,
+        webSearchEnabled,
+        attachments,
+      });
     } catch (err) {
       console.error("Error sending message:", err);
     }
@@ -298,6 +352,38 @@ export const useGroupChat = () => {
 
   const stopStream = async () => {
     if (!groupId) return;
+
+    // Immediately stop typewriter animation
+    if (typewriterFrameRef.current !== null) {
+      cancelAnimationFrame(typewriterFrameRef.current);
+      typewriterFrameRef.current = null;
+    }
+
+    stopRequestedRef.current = true;
+
+    // Instantly freeze the active streaming message at its current content and mark as stopped
+    setGroupMessages((prev) =>
+      prev.map((m) =>
+        m.status === "streaming"
+          ? {
+              ...m,
+              content:
+                displayedContentRef.current ||
+                m.content ||
+                "⚠️ Response generation stopped.",
+              status: "stopped" as const,
+            }
+          : m,
+      ),
+    );
+
+    // Reset typewriter state refs to block any delayed socket updates
+    isDoneRef.current = false;
+    finalMessageRef.current = null;
+    displayedContentRef.current = "";
+    targetContentRef.current = "";
+    activeStreamIdRef.current = null;
+
     try {
       await api.post(`/group/${groupId}/stop`);
     } catch (err) {
@@ -307,7 +393,11 @@ export const useGroupChat = () => {
 
   const sendTypingStatus = (isTyping: boolean) => {
     if (socketRef.current && user?.id) {
-      const username = user.firstName || user.username || user.primaryEmailAddress?.emailAddress.split("@")[0] || "Someone";
+      const username =
+        user.firstName ||
+        user.username ||
+        user.primaryEmailAddress?.emailAddress.split("@")[0] ||
+        "Someone";
       socketRef.current.emit("typing", {
         isTyping,
         username,

@@ -91,6 +91,7 @@
     font-family: var(--font-sans);
     scroll-behavior: smooth;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow-x: hidden;
   }
 
   h1,
@@ -114,6 +115,7 @@
   body {
     margin: 0;
     min-height: 100vh;
+    overflow-x: hidden;
     background:
       radial-gradient(circle at top, var(--glow-primary), transparent 22%),
       radial-gradient(circle at 10% 25%, var(--glow-accent), transparent 14%),

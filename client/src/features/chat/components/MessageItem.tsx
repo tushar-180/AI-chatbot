@@ -414,7 +414,7 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
 
                 <div
                     className={`flex flex-col gap-2 ${
-                        isUser ? "items-end flex-1" : "min-w-0 flex-1"
+                        isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
                     }`}
                 >
                     {!isFailed && (
@@ -442,10 +442,10 @@ const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, 
                     <div
                         className={`transition-all duration-200 ease-out ${
                             isUser
-                                ? `max-w-full rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
+                                ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
                                 : isFailed
-                                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
-                                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+                                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
+                                  : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
                         }`}
                         ref={contentRef}
                         key={highlight || "no-highlight"}

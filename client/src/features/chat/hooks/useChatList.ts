@@ -6,7 +6,7 @@ import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
 import { useServerStatus } from "@/contexts/ServerStatusContext";
 
-export const useChatList = () => {
+export const useChatList = ({ shouldFetch = false } = {}) => {
   const { user } = useUser();
   const navigate = useNavigate();
   const location = useLocation();
@@ -214,12 +214,26 @@ export const useChatList = () => {
     }
   };
 
+  const currentChatIdRef = useRef(currentChatId);
+  currentChatIdRef.current = currentChatId;
+
+  const isNewChatRef = useRef(isNewChat);
+  isNewChatRef.current = isNewChat;
+
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+
+  const messagesLengthRef = useRef(messages.length);
+  messagesLengthRef.current = messages.length;
+
   useEffect(() => {
+    if (!shouldFetch) return;
+
     const fetchKey = `${user?.id}-${viewingArchived}`;
     if (
       !user?.id ||
       loading ||
-      isStreaming ||
+      isStreamingRef.current ||
       fetchedUserIdRef.current === fetchKey
     ) {
       return;
@@ -238,7 +252,7 @@ export const useChatList = () => {
         setHasMore(fetchedChats.length === 20);
 
         if (fetchedChats.length === 0) {
-          if (isNewChat || messages.length > 0) return;
+          if (isNewChatRef.current || messagesLengthRef.current > 0) return;
           setCurrentChat(null);
           setMessages([]);
           return;
@@ -246,11 +260,11 @@ export const useChatList = () => {
 
         const shouldAutoSelectFirstChat =
           !isSharedChatRoute &&
-          !currentChatId &&
-          !isNewChat &&
+          !currentChatIdRef.current &&
+          !isNewChatRef.current &&
           !loading &&
-          !isStreaming &&
-          messages.length === 0;
+          !isStreamingRef.current &&
+          messagesLengthRef.current === 0;
 
         if (shouldAutoSelectFirstChat) {
           setCurrentChat(fetchedChats[0]._id);
@@ -267,19 +281,15 @@ export const useChatList = () => {
     fetchChats();
   }, [
     user?.id,
-    currentChatId,
     isSharedChatRoute,
-    isNewChat,
     loading,
-    isStreaming,
-    messages.length,
     setChats,
     setCurrentChat,
     setMessages,
     setPage,
-    setPage,
     setHasMore,
     viewingArchived,
+    shouldFetch,
   ]);
 
   const deleteChats = async (chatIds: string[]) => {

@@ -452,7 +452,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
 
   return (
     <>
-      <div className="code-block group my-5 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c1018] shadow-xl shadow-black/20">
+      <div className="code-block group my-5 w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-white/[0.06] bg-[#0c1018] shadow-xl shadow-black/20">
         {/* Top accent gradient line */}
         <div
           className="h-[2px] w-full opacity-50"
@@ -515,7 +515,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
         </div>
 
         {/* Code content */}
-        <div className="overflow-auto" style={{ maxHeight: "480px" }}>
+        <div className="w-full max-w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "480px" }}>
           <SyntaxHighlighter
             showLineNumbers
             wrapLongLines

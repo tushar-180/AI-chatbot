@@ -13,7 +13,13 @@ import type { WebSource } from "@/features/chat/types/chat.types";
 const GroupChat = () => {
   const { groupId } = useParams<{ groupId: string }>();
   const { setSidebarOpen, setCurrentChat } = useChatStore();
-  const { sendMessage, stopStream, isStreaming, typingUsers, sendTypingStatus } = useGroupChat();
+  const {
+    sendMessage,
+    stopStream,
+    isStreaming,
+    typingUsers,
+    sendTypingStatus,
+  } = useGroupChat();
   const { setCurrentGroup } = useGroupStore();
 
   // Sources sidebar state

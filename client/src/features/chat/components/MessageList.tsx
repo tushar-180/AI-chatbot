@@ -88,6 +88,7 @@ const MessageList = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const highlight = searchParams.get("highlight");
+  const showSuggestions = !currentChatId && messages.length === 0;
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
@@ -153,6 +154,24 @@ const MessageList = ({
     handleScroll();
     return () => container.removeEventListener("scroll", handleScroll);
   }, [getScrollContainer, handleScroll]);
+
+  // LOCK SCROLL OVERFLOW WHEN SUGGESTIONS ARE ACTIVE
+  useEffect(() => {
+    const container = getScrollContainer();
+    if (!container) return;
+
+    if (showSuggestions) {
+      container.style.overflowY = "hidden";
+    } else {
+      container.style.overflowY = "auto";
+    }
+
+    return () => {
+      if (container) {
+        container.style.overflowY = "auto";
+      }
+    };
+  }, [showSuggestions, getScrollContainer]);
 
   // CLEAR HIGHLIGHT ON CLICK OR AFTER 3s
   useEffect(() => {
@@ -239,8 +258,6 @@ const MessageList = ({
     scrollToBottom,
     highlight,
   ]);
-
-  const showSuggestions = !currentChatId && messages.length === 0;
 
   return (
     <div

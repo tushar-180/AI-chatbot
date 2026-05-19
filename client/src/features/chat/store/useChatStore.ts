@@ -217,7 +217,7 @@ export const useChatStore = create<ChatState>()(
           const chatIndex = state.chats.findIndex((c) => c._id === id);
           if (chatIndex === -1) return state;
 
-          const updatedChat = { ...state.chats[chatIndex], isPinned };
+          const updatedChat = { ...state.chats[chatIndex], isPinned, updatedAt: new Date().toISOString() };
           const remainingChats = state.chats.filter((c) => c._id !== id);
 
           if (isPinned) {

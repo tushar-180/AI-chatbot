@@ -43,16 +43,14 @@ const MessageAvatar = ({
           {username.substring(0, 1).toUpperCase()}
         </div>
       )
+    ) : failed ? (
+      <AlertCircle className="h-4 w-4 text-red-400" />
     ) : (
-      failed ? (
-        <AlertCircle className="h-4 w-4 text-red-400" />
-      ) : (
-        <img
-          src="/logo.png"
-          alt="Velora Logo"
-          className="h-full w-full object-contain"
-        />
-      )
+      <img
+        src="/logo.png"
+        alt="Velora Logo"
+        className="h-full w-full object-contain"
+      />
     )}
   </div>
 );
@@ -102,9 +100,13 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
   );
 };
 
-const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: GroupMessageItemProps) => {
+const GroupMessageItem = ({
+  message: msg,
+  onCitationClick,
+  onSourcesClick,
+}: GroupMessageItemProps) => {
   const { user } = useUser();
-  
+
   // Robust check for AI vs User
   const isAssistant = msg.role === "assistant" || msg.userId === "velora";
   const isMe = msg.userId === user?.id && !isAssistant;
@@ -147,7 +149,9 @@ const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: Gro
       const model = match[1];
       return (
         <span className="flex items-center gap-2">
-          <span className="text-slate-300 font-bold tracking-[0.18em]">Velora</span>
+          <span className="text-slate-300 font-bold tracking-[0.18em]">
+            Velora
+          </span>
           <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
             {formatBadgeText(model)}
           </span>
@@ -177,13 +181,25 @@ const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: Gro
 
   let processedContent = msg.content || "";
   if (isAssistant) {
-    processedContent = processedContent.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>');
+    processedContent = processedContent.replace(
+      /\[(\d+)\]/g,
+      '<cite data-id="$1"></cite>',
+    );
   } else {
-    processedContent = processedContent.replace(/(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g, (match) => {
-      const hasLeadingSpace = match.startsWith(" ") || match.startsWith("\n") || match.startsWith("\r");
-      const mentionText = match.trim();
-      return (hasLeadingSpace ? " " : "") + `<span class="text-emerald-400 font-medium">${mentionText}</span>`;
-    });
+    processedContent = processedContent.replace(
+      /(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g,
+      (match) => {
+        const hasLeadingSpace =
+          match.startsWith(" ") ||
+          match.startsWith("\n") ||
+          match.startsWith("\r");
+        const mentionText = match.trim();
+        return (
+          (hasLeadingSpace ? " " : "") +
+          `<span class="text-emerald-400 font-medium">${mentionText}</span>`
+        );
+      },
+    );
   }
 
   const citationComponents = isAssistant
@@ -211,19 +227,21 @@ const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: Gro
   return (
     <div className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}>
       <div
-        className={`flex w-fit gap-4 ${
+        className={`flex w-full gap-4 ${
           isMe
             ? "max-w-full md:max-w-4xl flex-row-reverse"
             : "max-w-full md:max-w-5xl flex-row items-start"
         }`}
       >
         <div
-          className={`flex flex-col gap-2 ${
+          className={`flex flex-col gap-2 min-w-0 flex-1 ${
             isMe ? "items-end" : "items-start"
           }`}
         >
           {/* Header with Icon and Name */}
-          <div className={`flex items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
+          <div
+            className={`flex items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+          >
             <MessageAvatar
               isUser={!isAssistant}
               imageUrl={displayImageUrl}
@@ -240,12 +258,12 @@ const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: Gro
           <div
             className={`transition-opacity duration-150 ease-out ${
               isMe
-                ? "w-fit rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
+                ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
                 : isFailed
-                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
-                : isAssistant 
-                  ? "w-full py-1 text-base leading-[1.8] text-slate-200"
-                  : "w-fit rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
+                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
+                  : isAssistant
+                    ? "w-full max-w-full min-w-0 overflow-hidden py-1 text-base leading-[1.8] text-slate-200"
+                    : "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
             }`}
           >
             {isFailed ? (
@@ -258,7 +276,8 @@ const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: Gro
                   rehypePlugins={[rehypeRaw]}
                   components={assistantMarkdownComponents}
                 >
-                  {msg.content || "The AI model failed to respond. Please try again."}
+                  {msg.content ||
+                    "The AI model failed to respond. Please try again."}
                 </ReactMarkdown>
               </div>
             ) : (

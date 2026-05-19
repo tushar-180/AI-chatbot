@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -7,14 +7,14 @@ import { useAuthSetup } from "./features/auth/hooks/useUserSync";
 import { useServerStatus } from "./contexts/ServerStatusContext";
 import ServerDownBanner from "./components/ui/ServerDownBanner";
 
-const Landing = lazy(() => import("./pages/Landing"));
-const Chat = lazy(() => import("./pages/Chat"));
-const Auth = lazy(() => import("./pages/Auth"));
-const SharedChatPage = lazy(() => import("./pages/SharedChatPage"));
-const Admin = lazy(() => import("./pages/Admin"));
-const GroupChat = lazy(() => import("./pages/GroupChat"));
-const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
-const ChatLayout = lazy(() => import("./features/chat/components/ChatLayout"));
+import Landing from "./pages/Landing";
+import Chat from "./pages/Chat";
+import Auth from "./pages/Auth";
+import SharedChatPage from "./pages/SharedChatPage";
+import Admin from "./pages/Admin";
+import GroupChat from "./pages/GroupChat";
+import JoinGroupPage from "./pages/JoinGroupPage";
+import ChatLayout from "./features/chat/components/ChatLayout";
 
 function App() {
   const { isSignedIn, isLoaded } = useUser();
