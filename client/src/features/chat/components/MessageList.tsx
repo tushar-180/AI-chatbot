@@ -6,8 +6,9 @@ import {
   useState,
   useLayoutEffect,
 } from "react";
-import { ChevronDown, Code, Lightbulb, PenTool, Terminal } from "lucide-react";
+import { ChevronDown, Code, Lightbulb, PenTool, Terminal, ShieldAlert } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import type { WebSource } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
@@ -18,6 +19,9 @@ interface Message {
   content: string;
   model?: string;
   sources?: WebSource[];
+  metadata?: {
+    selection?: any;
+  };
 }
 
 const SUGGESTIONS = [
@@ -85,6 +89,7 @@ const MessageList = ({
   onCitationClick,
   onSourcesClick,
 }: MessageListProps) => {
+  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const highlight = searchParams.get("highlight");
@@ -250,23 +255,40 @@ const MessageList = ({
       }`}
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
+        {isTemporaryChatActive && messages.length > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/10 bg-emerald-500/[0.02] px-5 py-3.5 text-xs text-emerald-400/90 shadow-[0_0_15px_rgba(16,185,129,0.02)] select-none">
+            <ShieldAlert size={16} className="text-emerald-400 animate-pulse shrink-0" />
+            <span>
+              You are in a <strong>Temporary Chat</strong>. All messages and assets generated in this session will vanish permanently from history and cache once closed.
+            </span>
+          </div>
+        )}
+
         {showSuggestions ? (
           <div className="flex w-full animate-in fade-in slide-in-from-bottom-4 flex-col items-center justify-center py-12 duration-700 md:py-24">
             <div className="mb-12 flex flex-col items-center text-center">
               <div className="mb-7 flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Velora Logo"
-                  className="h-20 w-20 object-contain object-center drop-shadow-lg"
-                />
+                {isTemporaryChatActive ? (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.15)] animate-pulse">
+                    <ShieldAlert size={40} />
+                  </div>
+                ) : (
+                  <img
+                    src="/logo.png"
+                    alt="Velora Logo"
+                    className="h-20 w-20 object-contain object-center drop-shadow-lg"
+                  />
+                )}
               </div>
 
               <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
-                How can I help you today?
+                {isTemporaryChatActive ? "Temporary Chat Mode" : "How can I help you today?"}
               </h2>
 
-              <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-500">
-                {isNewChat
+              <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-400">
+                {isTemporaryChatActive
+                  ? "This chat is secure and completely stateless. Messages, metadata, and responses exist only in-memory and will be permanently erased once you leave."
+                  : isNewChat
                   ? "Your new conversation is ready. Choose a suggestion below or send a message to get started."
                   : "Select an existing chat from the sidebar or start a new one to begin brainstorming or asking questions."}
               </p>
@@ -277,14 +299,24 @@ const MessageList = ({
                 <button
                   key={idx}
                   onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                  className="group flex flex-col items-start rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 text-left transition-all duration-300 hover:border-white/15 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-indigo-500/[0.03]"
+                  className={`group flex flex-col items-start rounded-2xl border p-5 text-left transition-all duration-300 ${
+                    isTemporaryChatActive
+                      ? "border-emerald-500/10 bg-emerald-950/[0.02] hover:border-emerald-500/30 hover:bg-emerald-950/[0.06] hover:shadow-[0_0_20px_rgba(16,185,129,0.05)]"
+                      : "border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-indigo-500/[0.03]"
+                  }`}
                 >
-                  <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors duration-300 group-hover:text-indigo-400">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/60 transition-all duration-300 group-hover:bg-indigo-500/[0.12] group-hover:shadow-sm group-hover:shadow-indigo-500/20">
+                  <div className="mb-3 flex items-center gap-3 text-slate-400 transition-colors duration-300 group-hover:text-slate-200">
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl bg-slate-800/60 transition-all duration-300 ${
+                      isTemporaryChatActive
+                        ? "group-hover:bg-emerald-500/[0.12] group-hover:shadow-sm group-hover:shadow-emerald-500/20 group-hover:text-emerald-400"
+                        : "group-hover:bg-indigo-500/[0.12] group-hover:shadow-sm group-hover:shadow-indigo-500/20 group-hover:text-indigo-400"
+                    }`}>
                       <suggestion.icon size={18} strokeWidth={1.8} />
                     </div>
 
-                    <span className="text-base font-semibold tracking-tight text-slate-200">
+                    <span className={`text-base font-semibold tracking-tight transition-colors duration-300 ${
+                      isTemporaryChatActive ? "group-hover:text-emerald-300" : "group-hover:text-slate-200"
+                    }`}>
                       {suggestion.title}
                     </span>
                   </div>
@@ -330,21 +362,29 @@ const MessageList = ({
           </div>
         ) : (
           <>
-            {messages.map((msg, i) => (
-              <div key={msg.id}>
-                <MessageItem
-                  message={msg}
-                  isStreaming={isStreaming && i === messages.length - 1}
-                  onEdit={(content) => onEditMessage?.(msg.id, content)}
-                  onEditStart={onEditStart}
-                  onRetry={() => onRetryMessage?.(msg.id)}
-                  onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
-                  highlight={highlight || undefined}
-                  onCitationClick={onCitationClick}
-                  onSourcesClick={onSourcesClick}
-                />
-              </div>
-            ))}
+            {messages.map((msg, i) => {
+              if (
+                msg.role === "user" &&
+                (msg.content === "Explain this" || msg.metadata?.selection)
+              ) {
+                return null;
+              }
+              return (
+                <div key={msg.id}>
+                  <MessageItem
+                    message={msg}
+                    isStreaming={isStreaming && i === messages.length - 1}
+                    onEdit={(content) => onEditMessage?.(msg.id, content)}
+                    onEditStart={onEditStart}
+                    onRetry={() => onRetryMessage?.(msg.id)}
+                    onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                    highlight={highlight || undefined}
+                    onCitationClick={onCitationClick}
+                    onSourcesClick={onSourcesClick}
+                  />
+                </div>
+              );
+            })}
 
             {isStreaming &&
               messages.length > 0 &&
