@@ -490,7 +490,7 @@ const Sidebar = () => {
     groupId?: string;
   }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId, isNewChat } =
     useChatStore();
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
@@ -733,14 +733,10 @@ const Sidebar = () => {
           <button
             onClick={() => {
               if (isTemporaryChatActive) {
+                useTemporaryChatStore.getState().setTemporaryChatActive(false);
                 clearTemporaryChatStore();
-                useChatStore.getState().setCurrentChat(null);
-                useChatStore.getState().setIsNewChat(true);
-                useChatStore.getState().setMessages([]);
-                navigate("/chat");
-              } else {
-                createChat();
               }
+              createChat();
             }}
             className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
           >
@@ -998,32 +994,34 @@ const Sidebar = () => {
                 <span>Profile</span>
               </DropdownMenuItem>
 
-              <DropdownMenuItem
-                onClick={() => {
-                  const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
-                  const newActive = !currentActive;
-                  
-                  useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
-                  
-                  if (newActive) {
-                    useChatStore.getState().setCurrentChat(null);
-                    useChatStore.getState().setIsNewChat(true);
-                    useChatStore.getState().setMessages([]);
-                    useTemporaryChatStore.getState().clearStore();
-                    useChatStore.getState().setIsStreaming(false);
-                    useChatStore.getState().setLoading(false);
-                  } else {
-                    useTemporaryChatStore.getState().clearStore();
-                  }
-                  navigate("/chat");
-                }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
-              >
-                <ShieldAlert size={16} className={isTemporaryChatActive ? "text-emerald-400 animate-pulse" : "text-slate-400"} />
-                <span className={isTemporaryChatActive ? "text-emerald-400 font-extrabold" : ""}>
-                  Temporary Chat
-                </span>
-              </DropdownMenuItem>
+              {(isNewChat || !currentChatId || isTemporaryChatActive) && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+                    const newActive = !currentActive;
+                    
+                    useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
+                    
+                    if (newActive) {
+                      useChatStore.getState().setCurrentChat(null);
+                      useChatStore.getState().setIsNewChat(true);
+                      useChatStore.getState().setMessages([]);
+                      useTemporaryChatStore.getState().clearStore();
+                      useChatStore.getState().setIsStreaming(false);
+                      useChatStore.getState().setLoading(false);
+                    } else {
+                      useTemporaryChatStore.getState().clearStore();
+                    }
+                    navigate("/chat");
+                  }}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                >
+                  <ShieldAlert size={16} className={isTemporaryChatActive ? "text-emerald-400 animate-pulse" : "text-slate-400"} />
+                  <span className={isTemporaryChatActive ? "text-emerald-400 font-extrabold" : ""}>
+                    Temporary Chat
+                  </span>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuItem
                 onClick={() => {

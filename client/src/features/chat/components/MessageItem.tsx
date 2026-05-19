@@ -461,6 +461,9 @@ const MessageItem = ({
             }`}
             ref={contentRef}
             key={highlight || "no-highlight"}
+            data-message-role={msg.role}
+            data-message-id={msg.id}
+            data-message-content={msg.content}
           >
             {isStreaming && !msg.content ? (
               msg.isWebSearching ? (

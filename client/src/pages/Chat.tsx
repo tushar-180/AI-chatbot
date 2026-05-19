@@ -17,12 +17,16 @@ import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatSto
 import { useTemporaryChat } from "@/features/chat/hooks/useTemporaryChat";
 import { TempChatBanner } from "@/features/chat/components/TempChatBanner";
 import { chatService } from "@/features/chat/services/chat.service";
+import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
+import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
 
 /**
  * Chat Page Component
  * Handles the main layout and orchestrates chat logic via custom hooks.
  */
 const Chat = () => {
+  useTextSelection();
   const { chatId } = useParams<{ chatId?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
@@ -141,11 +145,16 @@ const Chat = () => {
     setWebSearchEnabled,
     handleFormSubmit,
   } = useChatInput({
-    onSubmit: (input, provider, attachments, options) =>
-      streamMessage(input, provider, attachments, {
+    onSubmit: async (input, provider, attachments, options) => {
+      const selectionContext = useComposerStore.getState().selectionContext;
+      useComposerStore.getState().clearSelectionContext();
+      const res = await streamMessage(input, provider, attachments, {
         forceNewChat: isTemporaryChatActive ? false : Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
-      }),
+        selection: selectionContext || undefined,
+      });
+      return res;
+    },
   });
 
   // 5. Handle auto-start message from SharedChatPage
@@ -305,6 +314,7 @@ const Chat = () => {
           onClose={handleSourcesClose}
         />
       )}
+      <SelectionToolbar />
     </div>
   );
 };

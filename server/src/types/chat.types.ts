@@ -58,6 +58,12 @@ export type CreateChatInput = {
   requestId?: string;
   attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  selection?: {
+    selectedText: string;
+    originalSourceMessage: string;
+    sourceMessageId: string;
+    actionType: string;
+  };
 };
 
 export type SendMessageInput = {
@@ -67,6 +73,12 @@ export type SendMessageInput = {
   requestId?: string;
   attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  selection?: {
+    selectedText: string;
+    originalSourceMessage: string;
+    sourceMessageId: string;
+    actionType: string;
+  };
 };
 
 export type EditMessageInput = {

@@ -178,7 +178,27 @@ const buildPromptMessages = async (
   webSearchEnabled = false,
   provider?: string,
 ) => {
-  const promptMessages = getLimitedMessages(chatMessages);
+  const rawPromptMessages = getLimitedMessages(chatMessages);
+  const promptMessages = rawPromptMessages.map((m) => {
+    const raw = typeof (m as any).toObject === "function" ? (m as any).toObject() : { ...m };
+    return { ...raw };
+  });
+
+  const lastMsg = promptMessages[promptMessages.length - 1];
+  if (lastMsg && lastMsg.role === "user" && lastMsg.metadata?.selection) {
+    const selection = lastMsg.metadata.selection;
+    const userRequest = lastMsg.content?.trim() || "Explain this.";
+    lastMsg.content = `User selected text from a previous assistant message.
+
+Selected text:
+"${selection.selectedText}"
+
+Original message:
+"${selection.originalSourceMessage}"
+
+User request:
+${userRequest}`;
+  }
   const systemMessages: ChatMessage[] = [
     {
       role: "system",
@@ -496,9 +516,10 @@ export const chatService = {
     provider,
     attachments,
     webSearchEnabled,
+    selection,
   }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
-    const trimmedMessage = message?.trim() || "";
+    const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
 
     const chat = chatRepository.create({
       userId: resolvedUserId,
@@ -518,6 +539,7 @@ export const chatService = {
       );
       userMessage.metadata = {
         webSearchEnabled: Boolean(webSearchEnabled),
+        selection,
       };
       const userPromptText = userMessage.content || "";
       const attachmentCount = attachments?.length || 0;
@@ -584,10 +606,13 @@ export const chatService = {
 
   async *createChatStream(input: CreateChatInput) {
     const resolvedUserId = requireUserId(input.userId);
-    const trimmedMessage = requireMessage(
-      input.message,
-      "message is required for streaming creation",
-    );
+    const trimmedMessage = (input.message?.trim() || "") || (input.selection ? "Explain this" : "");
+    if (!input.selection) {
+      requireMessage(
+        input.message,
+        "message is required for streaming creation",
+      );
+    }
     const requestId = requireRequestId(input.requestId);
 
     const chat = chatRepository.create({
@@ -607,6 +632,7 @@ export const chatService = {
     );
     userMsg.metadata = {
       webSearchEnabled: Boolean(input.webSearchEnabled),
+      selection: input.selection,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = input.attachments?.length || 0;
@@ -634,8 +660,9 @@ export const chatService = {
     provider,
     attachments,
     webSearchEnabled,
+    selection,
   }: SendMessageInput) {
-    const trimmedMessage = message?.trim() || "";
+    const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const chat = await requireChat(chatId);
 
     // Save User Message
@@ -647,6 +674,7 @@ export const chatService = {
     );
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
+      selection,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
@@ -730,8 +758,9 @@ export const chatService = {
     requestId,
     attachments,
     webSearchEnabled,
+    selection,
   }: SendMessageInput) {
-    const trimmedMessage = message?.trim() || "";
+    const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
 
@@ -744,6 +773,7 @@ export const chatService = {
     );
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
+      selection,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
