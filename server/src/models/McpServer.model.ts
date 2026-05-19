@@ -42,7 +42,11 @@ const mcpServerSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toObject: { flattenMaps: true },
+    toJSON: { flattenMaps: true }
+  }
 );
 
 export const McpServer = mongoose.model("McpServer", mcpServerSchema);

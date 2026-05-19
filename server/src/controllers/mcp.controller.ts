@@ -68,7 +68,7 @@ export const mcpController = {
         const isGloballyEnabled = server.enabled;
         const isDisabledByUser = disabledMcpServers.includes(server.name);
         return {
-          ...server.toObject(),
+          ...server.toObject({ flattenMaps: true }),
           enabled: isGloballyEnabled && !isDisabledByUser,
           connected: mcpClientService.getConnectionState(server.name) && !isDisabledByUser,
         };
@@ -134,7 +134,7 @@ export const mcpController = {
         res.status(200).json({
           message: `Server ${enabled ? "enabled" : "disabled"} successfully for you`,
           server: {
-            ...server.toObject(),
+            ...server.toObject({ flattenMaps: true }),
             enabled: server.enabled && !isDisabledByUser,
           },
           connected: mcpClientService.getConnectionState(server.name) && !isDisabledByUser,
