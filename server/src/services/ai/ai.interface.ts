@@ -1,11 +1,11 @@
-import { AIMessage } from "./types";
+import { AIMessage, AIResponse, AIStreamResponse } from "./types";
 
 export interface IAIService {
-  generateResponse(messages: AIMessage[]): Promise<string>;
+  generateResponse(messages: AIMessage[]): Promise<AIResponse>;
   generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
-  ): AsyncIterable<string>;
+  ): Promise<AIStreamResponse>;
   getProviderName(): string;
   setModel(model: string): void;
   generateEmbedding(text: string): Promise<number[]>;

@@ -51,6 +51,14 @@ export const chatStreamRegistry = {
     activeStream.emitter.emit("chunk", chunk);
   },
 
+  updateUsage(requestId: string, usage: ActiveStream["usage"]) {
+    const activeStream = activeStreams.get(requestId);
+
+    if (!activeStream || !usage) return;
+
+    activeStream.usage = usage;
+  },
+
   complete(requestId: string) {
     const activeStream = activeStreams.get(requestId);
 

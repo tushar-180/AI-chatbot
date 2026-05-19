@@ -319,7 +319,6 @@ const MessageItem = ({
             span.appendChild(document.createTextNode(after));
 
             if (!firstMark) firstMark = mark;
-
             textNode.parentNode?.replaceChild(span, textNode);
           }
 
@@ -401,7 +400,11 @@ const MessageItem = ({
             <button
               onClick={(e) => {
                 e.preventDefault();
-                onCitationClick?.(id);
+                if (msg.sources?.length) {
+                  onSourcesClick?.(msg.sources, id);
+                } else {
+                  onCitationClick?.(id);
+                }
               }}
               className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
               title={`Source ${id}`}

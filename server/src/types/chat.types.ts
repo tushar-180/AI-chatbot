@@ -126,6 +126,7 @@ export type ActiveStream = {
   chatId: string;
   messageId: string;
   fullResponse: string;
+  usage?: TokenUsage;
   emitter: EventEmitter;
   model: string;
   status: ChatMessageStatus;

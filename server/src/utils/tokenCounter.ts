@@ -4,6 +4,65 @@ export interface TokenUsage {
   totalTokens: number;
 }
 
+export function createTokenUsage(
+  promptTokens = 0,
+  completionTokens = 0,
+  totalTokens?: number,
+): TokenUsage {
+  const normalizedPromptTokens = Number(promptTokens) || 0;
+  const normalizedCompletionTokens = Number(completionTokens) || 0;
+  const normalizedTotalTokens =
+    Number(totalTokens) || normalizedPromptTokens + normalizedCompletionTokens;
+
+  return {
+    promptTokens: normalizedPromptTokens,
+    completionTokens: normalizedCompletionTokens,
+    totalTokens: normalizedTotalTokens,
+  };
+}
+
+export function normalizeOpenAIUsage(usage: any): TokenUsage | undefined {
+  if (!usage) return undefined;
+
+  const promptTokens = usage.input_tokens ?? usage.prompt_tokens;
+  const completionTokens = usage.output_tokens ?? usage.completion_tokens;
+  const totalTokens = usage.total_tokens;
+
+  if (
+    typeof promptTokens !== "number" &&
+    typeof completionTokens !== "number" &&
+    typeof totalTokens !== "number"
+  ) {
+    return undefined;
+  }
+
+  return createTokenUsage(promptTokens, completionTokens, totalTokens);
+}
+
+export function normalizeGeminiUsageMetadata(
+  usageMetadata: any,
+): TokenUsage | undefined {
+  if (!usageMetadata) return undefined;
+
+  const promptTokens =
+    usageMetadata.promptTokenCount ?? usageMetadata.prompt_token_count;
+  const completionTokens =
+    usageMetadata.candidatesTokenCount ??
+    usageMetadata.candidates_token_count;
+  const totalTokens =
+    usageMetadata.totalTokenCount ?? usageMetadata.total_token_count;
+
+  if (
+    typeof promptTokens !== "number" &&
+    typeof completionTokens !== "number" &&
+    typeof totalTokens !== "number"
+  ) {
+    return undefined;
+  }
+
+  return createTokenUsage(promptTokens, completionTokens, totalTokens);
+}
+
 /**
  * Estimate token count based on standard English ratio (1 token ≈ 4 characters).
  * Accounts for vision attachments by adding a fixed token cost (258 tokens per attachment).

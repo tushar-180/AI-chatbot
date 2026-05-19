@@ -25,8 +25,9 @@ import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
 import { userService } from "./user.service";
 import {
-  estimateTokenCount,
+  TokenUsage,
   calculateUsage,
+  estimateTokenCount,
   serializePromptMessages,
 } from "../utils/tokenCounter";
 
@@ -170,6 +171,14 @@ const finalizeGroundedResponse = (
     appendedCitations,
   };
 };
+
+const resolveAssistantTokens = (
+  usage: TokenUsage | undefined,
+  promptText: string,
+  completionText: string,
+  promptAttachmentCount = 0,
+) =>
+  usage ?? calculateUsage(promptText, completionText, promptAttachmentCount);
 
 const buildPromptMessages = async (
   userId: string,
@@ -364,7 +373,7 @@ async function* streamAssistantResponse(
   let firstTokenTimedOut = false;
 
   try {
-    const stream = aiProvider.generateStreamResponse(
+    const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
     );
@@ -398,6 +407,8 @@ async function* streamAssistantResponse(
       clearTimeout(timeout);
     }
 
+    chatStreamRegistry.updateUsage(requestId, await stream.usage);
+
     const groundedResponse = finalizeGroundedResponse(
       fullResponse,
       webGrounding,
@@ -428,7 +439,8 @@ async function* streamAssistantResponse(
       (sum, m) => sum + (m.attachments?.length || 0),
       0,
     );
-    const tokens = calculateUsage(
+    const tokens = resolveAssistantTokens(
+      activeStream.usage,
       promptText,
       fullResponse,
       promptAttachmentCount,
@@ -478,7 +490,8 @@ async function* streamAssistantResponse(
         (sum, m) => sum + (m.attachments?.length || 0),
         0,
       );
-      const tokens = calculateUsage(
+      const tokens = resolveAssistantTokens(
+        activeStream.usage,
         promptText,
         activeStream.fullResponse,
         promptAttachmentCount,
@@ -498,7 +511,12 @@ async function* streamAssistantResponse(
       (sum, m) => sum + (m.attachments?.length || 0),
       0,
     );
-    const tokens = calculateUsage(promptText, "", promptAttachmentCount);
+    const tokens = resolveAssistantTokens(
+      activeStream.usage,
+      promptText,
+      "",
+      promptAttachmentCount,
+    );
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       status: "failed",
       tokens,
@@ -564,8 +582,11 @@ export const chatService = {
       );
 
       let reply = "";
+      let usage: TokenUsage | undefined;
       try {
-        reply = await aiProvider.generateResponse(promptMessages);
+        const response = await aiProvider.generateResponse(promptMessages);
+        reply = response.text;
+        usage = response.usage;
       } catch (err) {
         console.error("AI Error in createChat:", err);
         throw new Error("Server Error: AI failed to respond.");
@@ -575,7 +596,11 @@ export const chatService = {
 
       // Save Assistant Message
       const assistantPromptText = serializePromptMessages(promptMessages);
-      const assistantTokens = calculateUsage(assistantPromptText, reply);
+      const assistantTokens = resolveAssistantTokens(
+        usage,
+        assistantPromptText,
+        reply,
+      );
       await chatRepository.saveMessage(chatId, {
         ...createAssistantMessage(
           reply,
@@ -705,8 +730,11 @@ export const chatService = {
     );
 
     let reply = "";
+    let usage: TokenUsage | undefined;
     try {
-      reply = await aiProvider.generateResponse(promptMessages);
+      const response = await aiProvider.generateResponse(promptMessages);
+      reply = response.text;
+      usage = response.usage;
     } catch (err) {
       console.error("AI Error in sendMessage:", err);
       throw new Error("Server Error: AI failed to respond.");
@@ -720,7 +748,8 @@ export const chatService = {
       (sum, m) => sum + (m.attachments?.length || 0),
       0,
     );
-    const assistantTokens = calculateUsage(
+    const assistantTokens = resolveAssistantTokens(
+      usage,
       assistantPromptText,
       reply,
       promptAttachmentCount,
@@ -826,7 +855,8 @@ export const chatService = {
           (sum, m) => sum + (m.attachments?.length || 0),
           0,
         );
-        tokens = calculateUsage(
+        tokens = resolveAssistantTokens(
+          activeStream.usage,
           promptText,
           activeStream.fullResponse,
           promptAttachmentCount,
@@ -1021,8 +1051,11 @@ export const chatService = {
     );
 
     let reply = "";
+    let usage: TokenUsage | undefined;
     try {
-      reply = await aiProvider.generateResponse(promptMessages);
+      const response = await aiProvider.generateResponse(promptMessages);
+      reply = response.text;
+      usage = response.usage;
     } catch (err) {
       console.error("AI Error in editMessage:", err);
       throw new Error("Server Error: AI failed to respond.");
@@ -1043,6 +1076,12 @@ export const chatService = {
       ),
       attachments: aiAttachments,
       type: type as any,
+      tokens: resolveAssistantTokens(
+        usage,
+        serializePromptMessages(promptMessages),
+        reply,
+        promptMessages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
+      ),
     });
 
     // Check if it's the first message to update title
@@ -1145,8 +1184,11 @@ export const chatService = {
     );
 
     let reply = "";
+    let usage: TokenUsage | undefined;
     try {
-      reply = await aiProvider.generateResponse(promptMessages);
+      const response = await aiProvider.generateResponse(promptMessages);
+      reply = response.text;
+      usage = response.usage;
     } catch (err) {
       console.error("AI Error in retryMessage:", err);
       throw new Error("Server Error: AI failed to respond.");
@@ -1159,6 +1201,12 @@ export const chatService = {
       status: "completed",
       model: providerName,
       metadata: buildGroundingMetadata(webGrounding),
+      tokens: resolveAssistantTokens(
+        usage,
+        serializePromptMessages(promptMessages),
+        reply,
+        promptMessages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
+      ),
     });
 
     return await chatRepository.findById(chatId);

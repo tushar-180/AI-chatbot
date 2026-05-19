@@ -104,6 +104,6 @@ ${context}
       { role: "user", content: exportPrompt, userId: clerkId }
     ]);
 
-    return summary;
+    return summary.text;
   }
 };
