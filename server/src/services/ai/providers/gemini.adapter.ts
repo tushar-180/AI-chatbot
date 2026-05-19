@@ -1,11 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
 import {
   AI_PROVIDERS,
   getDisplayProviderName,
   supportsVision,
 } from "../constants";
+import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -146,7 +147,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
     return collapsed;
   }
 
-  async generateResponse(messages: AIMessage[]): Promise<string> {
+  async generateResponse(messages: AIMessage[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
     const contents = await this.formatContents(collapsedMessages);
@@ -167,17 +168,22 @@ OUTPUT RULES (STRICTLY ENFORCED):
       const text =
         res?.candidates?.[0]?.content?.parts?.[0]?.text || res?.text || "";
 
-      return text.trim() || "No response generated.";
+      return {
+        text: text.trim() || "No response generated.",
+        usage: normalizeGeminiUsageMetadata(
+          (res as any).usageMetadata ?? (res as any).usage_metadata,
+        ),
+      };
     } catch (error: any) {
       console.error("Gemini Adapter Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
     }
   }
 
-  async *generateStreamResponse(
+  async generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
-  ): AsyncIterable<string> {
+  ): Promise<AIStreamResponse> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
     const contents = await this.formatContents(collapsedMessages);
@@ -197,26 +203,56 @@ OUTPUT RULES (STRICTLY ENFORCED):
         },
       } as any);
 
-      for await (const chunk of res) {
-        if (signal?.aborted) {
-          return;
-        }
-        const text = chunk.text;
-        if (text) {
-          streamedText += text;
-          yield text;
-        }
-      }
+      let latestUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+      let settleUsage: (
+        usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
+      ) => void = () => undefined;
+      let usageSettled = false;
+      const usage = new Promise<
+        ReturnType<typeof normalizeGeminiUsageMetadata>
+      >((resolve) => {
+        settleUsage = (value) => {
+          if (!usageSettled) {
+            usageSettled = true;
+            resolve(value);
+          }
+        };
+      });
+
+      return {
+        usage,
+        async *[Symbol.asyncIterator]() {
+          try {
+            for await (const chunk of res) {
+              if (signal?.aborted) {
+                return;
+              }
+              const normalizedUsage = normalizeGeminiUsageMetadata(
+                (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
+              );
+              if (normalizedUsage) {
+                latestUsage = normalizedUsage;
+              }
+              const text = chunk.text;
+              if (text) {
+                streamedText += text;
+                yield text;
+              }
+            }
+          } finally {
+            settleUsage(latestUsage);
+          }
+        },
+      };
     } catch (error: any) {
       if (signal?.aborted) {
-        return;
+        return {
+          usage: Promise.resolve(undefined),
+          async *[Symbol.asyncIterator]() {},
+        };
       }
 
       console.error("Gemini Adapter Stream Error:", error);
-
-      if (streamedText) {
-        return;
-      }
 
       if (error?.message?.includes("Incomplete JSON segment")) {
         const fallbackResponse = await this.ai.models.generateContent({
@@ -232,8 +268,18 @@ OUTPUT RULES (STRICTLY ENFORCED):
           "";
 
         if (text.trim()) {
-          yield text.trim();
-          return;
+          const fallbackText = text.trim();
+          return {
+            usage: Promise.resolve(
+              normalizeGeminiUsageMetadata(
+                (fallbackResponse as any).usageMetadata ??
+                  (fallbackResponse as any).usage_metadata,
+              ),
+            ),
+            async *[Symbol.asyncIterator]() {
+              yield fallbackText;
+            },
+          };
         }
       }
 

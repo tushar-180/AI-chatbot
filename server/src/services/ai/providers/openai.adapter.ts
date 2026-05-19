@@ -1,11 +1,12 @@
 import { OpenAI } from "openai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
 import {
   AI_PROVIDERS,
   getDisplayProviderName,
   supportsVision,
 } from "../constants";
+import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -106,7 +107,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
       : coreInstructions;
   }
 
-  async generateResponse(messages: AIMessage[]): Promise<string> {
+  async generateResponse(messages: AIMessage[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
@@ -128,17 +129,20 @@ OUTPUT RULES (STRICTLY ENFORCED):
         input: [developerMessage, ...formattedInput] as any,
       });
 
-      return response.output_text?.trim() || "No response generated.";
+      return {
+        text: response.output_text?.trim() || "No response generated.",
+        usage: normalizeOpenAIUsage((response as any).usage),
+      };
     } catch (error: any) {
       console.error("OpenAI Adapter Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
     }
   }
 
-  async *generateStreamResponse(
+  async generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
-  ): AsyncIterable<string> {
+  ): Promise<AIStreamResponse> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
@@ -160,33 +164,66 @@ OUTPUT RULES (STRICTLY ENFORCED):
         stream: true,
       })) as any;
 
-      for await (const chunk of stream) {
-        if (signal?.aborted) {
-          return;
-        }
+      let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
+      let settleUsage: (usage: ReturnType<typeof normalizeOpenAIUsage>) => void =
+        () => undefined;
+      let usageSettled = false;
+      const usage = new Promise<ReturnType<typeof normalizeOpenAIUsage>>(
+        (resolve) => {
+          settleUsage = (value) => {
+            if (!usageSettled) {
+              usageSettled = true;
+              resolve(value);
+            }
+          };
+        },
+      );
 
-        let text = "";
+      return {
+        usage,
+        async *[Symbol.asyncIterator]() {
+          try {
+            for await (const chunk of stream) {
+              if (signal?.aborted) {
+                return;
+              }
 
-        // 1. New Responses API SSE structure
-        if (chunk.data?.event?.type === "response.output_text.delta") {
-          text = chunk.data.event.delta;
-        } else if (chunk.type === "response.output_text.delta") {
-          text = chunk.delta || chunk.text;
-        } 
-        // 2. Legacy completions / helper SDK structures
-        else if (chunk.choices?.[0]?.delta?.content) {
-          text = chunk.choices[0].delta.content;
-        } else if (chunk.text) {
-          text = chunk.text;
-        }
+              let text = "";
 
-        if (text) {
-          yield text;
-        }
-      }
+              if (chunk.data?.event?.type === "response.output_text.delta") {
+                text = chunk.data.event.delta;
+              } else if (chunk.type === "response.output_text.delta") {
+                text = chunk.delta || chunk.text;
+              } else if (chunk.choices?.[0]?.delta?.content) {
+                text = chunk.choices[0].delta.content;
+              } else if (chunk.text) {
+                text = chunk.text;
+              }
+
+              const usageChunk =
+                chunk.response?.usage ??
+                chunk.data?.event?.response?.usage ??
+                chunk.usage;
+              const normalizedUsage = normalizeOpenAIUsage(usageChunk);
+              if (normalizedUsage) {
+                latestUsage = normalizedUsage;
+              }
+
+              if (text) {
+                yield text;
+              }
+            }
+          } finally {
+            settleUsage(latestUsage);
+          }
+        },
+      };
     } catch (error: any) {
       if (signal?.aborted) {
-        return;
+        return {
+          usage: Promise.resolve(undefined),
+          async *[Symbol.asyncIterator]() {},
+        };
       }
       console.error("OpenAI Adapter Stream Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
@@ -207,4 +244,3 @@ OUTPUT RULES (STRICTLY ENFORCED):
   }
   
 }
-
