@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useUser } from "@clerk/react";
 import Loading from "@/features/chat/components/Loading";
+import McpAdminTab from "@/features/admin/components/McpAdminTab";
 import { api } from "@/lib/api";
 import {
   ArrowLeft,
@@ -18,7 +19,8 @@ import {
   TrendingUp,
   Database,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Sliders
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -377,7 +379,7 @@ const Admin: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortField, setSortField] = useState<"name" | "chats" | "joined" | "tokens">("chats");
   const [sortAsc, setSortAsc] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance" | "mcp">("overview");
   const [syncing, setSyncing] = useState<boolean>(false);
 
   const fetchStats = async (isSync = false) => {
@@ -686,6 +688,17 @@ const Admin: React.FC = () => {
           >
             <Zap size={14} />
             <span>Model Performance</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("mcp")}
+            className={`pb-4 text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "mcp"
+                ? "text-indigo-400 border-indigo-400 font-bold"
+                : "text-slate-500 border-transparent hover:text-slate-300"
+            }`}
+          >
+            <Sliders size={14} />
+            <span>MCP Servers</span>
           </button>
         </div>
 
@@ -1018,6 +1031,9 @@ const Admin: React.FC = () => {
             </div>
           </div>
         )}
+
+        {activeTab === "mcp" && <McpAdminTab />}
+
       </div>
     </div>
   );

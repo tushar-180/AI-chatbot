@@ -516,6 +516,37 @@ const Sidebar = () => {
     viewingArchived,
   } = useChatList();
 
+  const chatListScrollRef = useRef<HTMLDivElement>(null);
+
+  const fetchMoreChatsRef = useRef(fetchMoreChats);
+  useEffect(() => {
+    fetchMoreChatsRef.current = fetchMoreChats;
+  }, [fetchMoreChats]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const observerTargetRef = useCallback((node: HTMLDivElement | null) => {
+    if (observer.current) {
+      observer.current.disconnect();
+    }
+
+    if (!node || !hasMore) return;
+
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          fetchMoreChatsRef.current();
+        }
+      },
+      {
+        root: chatListScrollRef.current,
+        threshold: 0,
+        rootMargin: "100px",
+      }
+    );
+
+    observer.current.observe(node);
+  }, [hasMore]);
+
   const [showRecent, setShowRecent] = useState(true);
   const [deleteConfig, setDeleteConfig] = useState<{
     id: string;
@@ -586,7 +617,6 @@ const Sidebar = () => {
       });
   }, [chats, viewingArchived]);
 
-  const observerTarget = useRef<HTMLDivElement>(null);
 
   // Merge and sort chats and groups
   const unifiedList = useMemo(() => {
@@ -611,7 +641,6 @@ const Sidebar = () => {
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   }, [filteredChats, groups, viewingArchived]);
-  const chatListScrollRef = useRef<HTMLDivElement>(null);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredChats.length) {
@@ -656,22 +685,6 @@ const Sidebar = () => {
     }
   };
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          fetchMoreChats();
-        }
-      },
-      { threshold: 1.0 },
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, fetchMoreChats]);
 
   useEffect(() => {
     if (user?.id) {
@@ -746,9 +759,9 @@ const Sidebar = () => {
 
           <button
             onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10"
           >
-            <ImageIcon size={16} />
+            <ImageIcon size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
             <span>Gallery</span>
           </button>
         </div>
@@ -907,8 +920,8 @@ const Sidebar = () => {
                 )}
 
                 {/* Intersection Observer Sentinel */}
-                {(hasMore || filteredChats.length > 0) && (
-                  <div ref={observerTarget} className="h-4 w-full mt-2" />
+                {hasMore && (
+                  <div ref={observerTargetRef} className="h-4 w-full mt-2" />
                 )}
 
                 {hasMore && loading && (
@@ -999,9 +1012,9 @@ const Sidebar = () => {
                   onClick={() => {
                     const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
                     const newActive = !currentActive;
-                    
+
                     useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
-                    
+
                     if (newActive) {
                       useChatStore.getState().setCurrentChat(null);
                       useChatStore.getState().setIsNewChat(true);
