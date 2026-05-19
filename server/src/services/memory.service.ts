@@ -154,7 +154,7 @@ export const memoryService = {
                 { role: "user", content: extractionPrompt, userId },
             ]);
 
-            const cleanedResponse = response.trim();
+            const cleanedResponse = response.text.trim();
             if (cleanedResponse === "NONE" || !cleanedResponse) return [];
 
             const lines = cleanedResponse.split("\n").filter(Boolean);

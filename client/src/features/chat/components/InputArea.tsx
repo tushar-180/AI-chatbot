@@ -40,6 +40,8 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
+import { ComposerQuotePreview } from "./ComposerQuotePreview";
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
 
 export interface InputAreaProps {
     input: string;
@@ -257,6 +259,7 @@ const InputArea = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [isUploading, setIsUploading] = useState(false);
+    const selectionContext = useComposerStore((state) => state.selectionContext);
 
     const { isListening, isSpeaking, start, stop } = useVoiceInput({
         onResult: (text) => {
@@ -282,6 +285,28 @@ const InputArea = ({
             )}px`;
         }
     }, [input]);
+
+    // Quote insertion listener with focus and cursor placement
+    useEffect(() => {
+        const handleInsertQuote = (e: Event) => {
+            const customEvent = e as CustomEvent<{ text: string }>;
+            const textToInsert = customEvent.detail.text;
+            onInputChange(textToInsert);
+
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                    textareaRef.current.selectionStart = textareaRef.current.value.length;
+                    textareaRef.current.selectionEnd = textareaRef.current.value.length;
+                }
+            }, 50);
+        };
+
+        window.addEventListener("insert-quote", handleInsertQuote);
+        return () => {
+            window.removeEventListener("insert-quote", handleInsertQuote);
+        };
+    }, [onInputChange]);
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -375,11 +400,14 @@ const InputArea = ({
                     </div>
                 </div>
             ) : (
-                <form
-                    onSubmit={onSubmit}
-                    className="mx-auto max-w-4xl relative pointer-events-auto"
-                >
+                <>
+                    <form
+                        onSubmit={onSubmit}
+                        className="mx-auto max-w-4xl relative pointer-events-auto"
+                    >
                     <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+                        <ComposerQuotePreview />
+
                         <ModelSelector
                             availableProviders={availableProviders}
                             selectedProvider={selectedProvider}
@@ -513,13 +541,15 @@ const InputArea = ({
                                         loading ||
                                         isUploading ||
                                         (!input.trim() &&
-                                            attachments.length === 0)
+                                            attachments.length === 0 &&
+                                            !selectionContext)
                                     }
                                     className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
                                         loading ||
                                         isUploading ||
                                         (!input.trim() &&
-                                            attachments.length === 0)
+                                            attachments.length === 0 &&
+                                            !selectionContext)
                                             ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                                             : "bg-white text-slate-900 hover:bg-slate-200"
                                     }`}
@@ -537,6 +567,7 @@ const InputArea = ({
                         </div>
                     </div>
                 </form>
+            </>
             )}
         </div>
     );
