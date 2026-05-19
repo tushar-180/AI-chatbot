@@ -7,6 +7,7 @@ import {
   supportsVision,
 } from "../constants";
 import dotenv from "dotenv";
+import { mcpClientService } from "../../mcpClient.service";
 
 dotenv.config();
 
@@ -146,7 +147,64 @@ OUTPUT RULES (STRICTLY ENFORCED):
     return collapsed;
   }
 
-  async generateResponse(messages: AIMessage[]): Promise<string> {
+  private mapJsonSchemaToGemini(schema: any): any {
+    if (!schema) return undefined;
+
+    const mapped: any = {};
+
+    if (schema.type) {
+      mapped.type = String(schema.type).toUpperCase();
+    } else {
+      mapped.type = "STRING";
+    }
+
+    if (schema.description) {
+      mapped.description = schema.description;
+    }
+
+    if (schema.properties) {
+      mapped.properties = Object.fromEntries(
+        Object.entries(schema.properties).map(([k, propSchema]: [string, any]) => [
+          k,
+          this.mapJsonSchemaToGemini(propSchema)
+        ])
+      );
+    }
+
+    if (schema.required) {
+      mapped.required = schema.required;
+    }
+
+    if (schema.items) {
+      mapped.items = this.mapJsonSchemaToGemini(schema.items);
+    } else if (mapped.type === "ARRAY") {
+      mapped.items = { type: "STRING" };
+    }
+
+    if (schema.enum) {
+      mapped.enum = schema.enum;
+    }
+
+    return mapped;
+  }
+
+  private mapMcpToolsToGemini(tools?: any[]) {
+    if (!tools || tools.length === 0) return undefined;
+
+    return [{
+      functionDeclarations: tools.map((t) => ({
+        name: t.name,
+        description: t.description || "",
+        parameters: this.mapJsonSchemaToGemini(t.inputSchema) || {
+          type: "OBJECT",
+          properties: {},
+          required: []
+        }
+      })),
+    }];
+  }
+
+  async generateResponse(messages: AIMessage[], tools?: any[]): Promise<string> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
     const contents = await this.formatContents(collapsedMessages);
@@ -155,19 +213,85 @@ OUTPUT RULES (STRICTLY ENFORCED):
       .map((msg) => msg.content)
       .join("\n\n---\n\n");
 
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+    let finalOutput = "";
+
     try {
-      const res = await this.ai.models.generateContent({
-        model: this.model,
-        contents,
-        config: {
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
+
+        const config: any = {
           systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
-        },
-      });
+        };
 
-      const text =
-        res?.candidates?.[0]?.content?.parts?.[0]?.text || res?.text || "";
+        const geminiTools = this.mapMcpToolsToGemini(tools);
+        if (geminiTools) {
+          config.tools = geminiTools;
+        }
 
-      return text.trim() || "No response generated.";
+        const res = await this.ai.models.generateContent({
+          model: this.model,
+          contents,
+          config,
+        });
+
+        const text = res?.candidates?.[0]?.content?.parts?.[0]?.text || res?.text || "";
+        if (text) {
+          finalOutput += text;
+        }
+
+        const fc = res.functionCalls;
+        if (fc && fc.length > 0) {
+          hasToolCalls = true;
+
+          // Record model turn in context (preserving all parts like thought_signature!)
+          const modelContent = res.candidates?.[0]?.content;
+          contents.push({
+            role: "model",
+            parts: modelContent?.parts && modelContent.parts.length > 0
+              ? modelContent.parts
+              : fc.map((f) => ({
+                  functionCall: {
+                    name: f.name,
+                    args: f.args,
+                  },
+                })),
+          } as any);
+
+          // Execute tool calls
+          const responseParts = await Promise.all(
+            fc.map(async (f) => {
+              try {
+                const result = await mcpClientService.executeTool(f.name!, f.args);
+                return {
+                  functionResponse: {
+                    name: f.name!,
+                    response: { result },
+                  },
+                };
+              } catch (err: any) {
+                return {
+                  functionResponse: {
+                    name: f.name!,
+                    response: { error: err.message || String(err) },
+                  },
+                };
+              }
+            })
+          );
+
+          // Record user turn with tool response in context
+          contents.push({
+            role: "user",
+            parts: responseParts,
+          } as any);
+        }
+      }
+
+      return finalOutput.trim() || "No response generated.";
     } catch (error: any) {
       console.error("Gemini Adapter Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
@@ -177,6 +301,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
   async *generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
+    tools?: any[],
   ): AsyncIterable<string> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
@@ -187,24 +312,104 @@ OUTPUT RULES (STRICTLY ENFORCED):
       .join("\n\n---\n\n");
 
     let streamedText = "";
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
 
     try {
-      const res = await this.ai.models.generateContentStream({
-        model: this.model,
-        contents,
-        config: {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
-        },
-      } as any);
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
 
-      for await (const chunk of res) {
-        if (signal?.aborted) {
-          return;
+        const config: any = {
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
+        };
+
+        const geminiTools = this.mapMcpToolsToGemini(tools);
+        if (geminiTools) {
+          config.tools = geminiTools;
         }
-        const text = chunk.text;
-        if (text) {
-          streamedText += text;
-          yield text;
+
+        const res = await this.ai.models.generateContentStream({
+          model: this.model,
+          contents,
+          config,
+        } as any);
+
+        const activeFunctionCalls: any[] = [];
+        const accumulatedParts: any[] = [];
+
+        for await (const chunk of res) {
+          if (signal?.aborted) {
+            return;
+          }
+          const text = chunk.text;
+          if (text) {
+            streamedText += text;
+            yield text;
+          }
+
+          const parts = chunk.candidates?.[0]?.content?.parts;
+          if (parts && parts.length > 0) {
+            accumulatedParts.push(...parts);
+          }
+
+          const fc = chunk.functionCalls;
+          if (fc && fc.length > 0) {
+            activeFunctionCalls.push(...fc);
+          }
+        }
+
+        if (activeFunctionCalls.length > 0) {
+          hasToolCalls = true;
+
+          // Record model turn in context (preserving all parts like thought_signature!)
+          contents.push({
+            role: "model",
+            parts: accumulatedParts.length > 0 
+              ? accumulatedParts 
+              : activeFunctionCalls.map((f) => ({
+                  functionCall: {
+                    name: f.name,
+                    args: f.args,
+                  },
+                })),
+          } as any);
+
+          // Execute tool calls sequentially to allow legal yields inside generator
+          const responseParts = [];
+          for (const f of activeFunctionCalls) {
+            if (!f.name) continue;
+
+            yield `\n\n⚙️ *Running tool \`${f.name}\`...*\n`;
+
+            try {
+              const result = await mcpClientService.executeTool(f.name, f.args);
+              yield `\n\n✅ *Tool \`${f.name}\` completed.* \n\n`;
+
+              responseParts.push({
+                functionResponse: {
+                  name: f.name,
+                  response: { result },
+                },
+              });
+            } catch (err: any) {
+              yield `\n\n❌ *Tool \`${f.name}\` failed: ${err.message || err}*\n\n`;
+
+              responseParts.push({
+                functionResponse: {
+                  name: f.name,
+                  response: { error: err.message || String(err) },
+                },
+              });
+            }
+          }
+
+          // Record user turn with tool response in context
+          contents.push({
+            role: "user",
+            parts: responseParts,
+          } as any);
         }
       }
     } catch (error: any) {

@@ -7,6 +7,7 @@ import {
   supportsVision,
 } from "../constants";
 import dotenv from "dotenv";
+import { mcpClientService } from "../../mcpClient.service";
 
 dotenv.config();
 
@@ -32,6 +33,17 @@ export class OpenAIAdapter implements IAIService {
     this.model = model;
   }
 
+  private getRealModelName(modelName: string): string {
+    const name = modelName.toLowerCase();
+    if (name.includes("gpt-5.4-mini") || name.includes("gpt-5-mini") || name.includes("gpt-4.1-mini") || name.includes("gpt-4.1-nano") || name.includes("gpt-5-nano") || name.includes("gpt-4.1-nano")) {
+      return "gpt-4o-mini";
+    }
+    if (name.includes("gpt-5") || name.includes("gpt-4.1") || name.includes("o3") || name.includes("o4") || name.includes("o4-mini")) {
+      return "gpt-4o";
+    }
+    return modelName;
+  }
+
   private async formatMessages(messages: AIMessage[]) {
     const isVision = supportsVision(this.model);
 
@@ -39,7 +51,7 @@ export class OpenAIAdapter implements IAIService {
       messages.map(async (msg) => {
         const role =
           msg.role === "system"
-            ? "developer"
+            ? "system"
             : msg.role === "assistant"
             ? "assistant"
             : "user";
@@ -95,6 +107,12 @@ export class OpenAIAdapter implements IAIService {
   private getSystemInstruction(combinedSystemPrompt?: string): string {
     const coreInstructions = `You are Velora, a powerful and sophisticated AI assistant.
 
+TOOL-USE & ANTI-HALLUCINATION RULES (CRITICAL):
+1. You have access to a rich set of external tools and database interfaces (e.g., sqlite__query, web_search, github, etc.) exposed through Model Context Protocol (MCP).
+2. Whenever a user request requires information you do not have in your immediate prompt context—such as querying database rows, finding files, searching the web, checking the weather, fetching GitHub info, or performing calculations—you MUST call the corresponding tool.
+3. DO NOT hallucinate, guess, or make up facts. If a tool exists that can fetch the requested information, you are STRICTLY REQUIRED to call that tool first before rendering your final response.
+4. If a tool fails or returns an error, explain the error to the user rather than guessing the correct value.
+
 OUTPUT RULES (STRICTLY ENFORCED):
 1. Always format responses using clean, professional Markdown.
 2. For code: ALWAYS use triple backticks with the correct language; NEVER return raw code without code blocks.
@@ -106,7 +124,19 @@ OUTPUT RULES (STRICTLY ENFORCED):
       : coreInstructions;
   }
 
-  async generateResponse(messages: AIMessage[]): Promise<string> {
+  private mapMcpToolsToOpenAI(tools?: any[]): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
+    if (!tools || tools.length === 0) return undefined;
+    return tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description || "",
+        parameters: t.inputSchema || { type: "object", properties: {} },
+      },
+    }));
+  }
+
+  async generateResponse(messages: AIMessage[], tools?: any[]): Promise<string> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
@@ -116,19 +146,82 @@ OUTPUT RULES (STRICTLY ENFORCED):
       messages.filter((msg) => msg.role !== "system"),
     );
 
+    const systemMessage = {
+      role: "system" as const,
+      content: this.getSystemInstruction(combinedSystemPrompt),
+    };
+
+    const finalMessages = [systemMessage, ...formattedInput] as any[];
+
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+    let finalOutput = "";
+
     try {
-      // Add developer instructions at the beginning of the turn
-      const developerMessage = {
-        role: "developer" as const,
-        content: this.getSystemInstruction(combinedSystemPrompt),
-      };
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
 
-      const response = await this.openai.responses.create({
-        model: this.model,
-        input: [developerMessage, ...formattedInput] as any,
-      });
+        const openAITools = this.mapMcpToolsToOpenAI(tools);
 
-      return response.output_text?.trim() || "No response generated.";
+        // If tools are active, use classic chat completions to ensure full tool support
+        if (openAITools) {
+          const response = await this.openai.chat.completions.create({
+            model: this.getRealModelName(this.model),
+            messages: finalMessages as any,
+            tools: openAITools,
+            temperature: 0.6,
+          });
+
+          const choice = response.choices[0];
+          const text = choice.message?.content || "";
+          if (text) {
+            finalOutput += text;
+          }
+
+          const toolCalls = choice.message?.tool_calls;
+          if (toolCalls && toolCalls.length > 0) {
+            hasToolCalls = true;
+
+            // Push assistant message with tool calls to context
+            finalMessages.push(choice.message);
+
+            // Execute tool calls
+            const responseMessages = await Promise.all(
+              toolCalls.map(async (tc) => {
+                try {
+                  const args = JSON.parse((tc as any).function.arguments);
+                  const result = await mcpClientService.executeTool((tc as any).function.name, args);
+                  return {
+                    role: "tool" as const,
+                    tool_call_id: tc.id,
+                    content: JSON.stringify(result),
+                  };
+                } catch (err: any) {
+                  return {
+                    role: "tool" as const,
+                    tool_call_id: tc.id,
+                    content: JSON.stringify({ error: err.message || String(err) }),
+                  };
+                }
+              })
+            );
+
+            // Push tool results to context
+            finalMessages.push(...responseMessages);
+          }
+        } else {
+          const response = await this.openai.chat.completions.create({
+            model: this.getRealModelName(this.model),
+            messages: finalMessages as any,
+            temperature: 0.6,
+          });
+          return response.choices[0]?.message?.content?.trim() || "No response generated.";
+        }
+      }
+
+      return finalOutput.trim() || "No response generated.";
     } catch (error: any) {
       console.error("OpenAI Adapter Error:", error);
       throw new AIServiceError(error.message, error.status || 500);
@@ -138,6 +231,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
   async *generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
+    tools?: any[],
   ): AsyncIterable<string> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
@@ -148,40 +242,132 @@ OUTPUT RULES (STRICTLY ENFORCED):
       messages.filter((msg) => msg.role !== "system"),
     );
 
+    const systemMessage = {
+      role: "system" as const,
+      content: this.getSystemInstruction(combinedSystemPrompt),
+    };
+
+    const finalMessages = [systemMessage, ...formattedInput] as any[];
+
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+
     try {
-      const developerMessage = {
-        role: "developer" as const,
-        content: this.getSystemInstruction(combinedSystemPrompt),
-      };
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
 
-      const stream = (await this.openai.responses.create({
-        model: this.model,
-        input: [developerMessage, ...formattedInput] as any,
-        stream: true,
-      })) as any;
+        const openAITools = this.mapMcpToolsToOpenAI(tools);
 
-      for await (const chunk of stream) {
-        if (signal?.aborted) {
-          return;
-        }
+        if (openAITools) {
+          const response = await this.openai.chat.completions.create(
+            {
+              model: this.getRealModelName(this.model),
+              messages: finalMessages as any,
+              tools: openAITools,
+              temperature: 0.6,
+              stream: true,
+            },
+            { signal }
+          );
 
-        let text = "";
+          let accumulatedText = "";
+          let activeToolCalls: any[] = [];
 
-        // 1. New Responses API SSE structure
-        if (chunk.data?.event?.type === "response.output_text.delta") {
-          text = chunk.data.event.delta;
-        } else if (chunk.type === "response.output_text.delta") {
-          text = chunk.delta || chunk.text;
-        } 
-        // 2. Legacy completions / helper SDK structures
-        else if (chunk.choices?.[0]?.delta?.content) {
-          text = chunk.choices[0].delta.content;
-        } else if (chunk.text) {
-          text = chunk.text;
-        }
+          for await (const chunk of response) {
+            if (signal?.aborted) {
+              return;
+            }
 
-        if (text) {
-          yield text;
+            const choice = chunk.choices[0];
+            const text = choice?.delta?.content || "";
+            if (text) {
+              accumulatedText += text;
+              yield text;
+            }
+
+            const tcDeltas = choice?.delta?.tool_calls;
+            if (tcDeltas) {
+              for (const tcDelta of tcDeltas) {
+                if (!activeToolCalls[tcDelta.index]) {
+                  activeToolCalls[tcDelta.index] = {
+                    id: tcDelta.id,
+                    type: "function",
+                    function: { name: "", arguments: "" },
+                  };
+                }
+                const tc = activeToolCalls[tcDelta.index];
+                if (tcDelta.id) tc.id = tcDelta.id;
+                if (tcDelta.function?.name) tc.function.name += tcDelta.function.name;
+                if (tcDelta.function?.arguments) tc.function.arguments += tcDelta.function.arguments;
+              }
+            }
+          }
+
+          // Filter out incomplete tool calls
+          activeToolCalls = activeToolCalls.filter(Boolean);
+
+          if (activeToolCalls.length > 0) {
+            hasToolCalls = true;
+
+            // Push assistant message with tool calls to context
+            finalMessages.push({
+              role: "assistant",
+              content: accumulatedText,
+              tool_calls: activeToolCalls,
+            });
+
+            // Execute tool calls sequentially to allow legal yields inside generator
+            const responseMessages = [];
+            for (const tc of activeToolCalls) {
+              const toolCall = tc as any;
+              yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
+
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                const result = await mcpClientService.executeTool(toolCall.function.name, args);
+                yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
+
+                responseMessages.push({
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify(result),
+                });
+              } catch (err: any) {
+                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${err.message || err}*\n\n`;
+
+                responseMessages.push({
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify({ error: err.message || String(err) }),
+                });
+              }
+            }
+
+            // Push tool results to context
+            finalMessages.push(...responseMessages);
+          }
+        } else {
+          const stream = await this.openai.chat.completions.create(
+            {
+              model: this.getRealModelName(this.model),
+              messages: finalMessages as any,
+              temperature: 0.6,
+              stream: true,
+            },
+            { signal }
+          );
+
+          for await (const chunk of stream) {
+            if (signal?.aborted) {
+              return;
+            }
+            const text = chunk.choices?.[0]?.delta?.content || "";
+            if (text) {
+              yield text;
+            }
+          }
         }
       }
     } catch (error: any) {

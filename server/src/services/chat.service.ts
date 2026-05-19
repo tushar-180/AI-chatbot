@@ -24,6 +24,7 @@ import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
 import { userService } from "./user.service";
+import { mcpClientService } from "./mcpClient.service";
 import {
     estimateTokenCount,
     calculateUsage,
@@ -329,9 +330,15 @@ async function* streamAssistantResponse(
   let firstTokenTimedOut = false;
 
   try {
+    const user = await userService.getUserByClerkId(String(chat.userId));
+    const disabledMcpServers = user?.get("disabledMcpServers") || [];
+    const allTools = await mcpClientService.getActiveTools();
+    const tools = allTools.filter((tool) => !disabledMcpServers.includes(tool._serverName));
+
     const stream = aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
+      tools,
     );
 
     // 30s timeout for first token
@@ -520,7 +527,12 @@ export const chatService = {
 
       let reply = "";
       try {
-        reply = await aiProvider.generateResponse(promptMessages);
+        const user = await userService.getUserByClerkId(String(resolvedUserId));
+        const disabledMcpServers = user?.get("disabledMcpServers") || [];
+        const allTools = await mcpClientService.getActiveTools();
+        const tools = allTools.filter((tool) => !disabledMcpServers.includes(tool._serverName));
+
+        reply = await aiProvider.generateResponse(promptMessages, tools);
       } catch (err) {
         console.error("AI Error in createChat:", err);
         throw new Error("Server Error: AI failed to respond.");
@@ -655,7 +667,12 @@ export const chatService = {
 
     let reply = "";
     try {
-      reply = await aiProvider.generateResponse(promptMessages);
+      const user = await userService.getUserByClerkId(String(chat.userId));
+      const disabledMcpServers = user?.get("disabledMcpServers") || [];
+      const allTools = await mcpClientService.getActiveTools();
+      const tools = allTools.filter((tool) => !disabledMcpServers.includes(tool._serverName));
+
+      reply = await aiProvider.generateResponse(promptMessages, tools);
     } catch (err) {
       console.error("AI Error in sendMessage:", err);
       throw new Error("Server Error: AI failed to respond.");

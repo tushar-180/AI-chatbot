@@ -717,9 +717,9 @@ const Sidebar = () => {
 
           <button
             onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10"
           >
-            <ImageIcon size={16} />
+            <ImageIcon size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
             <span>Gallery</span>
           </button>
         </div>

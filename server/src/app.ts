@@ -11,6 +11,7 @@ import sharedChatRoutes from "./routes/sharedChat.routes";
 import adminRoutes from "./routes/admin.routes";
 import { groupChatRoutes } from "./routes/groupChat.routes";
 import { GroupChatController } from "./controllers/groupChat.controller";
+import mcpRoutes from "./routes/mcp.routes";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
@@ -63,6 +64,7 @@ app.use("/api/memory", requireAuth, memoryRoutes);
 app.use("/api/admin", requireAuth, adminRoutes);
 app.use("/api/shared-chat", sharedChatRoutes);
 app.use("/api/web-search", webSearchRoutes);
+app.use("/api/mcp", requireAuth, mcpRoutes);
 
 // Error Handler Middleware
 app.use(errorHandler);
