@@ -148,7 +148,7 @@ export const temporaryChatService = {
     let firstTokenTimedOut = false;
 
     try {
-      const stream = aiProvider.generateStreamResponse(
+      const stream = await aiProvider.generateStreamResponse(
         promptMessages,
         activeStream.abortController.signal,
       );
