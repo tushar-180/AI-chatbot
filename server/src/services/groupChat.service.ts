@@ -333,7 +333,7 @@ export class GroupChatService {
 
     try {
       const aiProvider = aiService.getProvider(targetProvider);
-      const stream = aiProvider.generateStreamResponse(promptMessages);
+      const stream = await aiProvider.generateStreamResponse(promptMessages);
 
       for await (const chunk of stream) {
         fullResponse += chunk;
@@ -419,4 +419,3 @@ export class GroupChatService {
     return { success: true };
   }
 }
-

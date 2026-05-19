@@ -1,11 +1,12 @@
 import OpenAI from "openai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
 import {
     AI_PROVIDERS,
     getDisplayProviderName,
     supportsVision,
 } from "../constants";
+import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 
 export class NvidiaAdapter implements IAIService {
     private openai: OpenAI;
@@ -87,7 +88,7 @@ export class NvidiaAdapter implements IAIService {
         return [...formattedMessages, ...formattedChatMessages];
     }
 
-    async generateResponse(messages: AIMessage[]): Promise<string> {
+    async generateResponse(messages: AIMessage[]) {
         try {
             const completion = await this.openai.chat.completions.create({
                 model: this.model,
@@ -97,7 +98,10 @@ export class NvidiaAdapter implements IAIService {
                 max_tokens: 4096,
             });
 
-            return completion.choices[0]?.message?.content || "";
+            return {
+                text: completion.choices[0]?.message?.content || "",
+                usage: normalizeOpenAIUsage((completion as any).usage),
+            };
         } catch (error: any) {
             console.error("NVIDIA generateResponse error:", error);
             throw new AIServiceError(
@@ -107,10 +111,10 @@ export class NvidiaAdapter implements IAIService {
         }
     }
 
-    async *generateStreamResponse(
+    async generateStreamResponse(
         messages: AIMessage[],
         signal?: AbortSignal,
-    ): AsyncIterable<string> {
+    ): Promise<AIStreamResponse> {
         try {
             const stream = await this.openai.chat.completions.create(
                 {
@@ -120,21 +124,54 @@ export class NvidiaAdapter implements IAIService {
                     top_p: 0.7,
                     max_tokens: 4096,
                     stream: true,
+                    stream_options: { include_usage: true },
                 },
                 {
                     signal,
                 },
             );
 
-            for await (const chunk of stream) {
-                if (signal?.aborted) {
-                    return;
-                }
-                const content = chunk.choices[0]?.delta?.content || "";
-                if (content) {
-                    yield content;
-                }
-            }
+            let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
+            let settleUsage: (usage: ReturnType<typeof normalizeOpenAIUsage>) => void =
+                () => undefined;
+            let usageSettled = false;
+            const usage = new Promise<ReturnType<typeof normalizeOpenAIUsage>>(
+                (resolve) => {
+                    settleUsage = (value) => {
+                        if (!usageSettled) {
+                            usageSettled = true;
+                            resolve(value);
+                        }
+                    };
+                },
+            );
+
+            return {
+                usage,
+                async *[Symbol.asyncIterator]() {
+                    try {
+                        for await (const chunk of stream) {
+                            if (signal?.aborted) {
+                                return;
+                            }
+
+                            const normalizedUsage = normalizeOpenAIUsage(
+                                (chunk as any).usage,
+                            );
+                            if (normalizedUsage) {
+                                latestUsage = normalizedUsage;
+                            }
+
+                            const content = chunk.choices[0]?.delta?.content || "";
+                            if (content) {
+                                yield content;
+                            }
+                        }
+                    } finally {
+                        settleUsage(latestUsage);
+                    }
+                },
+            };
         } catch (error: any) {
             console.error("NVIDIA generateStreamResponse error:", error);
             throw new AIServiceError(
