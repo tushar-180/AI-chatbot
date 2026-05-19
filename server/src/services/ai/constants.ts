@@ -7,17 +7,14 @@ export const AI_PROVIDERS = {
   OPENAI: {
     id: "openai",
     models: [
+      "gpt-5.2",
       "gpt-5.4-mini",
       "gpt-5",
       "gpt-5-mini",
       "gpt-5-nano",
-      "gpt-4.1",
-      "gpt-4.1-mini",
-      "gpt-4.1-nano",
-      "o3",
-      "o4-mini",
+      "o3"
     ],
-    visionModels: ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
+    visionModels: ["gpt-5", "gpt-5.4-mini"],
   },
   NVIDIA: {
     id: "nvidia",

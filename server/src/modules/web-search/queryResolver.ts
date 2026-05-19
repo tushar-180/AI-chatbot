@@ -55,9 +55,9 @@ export const resolveSearchQuery = async (
     try {
         let response: string;
         try {
-            response = await provider.generateResponse([
+            response = (await provider.generateResponse([
                 { role: "user", content: prompt },
-            ]);
+            ])).text;
         } catch (primaryError) {
             // Fallback to Gemini 2.0 Flash
             console.warn(
@@ -65,9 +65,9 @@ export const resolveSearchQuery = async (
                 primaryError,
             );
             provider = aiService.getProvider("gemini:gemini-2.0-flash");
-            response = await provider.generateResponse([
+            response = (await provider.generateResponse([
                 { role: "user", content: prompt },
-            ]);
+            ])).text;
         }
 
         // ── Robust JSON extraction ──────────────────────────────
