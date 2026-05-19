@@ -42,8 +42,8 @@ export class OpenAIAdapter implements IAIService {
           msg.role === "system"
             ? "developer"
             : msg.role === "assistant"
-            ? "assistant"
-            : "user";
+              ? "assistant"
+              : "user";
 
         if (msg.attachments && msg.attachments.length > 0 && isVision) {
           const contentParts: any[] = [
@@ -78,7 +78,10 @@ export class OpenAIAdapter implements IAIService {
                 image_url: imageUrl,
               });
             } catch (err) {
-              console.error(`Failed to process image for OpenAI: ${att.url}`, err);
+              console.error(
+                `Failed to process image for OpenAI: ${att.url}`,
+                err,
+              );
             }
           }
 
@@ -165,8 +168,9 @@ OUTPUT RULES (STRICTLY ENFORCED):
       })) as any;
 
       let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
-      let settleUsage: (usage: ReturnType<typeof normalizeOpenAIUsage>) => void =
-        () => undefined;
+      let settleUsage: (
+        usage: ReturnType<typeof normalizeOpenAIUsage>,
+      ) => void = () => undefined;
       let usageSettled = false;
       const usage = new Promise<ReturnType<typeof normalizeOpenAIUsage>>(
         (resolve) => {
@@ -190,19 +194,12 @@ OUTPUT RULES (STRICTLY ENFORCED):
 
               let text = "";
 
-              if (chunk.data?.event?.type === "response.output_text.delta") {
-                text = chunk.data.event.delta;
-              } else if (chunk.type === "response.output_text.delta") {
-                text = chunk.delta || chunk.text;
-              } else if (chunk.choices?.[0]?.delta?.content) {
-                text = chunk.choices[0].delta.content;
-              } else if (chunk.text) {
-                text = chunk.text;
+              if (chunk.type === "response.output_text.delta") {
+                text = chunk.delta ?? "";
               }
-
               const usageChunk =
                 chunk.response?.usage ??
-                chunk.data?.event?.response?.usage ??
+                chunk.response?.usage ??
                 chunk.usage;
               const normalizedUsage = normalizeOpenAIUsage(usageChunk);
               if (normalizedUsage) {
@@ -242,5 +239,4 @@ OUTPUT RULES (STRICTLY ENFORCED):
       return [];
     }
   }
-  
 }
