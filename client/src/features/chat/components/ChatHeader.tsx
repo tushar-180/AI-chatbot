@@ -2,6 +2,7 @@ import { memo } from "react";
 import { UserButton } from "@clerk/react";
 import { Menu, Share } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useState } from "react";
 import ShareModal from "./ShareModal";
 
@@ -12,13 +13,16 @@ interface ChatHeaderProps {
 }
 
 const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) => {
+  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
   const streamingChatId = useChatStore((state) => state.streamingChatId);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
   const currentChat = chats.find((chat) => chat._id === currentChatId);
-   chatTitle = chatTitle || currentChat?.title || "New Conversation";
+  chatTitle = isTemporaryChatActive
+    ? "Temporary Chat"
+    : chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
@@ -38,6 +42,12 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
             <h1 className="font-sans text-[14px] font-medium tracking-tight text-white/90 truncate">
               {chatTitle}
             </h1>
+            {isTemporaryChatActive && (
+              <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-400 select-none shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Temporary Mode
+              </div>
+            )}
             {isStreamingCurrentChat && (
               <div className="flex gap-1">
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />

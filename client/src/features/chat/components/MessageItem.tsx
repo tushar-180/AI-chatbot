@@ -1,6 +1,16 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { User, Globe, Pencil, Check, X, RotateCcw, ThumbsUp, ThumbsDown, Copy } from "lucide-react";
+import {
+  User,
+  Globe,
+  Pencil,
+  Check,
+  X,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
+  Copy,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -205,9 +215,7 @@ const MessageMetadata = ({
       )}
       {/* Finalized tokens badge shown after generation completes */}
       {!isUser && !isStreaming && tokens && tokens.completionTokens > 0 && (
-        <span
-          className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[9px] font-mono text-slate-500"
-        >
+        <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[9px] font-mono text-slate-500">
           {tokens.completionTokens?.toLocaleString()} tokens
         </span>
       )}
@@ -219,368 +227,411 @@ const MessageMetadata = ({
  * MessageItem component
  * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
  */
-const MessageItem = ({ message: msg, isStreaming, onEdit, onEditStart, onRetry, onFeedback, highlight, onCitationClick, onSourcesClick }: MessageItemProps) => {
-    const { user } = useUser();
-    const isUser = msg.role === "user";
-    const isFailed = msg.status === "failed";
+const MessageItem = ({
+  message: msg,
+  isStreaming,
+  onEdit,
+  onEditStart,
+  onRetry,
+  onFeedback,
+  highlight,
+  onCitationClick,
+  onSourcesClick,
+}: MessageItemProps) => {
+  const { user } = useUser();
+  const isUser = msg.role === "user";
+  const isFailed = msg.status === "failed";
 
-    const [isEditing, setIsEditing] = useState(false);
-    const [editContent, setEditContent] = useState(msg.content);
-    const [copied, setCopied] = useState(false);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const contentRef = useRef<HTMLDivElement>(null);
-    const highlightedRef = useRef(false);
-    const lastHighlightedTerm = useRef<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(msg.content);
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const highlightedRef = useRef(false);
+  const lastHighlightedTerm = useRef<string | null>(null);
 
-    useEffect(() => {
-        if (isEditing && textareaRef.current) {
-            textareaRef.current.focus();
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-        }
-    }, [isEditing]);
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [isEditing]);
 
-    useEffect(() => {
-        if (!highlight) {
-            highlightedRef.current = false;
-            lastHighlightedTerm.current = null;
-            return;
-        }
+  useEffect(() => {
+    if (!highlight) {
+      highlightedRef.current = false;
+      lastHighlightedTerm.current = null;
+      return;
+    }
 
-        // If we already highlighted this exact term for this message, skip
-        if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
-            return;
-        }
+    // If we already highlighted this exact term for this message, skip
+    if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
+      return;
+    }
 
-        if (contentRef.current && !isStreaming) {
-            const term = highlight.toLowerCase();
-            const walker = document.createTreeWalker(contentRef.current, NodeFilter.SHOW_TEXT);
-            let node: Node | null;
-            const nodes: Text[] = [];
-            let fullText = "";
+    if (contentRef.current && !isStreaming) {
+      const term = highlight.toLowerCase();
+      const walker = document.createTreeWalker(
+        contentRef.current,
+        NodeFilter.SHOW_TEXT,
+      );
+      let node: Node | null;
+      const nodes: Text[] = [];
+      let fullText = "";
 
-            while ((node = walker.nextNode())) {
-                nodes.push(node as Text);
-                fullText += node.textContent || "";
-            }
+      while ((node = walker.nextNode())) {
+        nodes.push(node as Text);
+        fullText += node.textContent || "";
+      }
 
-            const startIndex = fullText.toLowerCase().indexOf(term);
-            if (startIndex !== -1) {
-                const endIndex = startIndex + term.length;
-                let currentPos = 0;
-                let firstMark: HTMLElement | null = null;
+      const startIndex = fullText.toLowerCase().indexOf(term);
+      if (startIndex !== -1) {
+        const endIndex = startIndex + term.length;
+        let currentPos = 0;
+        let firstMark: HTMLElement | null = null;
 
-                nodes.forEach((textNode) => {
-                    const nodeText = textNode.textContent || "";
-                    const nodeStart = currentPos;
-                    const nodeEnd = currentPos + nodeText.length;
+        nodes.forEach((textNode) => {
+          const nodeText = textNode.textContent || "";
+          const nodeStart = currentPos;
+          const nodeEnd = currentPos + nodeText.length;
 
-                    // Check if this node overlaps with the search term
-                    const overlapStart = Math.max(startIndex, nodeStart);
-                    const overlapEnd = Math.min(endIndex, nodeEnd);
+          // Check if this node overlaps with the search term
+          const overlapStart = Math.max(startIndex, nodeStart);
+          const overlapEnd = Math.min(endIndex, nodeEnd);
 
-                    if (overlapStart < overlapEnd) {
-                        const relativeStart = overlapStart - nodeStart;
-                        const relativeEnd = overlapEnd - nodeStart;
+          if (overlapStart < overlapEnd) {
+            const relativeStart = overlapStart - nodeStart;
+            const relativeEnd = overlapEnd - nodeStart;
 
-                        const before = nodeText.substring(0, relativeStart);
-                        const match = nodeText.substring(relativeStart, relativeEnd);
-                        const after = nodeText.substring(relativeEnd);
+            const before = nodeText.substring(0, relativeStart);
+            const match = nodeText.substring(relativeStart, relativeEnd);
+            const after = nodeText.substring(relativeEnd);
 
-                        const span = document.createElement("span");
-                        const mark = document.createElement("mark");
-                        mark.className = "highlight-mark bg-emerald-500/40 text-emerald-300 font-bold px-0.5 rounded ring-1 ring-emerald-500/50 animate-pulse";
-                        mark.textContent = match;
-                        
-                        span.appendChild(document.createTextNode(before));
-                        span.appendChild(mark);
-                        span.appendChild(document.createTextNode(after));
+            const span = document.createElement("span");
+            const mark = document.createElement("mark");
+            mark.className =
+              "highlight-mark bg-emerald-500/40 text-emerald-300 font-bold px-0.5 rounded ring-1 ring-emerald-500/50 animate-pulse";
+            mark.textContent = match;
 
-                        if (!firstMark) firstMark = mark;
-                        
-                        textNode.parentNode?.replaceChild(span, textNode);
-                    }
+            span.appendChild(document.createTextNode(before));
+            span.appendChild(mark);
+            span.appendChild(document.createTextNode(after));
 
-                    currentPos = nodeEnd;
-                });
+            if (!firstMark) firstMark = mark;
 
-                if (firstMark) {
-                    lastHighlightedTerm.current = highlight;
-                    highlightedRef.current = true;
-
-                    // Use requestAnimationFrame for smoother and more reliable scrolling
-                    requestAnimationFrame(() => {
-                        if (firstMark) {
-                            firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
-                        }
-                    });
-
-                    // Stop pulsing after 3s
-                    const timer = setTimeout(() => {
-                        const marks = contentRef.current?.querySelectorAll(".highlight-mark");
-                        marks?.forEach(m => {
-                            m.classList.remove("animate-pulse");
-                            m.classList.add("bg-emerald-500/20");
-                        });
-                    }, 3000);
-
-                    return () => clearTimeout(timer);
-                }
-            }
-        }
-    }, [highlight, isStreaming]);
-
-    const handleEditStart = () => {
-        setIsEditing(true);
-        setEditContent(msg.content);
-        onEditStart?.();
-    };
-
-    const handleEditCancel = () => {
-        setIsEditing(false);
-        setEditContent(msg.content);
-    };
-
-    const handleEditSave = () => {
-        if (editContent.trim() && editContent !== msg.content) {
-            onEdit?.(editContent);
-        }
-        setIsEditing(false);
-    };
-
-    const handleCopy = () => {
-        navigator.clipboard.writeText(msg.content);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            handleEditSave();
-        } else if (e.key === "Escape") {
-            handleEditCancel();
-        }
-    };
-
-    const processedContent = !isUser && msg.content
-        ? msg.content.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>')
-        : msg.content;
-
-    const citationComponents = !isUser
-        ? {
-              ...assistantMarkdownComponents,
-              cite: ({ node }: any) => {
-                  const id = Number(node?.properties?.dataId);
-                  if (isNaN(id)) return null;
-                  return (
-                      <button
-                          onClick={(e) => {
-                              e.preventDefault();
-                              onCitationClick?.(id);
-                          }}
-                          className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
-                          title={`Source ${id}`}
-                      >
-                          {id}
-                      </button>
-                  );
-              },
+            textNode.parentNode?.replaceChild(span, textNode);
           }
-        : undefined;
 
-    return (
-        <div
-            className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
-        >
-            <div
-                className={`flex w-full gap-4 md:gap-6 ${
-                    isUser
-                        ? "max-w-full md:max-w-4xl flex-row-reverse"
-                        : "max-w-full md:max-w-5xl flex-row items-start"
-                }`}
+          currentPos = nodeEnd;
+        });
+
+        if (firstMark) {
+          lastHighlightedTerm.current = highlight;
+          highlightedRef.current = true;
+
+          // Use requestAnimationFrame for smoother and more reliable scrolling
+          requestAnimationFrame(() => {
+            if (firstMark) {
+              firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          });
+
+          // Stop pulsing after 3s
+          const timer = setTimeout(() => {
+            const marks =
+              contentRef.current?.querySelectorAll(".highlight-mark");
+            marks?.forEach((m) => {
+              m.classList.remove("animate-pulse");
+              m.classList.add("bg-emerald-500/20");
+            });
+          }, 3000);
+
+          return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [highlight, isStreaming]);
+
+  const handleEditStart = () => {
+    setIsEditing(true);
+    setEditContent(msg.content);
+    onEditStart?.();
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+    setEditContent(msg.content);
+  };
+
+  const handleEditSave = () => {
+    if (editContent.trim() && editContent !== msg.content) {
+      onEdit?.(editContent);
+    }
+    setIsEditing(false);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSave();
+    } else if (e.key === "Escape") {
+      handleEditCancel();
+    }
+  };
+
+  const processedContent =
+    !isUser && msg.content
+      ? msg.content.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>')
+      : msg.content;
+
+  const citationComponents = !isUser
+    ? {
+        ...assistantMarkdownComponents,
+        cite: ({ node }: any) => {
+          const id = Number(node?.properties?.dataId);
+          if (isNaN(id)) return null;
+          return (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onCitationClick?.(id);
+              }}
+              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+              title={`Source ${id}`}
             >
-                <div className="hidden xs:block">
-                    <MessageAvatar
-                        isUser={isUser}
-                        imageUrl={user?.imageUrl}
-                        failed={isFailed}
-                    />
-                </div>
+              {id}
+            </button>
+          );
+        },
+      }
+    : undefined;
 
-                <div
-                    className={`flex flex-col gap-2 ${
-                        isUser ? "items-end flex-1" : "min-w-0 flex-1"
-                    }`}
-                >
-                    {!isFailed && (
-                        <div className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-                            <MessageMetadata 
-                                isUser={isUser} 
-                                model={msg.model} 
-                                tokens={msg.tokens} 
-                                isStreaming={isStreaming} 
-                                content={msg.content}
-                            />
-                            
-                            {isUser && !isEditing && (
-                                <button
-                                    onClick={handleEditStart}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-white/10 rounded-md text-slate-400 hover:text-white"
-                                    title="Edit message"
-                                >
-                                    <Pencil size={12} />
-                                </button>
-                            )}
-                        </div>
-                    )}
-
-                    <div
-                        className={`transition-all duration-200 ease-out ${
-                            isUser
-                                ? `max-w-full rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
-                                : isFailed
-                                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
-                                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
-                        }`}
-                        ref={contentRef}
-                        key={highlight || "no-highlight"}
-                    >
-                        {isStreaming && !msg.content ? (
-                            msg.isWebSearching ? (
-                                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
-                                    <Globe
-                                        size={14}
-                                        className="animate-pulse"
-                                    />
-                                    <span>Searching the web...</span>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2 py-3">
-                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
-                                    <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
-                                </div>
-                            )
-                        ) : isEditing ? (
-                            <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
-                                <textarea
-                                    ref={textareaRef}
-                                    value={editContent}
-                                    onChange={(e) => {
-                                        setEditContent(e.target.value);
-                                        e.target.style.height = "auto";
-                                        e.target.style.height = `${e.target.scrollHeight}px`;
-                                    }}
-                                    onKeyDown={handleKeyDown}
-                                    className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
-                                    rows={1}
-                                />
-                                <div className="flex justify-end gap-2">
-                                    <button
-                                        onClick={handleEditCancel}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
-                                    >
-                                        <X size={14} />
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleEditSave}
-                                        disabled={!editContent.trim()}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
-                                    >
-                                        <Check size={14} />
-                                        Save 
-                                    </button>
-                                </div>
-                            </div>
-                        ) : isFailed ? (
-                            <div className="flex flex-col gap-1">
-                                <span className="font-semibold text-red-400/90">
-                                    Server Error
-                                </span>
-                                <span className="text-sm opacity-80">
-                                    {msg.content ||
-                                        "AI failed to respond. Please try again later."}
-                                </span>
-                            </div>
-                        ) : (
-                            <>
-                                {msg.content && (
-                                    <ReactMarkdown
-                                        remarkPlugins={[remarkGfm]}
-                                        rehypePlugins={[rehypeRaw]}
-                                        components={
-                                            isUser
-                                                ? userMarkdownComponents
-                                                : citationComponents
-                                        }
-                                    >
-                                        {processedContent}
-                                    </ReactMarkdown>
-                                )}
-                                <AttachmentList
-                                    attachments={msg.attachments || []}
-                                />
-
-                            </>
-                        )}
-
-                        {/* Assistant Action Buttons (ChatGPT Style) */}
-                        {!isUser && !isStreaming && (msg.content || isFailed) && (
-                            <div className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
-                                <button
-                                    onClick={handleCopy}
-                                    className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                                    title="Copy to clipboard"
-                                >
-                                    {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                                </button>
-                                
-                                <button
-                                    onClick={() => onFeedback?.(msg.feedback === "like" ? null : "like")}
-                                    className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                                    title="Like"
-                                >
-                                    <ThumbsUp size={14} fill={msg.feedback === "like" ? "currentColor" : "none"} />
-                                </button>
-
-                                <button
-                                    onClick={() => onFeedback?.(msg.feedback === "dislike" ? null : "dislike")}
-                                    className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                                    title="Dislike"
-                                >
-                                    <ThumbsDown size={14} fill={msg.feedback === "dislike" ? "currentColor" : "none"} />
-                                </button>
-
-                                <button
-                                    onClick={onRetry}
-                                    className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                                    title="Regenerate response"
-                                >
-                                    <RotateCcw size={14} />
-                                </button>
-
-                                {!!msg.sources?.length && (
-                                    <button
-                                        onClick={() => {
-                                            if (msg.sources?.length) {
-                                                onSourcesClick?.(msg.sources, msg.sources[0]?.id);
-                                            }
-                                        }}
-                                        className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                                        title="View sources"
-                                    >
-                                        Sources
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+  return (
+    <div
+      className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+    >
+      <div
+        className={`flex w-full gap-4 md:gap-6 ${
+          isUser
+            ? "max-w-full md:max-w-4xl flex-row-reverse"
+            : "max-w-full md:max-w-5xl flex-row items-start"
+        }`}
+      >
+        <div className="hidden xs:block">
+          <MessageAvatar
+            isUser={isUser}
+            imageUrl={user?.imageUrl}
+            failed={isFailed}
+          />
         </div>
-    );
+
+        <div
+          className={`flex flex-col gap-2 ${
+            isUser ? "items-end flex-1" : "min-w-0 flex-1"
+          }`}
+        >
+          {!isFailed && (
+            <div
+              className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+            >
+              <MessageMetadata
+                isUser={isUser}
+                model={msg.model}
+                tokens={msg.tokens}
+                isStreaming={isStreaming}
+                content={msg.content}
+              />
+            </div>
+          )}
+
+          <div
+            className={`transition-all duration-200 ease-out ${
+              isUser
+                ? `max-w-full rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
+                : isFailed
+                  ? "w-fit rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
+                  : "w-full py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+            }`}
+            ref={contentRef}
+            key={highlight || "no-highlight"}
+          >
+            {isStreaming && !msg.content ? (
+              msg.isWebSearching ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
+                  <Globe size={14} className="animate-pulse" />
+                  <span>Searching the web...</span>
+                </div>
+              ) : (
+                <div className="flex gap-2 py-3">
+                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
+                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-75" />
+                  <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse delay-150" />
+                </div>
+              )
+            ) : isEditing ? (
+              <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                <textarea
+                  ref={textareaRef}
+                  value={editContent}
+                  onChange={(e) => {
+                    setEditContent(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  onKeyDown={handleKeyDown}
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                  rows={1}
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleEditCancel}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                  >
+                    <X size={14} />
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleEditSave}
+                    disabled={!editContent.trim()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                  >
+                    <Check size={14} />
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : isFailed ? (
+              <div className="flex flex-col gap-1">
+                <span className="font-semibold text-red-400/90">
+                  Server Error
+                </span>
+                <span className="text-sm opacity-80">
+                  {msg.content ||
+                    "AI failed to respond. Please try again later."}
+                </span>
+              </div>
+            ) : (
+              <>
+                {msg.content && (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]}
+                    components={
+                      isUser ? userMarkdownComponents : citationComponents
+                    }
+                  >
+                    {processedContent}
+                  </ReactMarkdown>
+                )}
+                <AttachmentList attachments={msg.attachments || []} />
+              </>
+            )}
+
+            {/* Assistant Action Buttons (ChatGPT Style) */}
+            {!isUser && !isStreaming && (msg.content || isFailed) && (
+              <div
+                className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+              >
+                <button
+                  onClick={handleCopy}
+                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                  title="Copy to clipboard"
+                >
+                  {copied ? (
+                    <Check size={14} className="text-emerald-500" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                </button>
+
+                <button
+                  onClick={() =>
+                    onFeedback?.(msg.feedback === "like" ? null : "like")
+                  }
+                  className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                  title="Like"
+                >
+                  <ThumbsUp
+                    size={14}
+                    fill={msg.feedback === "like" ? "currentColor" : "none"}
+                  />
+                </button>
+
+                <button
+                  onClick={() =>
+                    onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
+                  }
+                  className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                  title="Dislike"
+                >
+                  <ThumbsDown
+                    size={14}
+                    fill={msg.feedback === "dislike" ? "currentColor" : "none"}
+                  />
+                </button>
+
+                <button
+                  onClick={onRetry}
+                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                  title="Regenerate response"
+                >
+                  <RotateCcw size={14} />
+                </button>
+
+                {!!msg.sources?.length && (
+                  <button
+                    onClick={() => {
+                      if (msg.sources?.length) {
+                        onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                      }
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                    title="View sources"
+                  >
+                    Sources
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* User Action Buttons (Copy & Edit) */}
+          {isUser && !isEditing && (
+            <div
+              className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200"
+            >
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Copy to clipboard"
+              >
+                {copied ? (
+                  <Check size={14} className="text-emerald-500" />
+                ) : (
+                  <Copy size={14} />
+                )}
+              </button>
+
+              <button
+                onClick={handleEditStart}
+                className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Edit message"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
@@ -594,9 +645,9 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.message.isWebSearching === next.message.isWebSearching &&
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
-    prev.message.tokens?.completionTokens === next.message.tokens?.completionTokens &&
+    prev.message.tokens?.completionTokens ===
+      next.message.tokens?.completionTokens &&
     prev.message.sources === next.message.sources
-
   );
 };
 

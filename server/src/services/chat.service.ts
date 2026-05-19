@@ -25,9 +25,9 @@ import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
 import { userService } from "./user.service";
 import {
-    estimateTokenCount,
-    calculateUsage,
-    serializePromptMessages,
+  estimateTokenCount,
+  calculateUsage,
+  serializePromptMessages,
 } from "../utils/tokenCounter";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
@@ -124,8 +124,10 @@ const getAssistantMessageByRequestId = (
       message.role === "assistant" && message.requestId === requestId,
   );
 
-const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchRejection | null) => {
-  if (!webGrounding || 'rejected' in webGrounding) return undefined;
+const buildGroundingMetadata = (
+  webGrounding: WebGroundingContext | SearchRejection | null,
+) => {
+  if (!webGrounding || "rejected" in webGrounding) return undefined;
   return {
     grounded: true,
     query: webGrounding.query,
@@ -134,13 +136,15 @@ const buildGroundingMetadata = (webGrounding: WebGroundingContext | SearchReject
     liveDataQuery: webGrounding.liveDataQuery,
     confidence: webGrounding.confidence,
     debug: webGrounding.debug,
-    sources: webGrounding.sources.map(({ id, title, url, hostname, snippet }) => ({
-      id,
-      title,
-      url,
-      hostname,
-      snippet,
-    })),
+    sources: webGrounding.sources.map(
+      ({ id, title, url, hostname, snippet }) => ({
+        id,
+        title,
+        url,
+        hostname,
+        snippet,
+      }),
+    ),
   };
 };
 
@@ -184,9 +188,8 @@ const buildPromptMessages = async (
     },
   ];
 
-  const personalizationContext = await userService.getPersonalizationContext(
-    userId,
-  );
+  const personalizationContext =
+    await userService.getPersonalizationContext(userId);
   if (personalizationContext) {
     systemMessages.push({
       role: "system",
@@ -209,33 +212,33 @@ const buildPromptMessages = async (
     });
   }
 
-    let webGrounding: WebGroundingContext | null = null;
-    const supportsImages = provider?.startsWith('gemini')
-    if (webSearchEnabled && latestUserMessage) {
-        const result = await webSearchService.buildGroundingContext(
-            latestUserMessage,
-            chatMessages,
-            userId,
-            supportsImages
-        );
+  let webGrounding: WebGroundingContext | null = null;
+  const supportsImages = provider?.startsWith("gemini");
+  if (webSearchEnabled && latestUserMessage) {
+    const result = await webSearchService.buildGroundingContext(
+      latestUserMessage,
+      chatMessages,
+      userId,
+      supportsImages,
+    );
 
-        // Handle quota/cooldown rejections gracefully
-        if (result && "rejected" in result) {
-            console.warn(
-                `[chat] Web search rejected: ${result.reason} — ${result.message}`,
-            );
-        } else {
-            webGrounding = result;
-        }
+    // Handle quota/cooldown rejections gracefully
+    if (result && "rejected" in result) {
+      console.warn(
+        `[chat] Web search rejected: ${result.reason} — ${result.message}`,
+      );
+    } else {
+      webGrounding = result;
     }
-    if (webGrounding) {
-        systemMessages.push({
-            role: "system",
-            content: webGrounding.systemPrompt,
-            userId,
-            status: "completed",
-        });
-    }
+  }
+  if (webGrounding) {
+    systemMessages.push({
+      role: "system",
+      content: webGrounding.systemPrompt,
+      userId,
+      status: "completed",
+    });
+  }
 
   return {
     promptMessages: [...systemMessages, ...promptMessages],
@@ -306,23 +309,35 @@ async function* streamAssistantResponse(
     model: providerName,
   });
 
-  yield (includeChatId
-    ? { chatId, messageId, requestId, model: providerName, status: "streaming" }
-    : { messageId, requestId, model: providerName, status: "streaming" }) as StreamPayload;
+  yield (
+    includeChatId
+      ? {
+          chatId,
+          messageId,
+          requestId,
+          model: providerName,
+          status: "streaming",
+        }
+      : { messageId, requestId, model: providerName, status: "streaming" }
+  ) as StreamPayload;
 
-  if (webGrounding && !('rejected' in webGrounding) && webGrounding.sources.length > 0) {
+  if (
+    webGrounding &&
+    !("rejected" in webGrounding) &&
+    webGrounding.sources.length > 0
+  ) {
     yield {
-        type: "sources",
-        sources: webGrounding.sources.map(s => ({
-            id: s.id,
-            url: s.url,
-            title: s.title,
-            hostname: s.hostname,
-            snippet: s.snippet,
-        })),
-        requestId,
+      type: "sources",
+      sources: webGrounding.sources.map((s) => ({
+        id: s.id,
+        url: s.url,
+        title: s.title,
+        hostname: s.hostname,
+        snippet: s.snippet,
+      })),
+      requestId,
     } as StreamPayload;
-}
+  }
 
   let fullResponse = "";
   let receivedFirstChunk = false;
@@ -363,7 +378,10 @@ async function* streamAssistantResponse(
       clearTimeout(timeout);
     }
 
-    const groundedResponse = finalizeGroundedResponse(fullResponse, webGrounding);
+    const groundedResponse = finalizeGroundedResponse(
+      fullResponse,
+      webGrounding,
+    );
     if (
       groundedResponse.appendedCitations &&
       !activeStream.abortController.signal.aborted
@@ -385,12 +403,16 @@ async function* streamAssistantResponse(
       ? "stopped"
       : "completed";
 
-        const promptText = serializePromptMessages(promptMessages);
-        const promptAttachmentCount = promptMessages.reduce(
-            (sum, m) => sum + (m.attachments?.length || 0),
-            0
-        );
-        const tokens = calculateUsage(promptText, fullResponse, promptAttachmentCount);
+    const promptText = serializePromptMessages(promptMessages);
+    const promptAttachmentCount = promptMessages.reduce(
+      (sum, m) => sum + (m.attachments?.length || 0),
+      0,
+    );
+    const tokens = calculateUsage(
+      promptText,
+      fullResponse,
+      promptAttachmentCount,
+    );
 
     // Update message doc in collection
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
@@ -400,7 +422,7 @@ async function* streamAssistantResponse(
       attachments: [],
       type: "text",
       metadata: buildGroundingMetadata(webGrounding),
-            tokens,
+      tokens,
     });
 
     if (activeStream.abortController.signal.aborted) {
@@ -430,36 +452,37 @@ async function* streamAssistantResponse(
       ? "AI generation timed out. Please try again."
       : "Server Error: AI failed to respond.";
 
-        if (activeStream.abortController.signal.aborted && !isTimeout) {
-            const promptText = serializePromptMessages(promptMessages);
-            const promptAttachmentCount = promptMessages.reduce(
-                (sum, m) => sum + (m.attachments?.length || 0),
-                0
-            );
-            const tokens = calculateUsage(promptText, activeStream.fullResponse, promptAttachmentCount);
-            await chatRepository.updateMessage(
-                (assistantMessageDoc as any)._id,
-                {
-                    content: activeStream.fullResponse,
-                    status: "stopped",
-                    tokens,
-                },
-            );
-            yield { done: true, chatId, requestId, status: "stopped" };
-            return;
-        }
+    if (activeStream.abortController.signal.aborted && !isTimeout) {
+      const promptText = serializePromptMessages(promptMessages);
+      const promptAttachmentCount = promptMessages.reduce(
+        (sum, m) => sum + (m.attachments?.length || 0),
+        0,
+      );
+      const tokens = calculateUsage(
+        promptText,
+        activeStream.fullResponse,
+        promptAttachmentCount,
+      );
+      await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+        content: activeStream.fullResponse,
+        status: "stopped",
+        tokens,
+      });
+      yield { done: true, chatId, requestId, status: "stopped" };
+      return;
+    }
 
-        console.error("AI Error in chat stream:", aiError);
-        const promptText = serializePromptMessages(promptMessages);
-        const promptAttachmentCount = promptMessages.reduce(
-            (sum, m) => sum + (m.attachments?.length || 0),
-            0
-        );
-        const tokens = calculateUsage(promptText, "", promptAttachmentCount);
-        await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
-            status: "failed",
-            tokens,
-        });
+    console.error("AI Error in chat stream:", aiError);
+    const promptText = serializePromptMessages(promptMessages);
+    const promptAttachmentCount = promptMessages.reduce(
+      (sum, m) => sum + (m.attachments?.length || 0),
+      0,
+    );
+    const tokens = calculateUsage(promptText, "", promptAttachmentCount);
+    await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+      status: "failed",
+      tokens,
+    });
 
     chatStreamRegistry.fail(requestId, errorMessage);
     yield { error: errorMessage, status: "failed" };
@@ -485,25 +508,25 @@ export const chatService = {
     await chat.save();
     const chatId = chat._id.toString();
 
-        if (trimmedMessage || (attachments && attachments.length > 0)) {
-            // Save User Message
-            const userMessage = createUserMessage(
-                trimmedMessage || "",
-                String(resolvedUserId),
-                provider,
-                attachments,
-            );
-            userMessage.metadata = {
-                webSearchEnabled: Boolean(webSearchEnabled),
-            };
-            const userPromptText = userMessage.content || "";
-            const attachmentCount = attachments?.length || 0;
-            userMessage.tokens = {
-                promptTokens: estimateTokenCount(userPromptText, attachmentCount),
-                completionTokens: 0,
-                totalTokens: estimateTokenCount(userPromptText, attachmentCount),
-            };
-            await chatRepository.saveMessage(chatId, userMessage);
+    if (trimmedMessage || (attachments && attachments.length > 0)) {
+      // Save User Message
+      const userMessage = createUserMessage(
+        trimmedMessage || "",
+        String(resolvedUserId),
+        provider,
+        attachments,
+      );
+      userMessage.metadata = {
+        webSearchEnabled: Boolean(webSearchEnabled),
+      };
+      const userPromptText = userMessage.content || "";
+      const attachmentCount = attachments?.length || 0;
+      userMessage.tokens = {
+        promptTokens: estimateTokenCount(userPromptText, attachmentCount),
+        completionTokens: 0,
+        totalTokens: estimateTokenCount(userPromptText, attachmentCount),
+      };
+      await chatRepository.saveMessage(chatId, userMessage);
 
       const aiProvider = aiService.getProvider(provider);
       const providerName = aiProvider.getProviderName();
@@ -528,22 +551,22 @@ export const chatService = {
 
       reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-            // Save Assistant Message
-            const assistantPromptText = serializePromptMessages(promptMessages);
-            const assistantTokens = calculateUsage(assistantPromptText, reply);
-            await chatRepository.saveMessage(chatId, {
-                ...createAssistantMessage(
-                    reply,
-                    String(resolvedUserId),
-                    providerName,
-                    undefined,
-                    "completed",
-                    buildGroundingMetadata(webGrounding),
-                ),
-                attachments: [],
-                type: "text",
-                tokens: assistantTokens,
-            });
+      // Save Assistant Message
+      const assistantPromptText = serializePromptMessages(promptMessages);
+      const assistantTokens = calculateUsage(assistantPromptText, reply);
+      await chatRepository.saveMessage(chatId, {
+        ...createAssistantMessage(
+          reply,
+          String(resolvedUserId),
+          providerName,
+          undefined,
+          "completed",
+          buildGroundingMetadata(webGrounding),
+        ),
+        attachments: [],
+        type: "text",
+        tokens: assistantTokens,
+      });
 
       // Extract new memories in the background
       if (trimmedMessage) {
@@ -575,24 +598,24 @@ export const chatService = {
     await chat.save();
     const chatId = chat._id.toString();
 
-        // Save User Message
-        const userMsg = createUserMessage(
-            trimmedMessage,
-            String(resolvedUserId),
-            input.provider,
-            input.attachments,
-        );
-        userMsg.metadata = {
-            webSearchEnabled: Boolean(input.webSearchEnabled),
-        };
-        const userPromptText = userMsg.content || "";
-        const attachmentCount = input.attachments?.length || 0;
-        userMsg.tokens = {
-            promptTokens: estimateTokenCount(userPromptText, attachmentCount),
-            completionTokens: 0,
-            totalTokens: estimateTokenCount(userPromptText, attachmentCount),
-        };
-        await chatRepository.saveMessage(chatId, userMsg);
+    // Save User Message
+    const userMsg = createUserMessage(
+      trimmedMessage,
+      String(resolvedUserId),
+      input.provider,
+      input.attachments,
+    );
+    userMsg.metadata = {
+      webSearchEnabled: Boolean(input.webSearchEnabled),
+    };
+    const userPromptText = userMsg.content || "";
+    const attachmentCount = input.attachments?.length || 0;
+    userMsg.tokens = {
+      promptTokens: estimateTokenCount(userPromptText, attachmentCount),
+      completionTokens: 0,
+      totalTokens: estimateTokenCount(userPromptText, attachmentCount),
+    };
+    await chatRepository.saveMessage(chatId, userMsg);
 
     // Refetch to get messages for prompt
     const fullChat = await chatRepository.findById(chatId);
@@ -615,24 +638,24 @@ export const chatService = {
     const trimmedMessage = message?.trim() || "";
     const chat = await requireChat(chatId);
 
-        // Save User Message
-        const userMsg = createUserMessage(
-            trimmedMessage,
-            String(chat.userId),
-            provider,
-            attachments,
-        );
-        userMsg.metadata = {
-            webSearchEnabled: Boolean(webSearchEnabled),
-        };
-        const userPromptText = userMsg.content || "";
-        const attachmentCount = attachments?.length || 0;
-        userMsg.tokens = {
-            promptTokens: estimateTokenCount(userPromptText, attachmentCount),
-            completionTokens: 0,
-            totalTokens: estimateTokenCount(userPromptText, attachmentCount),
-        };
-        await chatRepository.saveMessage(chatId, userMsg);
+    // Save User Message
+    const userMsg = createUserMessage(
+      trimmedMessage,
+      String(chat.userId),
+      provider,
+      attachments,
+    );
+    userMsg.metadata = {
+      webSearchEnabled: Boolean(webSearchEnabled),
+    };
+    const userPromptText = userMsg.content || "";
+    const attachmentCount = attachments?.length || 0;
+    userMsg.tokens = {
+      promptTokens: estimateTokenCount(userPromptText, attachmentCount),
+      completionTokens: 0,
+      totalTokens: estimateTokenCount(userPromptText, attachmentCount),
+    };
+    await chatRepository.saveMessage(chatId, userMsg);
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       const newTitle = createTitle(trimmedMessage);
@@ -663,26 +686,30 @@ export const chatService = {
 
     reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-        // Save Assistant Message
-        const assistantPromptText = serializePromptMessages(promptMessages);
-        const promptAttachmentCount = promptMessages.reduce(
-            (sum, m) => sum + (m.attachments?.length || 0),
-            0
-        );
-        const assistantTokens = calculateUsage(assistantPromptText, reply, promptAttachmentCount);
-        await chatRepository.saveMessage(chatId, {
-            ...createAssistantMessage(
-                reply,
-                String(chat.userId),
-                providerName,
-                undefined,
-                "completed",
-                buildGroundingMetadata(webGrounding),
-            ),
-            attachments: [],
-            type: "text",
-            tokens: assistantTokens,
-        });
+    // Save Assistant Message
+    const assistantPromptText = serializePromptMessages(promptMessages);
+    const promptAttachmentCount = promptMessages.reduce(
+      (sum, m) => sum + (m.attachments?.length || 0),
+      0,
+    );
+    const assistantTokens = calculateUsage(
+      assistantPromptText,
+      reply,
+      promptAttachmentCount,
+    );
+    await chatRepository.saveMessage(chatId, {
+      ...createAssistantMessage(
+        reply,
+        String(chat.userId),
+        providerName,
+        undefined,
+        "completed",
+        buildGroundingMetadata(webGrounding),
+      ),
+      attachments: [],
+      type: "text",
+      tokens: assistantTokens,
+    });
 
     // Extract new memories in the background
     if (trimmedMessage) {
@@ -708,24 +735,24 @@ export const chatService = {
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
 
-        // Save User Message
-        const userMsg = createUserMessage(
-            trimmedMessage,
-            String(chat.userId),
-            provider,
-            attachments,
-        );
-        userMsg.metadata = {
-            webSearchEnabled: Boolean(webSearchEnabled),
-        };
-        const userPromptText = userMsg.content || "";
-        const attachmentCount = attachments?.length || 0;
-        userMsg.tokens = {
-            promptTokens: estimateTokenCount(userPromptText, attachmentCount),
-            completionTokens: 0,
-            totalTokens: estimateTokenCount(userPromptText, attachmentCount),
-        };
-        await chatRepository.saveMessage(chatId, userMsg);
+    // Save User Message
+    const userMsg = createUserMessage(
+      trimmedMessage,
+      String(chat.userId),
+      provider,
+      attachments,
+    );
+    userMsg.metadata = {
+      webSearchEnabled: Boolean(webSearchEnabled),
+    };
+    const userPromptText = userMsg.content || "";
+    const attachmentCount = attachments?.length || 0;
+    userMsg.tokens = {
+      promptTokens: estimateTokenCount(userPromptText, attachmentCount),
+      completionTokens: 0,
+      totalTokens: estimateTokenCount(userPromptText, attachmentCount),
+    };
+    await chatRepository.saveMessage(chatId, userMsg);
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       const newTitle = createTitle(trimmedMessage);
@@ -747,32 +774,47 @@ export const chatService = {
     const resolvedRequestId = requireRequestId(requestId);
     const activeStream = chatStreamRegistry.get(resolvedRequestId);
 
-        if (activeStream) {
-            let tokens;
-            try {
-                const chatObj = await chatRepository.findById(activeStream.chatId);
-                const messages = chatObj ? chatObj.messages : [];
-                const priorMessages = messages.filter(m => m.requestId !== resolvedRequestId);
-                const promptText = serializePromptMessages(priorMessages);
-                const promptAttachmentCount = priorMessages.reduce(
-                    (sum, m) => sum + (m.attachments?.length || 0),
-                    0
-                );
-                tokens = calculateUsage(promptText, activeStream.fullResponse, promptAttachmentCount);
-            } catch (err) {
-                console.error("Failed to calculate tokens during stream stop:", err);
-            }
+    if (activeStream) {
+      if (activeStream.chatId?.startsWith("temp_")) {
+        chatStreamRegistry.stop(resolvedRequestId);
+        return {
+          stopped: true,
+          chatId: activeStream.chatId,
+          requestId: resolvedRequestId,
+        };
+      }
 
-            // Update message doc in collection
-            await chatRepository.updateMessageByRequestId(
-                activeStream.chatId,
-                resolvedRequestId,
-                {
-                    content: activeStream.fullResponse,
-                    status: "stopped",
-                    tokens,
-                },
-            );
+      let tokens;
+      try {
+        const chatObj = await chatRepository.findById(activeStream.chatId);
+        const messages = chatObj ? chatObj.messages : [];
+        const priorMessages = messages.filter(
+          (m) => m.requestId !== resolvedRequestId,
+        );
+        const promptText = serializePromptMessages(priorMessages);
+        const promptAttachmentCount = priorMessages.reduce(
+          (sum, m) => sum + (m.attachments?.length || 0),
+          0,
+        );
+        tokens = calculateUsage(
+          promptText,
+          activeStream.fullResponse,
+          promptAttachmentCount,
+        );
+      } catch (err) {
+        console.error("Failed to calculate tokens during stream stop:", err);
+      }
+
+      // Update message doc in collection
+      await chatRepository.updateMessageByRequestId(
+        activeStream.chatId,
+        resolvedRequestId,
+        {
+          content: activeStream.fullResponse,
+          status: "stopped",
+          tokens,
+        },
+      );
 
       chatStreamRegistry.stop(resolvedRequestId);
       return {
@@ -832,13 +874,13 @@ export const chatService = {
   async updateChatTitle(chatId: string, title: string) {
     const validatedTitle = requireMessage(title, "Title is required");
     const chat = await chatRepository.updateTitle(chatId, validatedTitle);
-    
+
     if (!chat) {
       const error = new Error("Chat not found");
       error.name = "NotFoundError";
       throw error;
     }
-    
+
     return chat;
   },
 
@@ -962,12 +1004,12 @@ export const chatService = {
     // Update Assistant Message
     await chatRepository.saveMessage(chatId, {
       ...createAssistantMessage(
-          reply,
-          String(chat.userId),
-          providerName,
-          undefined,
-          "completed",
-          buildGroundingMetadata(webGrounding),
+        reply,
+        String(chat.userId),
+        providerName,
+        undefined,
+        "completed",
+        buildGroundingMetadata(webGrounding),
       ),
       attachments: aiAttachments,
       type: type as any,
@@ -976,7 +1018,7 @@ export const chatService = {
     // Check if it's the first message to update title
     if (updatedChat?.messages?.[0]?.id === messageId) {
       await chatRepository.update(chatId, {
-        title: createTitle(trimmedMessage)
+        title: createTitle(trimmedMessage),
       });
     }
 
@@ -1012,7 +1054,7 @@ export const chatService = {
     // Check if it's the first message to update title
     if (updatedChat?.messages?.[0]?.id === messageId) {
       await chatRepository.update(chatId, {
-        title: createTitle(trimmedMessage)
+        title: createTitle(trimmedMessage),
       });
     }
 
@@ -1108,7 +1150,17 @@ export const chatService = {
 
     console.log("Retrying messageId:", messageId);
     console.log("Chat messages count:", chat.messages.length);
-    console.log("Last 2 messages:", chat.messages.slice(-2).map((m: any) => ({ id: m.id, _id: m._id, requestId: m.requestId, role: m.role })));
+    console.log(
+      "Last 2 messages:",
+      chat.messages
+        .slice(-2)
+        .map((m: any) => ({
+          id: m.id,
+          _id: m._id,
+          requestId: m.requestId,
+          role: m.role,
+        })),
+    );
 
     let assistantMessage = (chat.messages as any[]).find(
       (m) =>
@@ -1127,7 +1179,10 @@ export const chatService = {
     }
 
     if (!assistantMessage) {
-      console.log("FAILED TO FIND MESSAGE. IDs in chat:", chat.messages.map((m: any) => m.id || m._id));
+      console.log(
+        "FAILED TO FIND MESSAGE. IDs in chat:",
+        chat.messages.map((m: any) => m.id || m._id),
+      );
       throw new Error("Assistant message not found for retry");
     }
 
@@ -1150,9 +1205,10 @@ export const chatService = {
     );
   },
 
-  async updateMessageFeedback(messageId: string, feedback: "like" | "dislike" | null) {
+  async updateMessageFeedback(
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) {
     return await chatRepository.updateMessage(messageId, { feedback });
   },
-
-
 };

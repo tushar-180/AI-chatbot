@@ -13,6 +13,10 @@ import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
 import type { WebSource } from "@/features/chat/types/chat.types";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
+import { useTemporaryChat } from "@/features/chat/hooks/useTemporaryChat";
+import { TempChatBanner } from "@/features/chat/components/TempChatBanner";
+import { chatService } from "@/features/chat/services/chat.service";
 
 /**
  * Chat Page Component
@@ -33,6 +37,8 @@ const Chat = () => {
     setMessages,
     setIsNewChat,
   } = useChatStore();
+  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
+  const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
@@ -71,7 +77,7 @@ const Chat = () => {
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
-    skipFetch: canAutoStartFromSeededMessages,
+    skipFetch: canAutoStartFromSeededMessages || isTemporaryChatActive,
   });
 
   // 2. Manage Web Search Quota
@@ -82,17 +88,46 @@ const Chat = () => {
   } = useWebSearchQuota();
 
   // 3. Manage Streaming Logic & Optimistic UI
+  const normalStream = useChatStream({
+    onWebSearchComplete: refreshQuota,
+  });
+
+  const tempStream = useTemporaryChat();
+
+  const activeStream = isTemporaryChatActive ? tempStream : normalStream;
+
   const {
     streamMessage,
     editMessage,
     retryMessage,
     stopGeneration,
-    optimisticMessages,
     isStreaming,
     loading: isCurrentChatLoading,
-  } = useChatStream({
-    onWebSearchComplete: refreshQuota,
-  });
+  } = activeStream;
+
+  const displayMessages = isTemporaryChatActive
+    ? tempStream.messages
+    : (normalStream.optimisticMessages ?? messages);
+
+  // Automatically disable and purge temporary chat mode when navigating to specific chats or unmounting
+  useEffect(() => {
+    if (isTemporaryChatActive) {
+      const path = location.pathname;
+      if (chatId || path.includes("/group/")) {
+        useTemporaryChatStore.getState().setTemporaryChatActive(false);
+        clearTemporaryChatStore();
+      }
+    }
+  }, [chatId, location.pathname, isTemporaryChatActive, clearTemporaryChatStore]);
+
+  useEffect(() => {
+    return () => {
+      if (useTemporaryChatStore.getState().isTemporaryChatActive) {
+        useTemporaryChatStore.getState().setTemporaryChatActive(false);
+        useTemporaryChatStore.getState().clearStore();
+      }
+    };
+  }, []);
 
   // 4. Manage Input & Form Submission
   const {
@@ -108,7 +143,7 @@ const Chat = () => {
   } = useChatInput({
     onSubmit: (input, provider, attachments, options) =>
       streamMessage(input, provider, attachments, {
-        forceNewChat: Boolean(messagesError && currentChatId),
+        forceNewChat: isTemporaryChatActive ? false : Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
       }),
   });
@@ -148,7 +183,7 @@ const Chat = () => {
     location.pathname,
   ]);
 
-  const displayMessages = optimisticMessages ?? messages;
+
 
   const handleSourcesOpen = useCallback(
     (sources: WebSource[], sourceId?: number) => {
@@ -171,12 +206,18 @@ const Chat = () => {
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
       <Sidebar />
 
-      <main className="relative flex flex-1 flex-col h-screen overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
+      <main className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
+        isTemporaryChatActive
+          ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
+          : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
+      }`}>
         {/* Spotlight Component - Positioned correctly */}
-        <Spotlight
-          className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
-          fill="rgba(255, 255, 255, 0.05)"
-        />
+        {!isTemporaryChatActive && (
+          <Spotlight
+            className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
+            fill="rgba(255, 255, 255, 0.05)"
+          />
+        )}
 
         <div
           className={`flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
@@ -185,6 +226,8 @@ const Chat = () => {
             currentChatId={currentChatId}
             onMenuClick={() => setSidebarOpen(true)}
           />
+
+          {isTemporaryChatActive && <TempChatBanner />}
 
           <div className="relative flex-1">
             <MessageList
@@ -207,6 +250,16 @@ const Chat = () => {
                 })
               }
               onEditStart={stopGeneration}
+              onFeedback={(messageId, feedback) => {
+                if (isTemporaryChatActive) {
+                  useTemporaryChatStore.getState().setMessageFeedback(messageId, feedback);
+                } else {
+                  useChatStore.getState().setMessageFeedback(messageId, feedback);
+                  if (currentChatId) {
+                    chatService.updateMessageFeedback(currentChatId, messageId, feedback);
+                  }
+                }
+              }}
               onRetryMessage={(messageId) =>
                 retryMessage(messageId, selectedProvider)
               }

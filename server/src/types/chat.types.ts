@@ -46,7 +46,7 @@ export type ChatMessage = {
   requestId?: string;
   status: ChatMessageStatus;
   feedback?: "like" | "dislike" | null;
-    tokens?: TokenUsage;
+  tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
 };
