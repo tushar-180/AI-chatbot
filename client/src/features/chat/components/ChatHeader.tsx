@@ -1,8 +1,10 @@
 import { memo } from "react";
 import { UserButton } from "@clerk/react";
-import { Menu, Share } from "lucide-react";
+import { Menu, Share, LogOut } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ShareModal from "./ShareModal";
 
 interface ChatHeaderProps {
@@ -12,12 +14,23 @@ interface ChatHeaderProps {
 }
 
 const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) => {
+  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
+  const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
-  const currentChat = useChatStore((state) => state.currentChat);
   const streamingChatId = useChatStore((state) => state.streamingChatId);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const navigate = useNavigate();
 
-  chatTitle = chatTitle || currentChat?.title || "New Conversation";
+  const handleExitTempChat = () => {
+    useTemporaryChatStore.getState().setTemporaryChatActive(false);
+    useTemporaryChatStore.getState().clearStore();
+    navigate("/chat");
+  };
+
+  const currentChat = chats.find((chat) => chat._id === currentChatId);
+  chatTitle = isTemporaryChatActive
+    ? "Temporary Chat"
+    : chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
@@ -37,6 +50,15 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
             <h1 className="font-sans text-[14px] font-medium tracking-tight text-white/90 truncate">
               {chatTitle}
             </h1>
+            {isTemporaryChatActive && (
+              <div className="flex items-center gap-2 rounded-full bg-emerald-500/5 border border-emerald-500/20 px-3 py-1 text-[9px] font-extrabold uppercase tracking-widest text-emerald-400 select-none shadow-[0_0_15px_rgba(16,185,129,0.1)] backdrop-blur-sm">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                Temporary Mode
+              </div>
+            )}
             {isStreamingCurrentChat && (
               <div className="flex gap-1">
                 <span className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
@@ -49,6 +71,18 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
 
         {/* Right Section */}
         <div className="flex items-center justify-end gap-4">
+          {isTemporaryChatActive && (
+            <button
+              onClick={handleExitTempChat}
+              className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-rose-500/25 bg-rose-950/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400 backdrop-blur-md transition-all hover:bg-rose-500/25 hover:text-rose-200 hover:border-rose-500/40 hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_12px_rgba(244,63,94,0.08)] cursor-pointer"
+              title="Exit"
+            >
+              <span className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-rose-500/10 to-rose-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <LogOut size={13} className="transition-transform group-hover:translate-x-0.5 duration-300 relative z-10" />
+              <span className="relative z-10 hidden sm:inline">Exit</span>
+            </button>
+          )}
+
           {currentChatId && (
             <button
               onClick={() => setIsShareModalOpen(true)}

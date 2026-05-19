@@ -2,7 +2,8 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useGroupStore } from "../store/useGroupStore";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -29,6 +30,7 @@ import {
   Search,
   ListChecks,
   Shield,
+  ShieldAlert,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -125,11 +127,14 @@ const SidebarItem = memo(
       setEditValue(item.title || "");
     };
 
-    const handleCancel = useCallback((e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setIsEditing(false);
-      setEditValue(item.title || "");
-    }, [item.title]);
+    const handleCancel = useCallback(
+      (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setIsEditing(false);
+        setEditValue(item.title || "");
+      },
+      [item.title],
+    );
 
     const handleSave = async (e?: React.MouseEvent | React.KeyboardEvent) => {
       e?.stopPropagation();
@@ -210,22 +215,35 @@ const SidebarItem = memo(
           )}
 
           {isPinned && !isEditing && (
-            <Pin 
-              size={12} 
-              strokeWidth={2.5} 
+            <Pin
+              size={12}
+              strokeWidth={2.5}
               className={`shrink-0 transition-all rotate-[-35deg] ${
-                isActive ? "text-emerald-600" : "text-emerald-500"
-              }`} 
+                item.itemType === "group"
+                  ? isActive
+                    ? "text-emerald-600"
+                    : "text-emerald-500"
+                  : isActive
+                    ? "text-black/30"
+                    : "text-slate-500/60"
+              }`}
             />
           )}
 
-          {item.itemType === "group" && (
-            group ? (
+          {item.itemType === "group" &&
+            (group ? (
               <AvatarGroup className="flex-shrink-0">
                 {group.members.slice(0, 2).map((member) => (
-                  <Avatar key={member.userId} className="h-5 w-5 ring-1 ring-slate-950">
+                  <Avatar
+                    key={member.userId}
+                    className="h-5 w-5 ring-1 ring-slate-950"
+                  >
                     {member.userImage && (
-                      <AvatarImage src={member.userImage} alt={member.username} className="object-cover" />
+                      <AvatarImage
+                        src={member.userImage}
+                        alt={member.username}
+                        className="object-cover"
+                      />
                     )}
                     <AvatarFallback className="text-[8px] font-bold bg-zinc-800 text-zinc-300 flex items-center justify-center">
                       {member.username.substring(0, 2).toUpperCase()}
@@ -241,7 +259,9 @@ const SidebarItem = memo(
             ) : (
               <Users
                 size={14}
-                className={isActive ? "text-emerald-600" : "text-emerald-500/50"}
+                className={
+                  isActive ? "text-emerald-600" : "text-emerald-500/50"
+                }
               />
             )
           )}
@@ -398,9 +418,9 @@ const SidebarItem = memo(
                             )}
                             <button
                               onClick={(e) => {
-                                  e.stopPropagation();
-                                  onArchive(item._id);
-                                  setShowMenu(false);
+                                e.stopPropagation();
+                                onArchive(item._id);
+                                setShowMenu(false);
                               }}
                               className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-all outline-none"
                             >
@@ -518,13 +538,16 @@ const SidebarItem = memo(
       prevProps.isArchived === nextProps.isArchived &&
       prevProps.item.updatedAt === nextProps.item.updatedAt
     );
-  }
+  },
 );
 
 const Sidebar = () => {
   const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
-  const { sidebarOpen, setSidebarOpen } =
+  const location = useLocation();
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId, isNewChat } =
     useChatStore();
+  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
+  const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
   const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup, updateGroup } =
     useGroupStore();
   const { user } = useUser();
@@ -547,53 +570,36 @@ const Sidebar = () => {
     viewingArchived,
   } = useChatList({ shouldFetch: true });
 
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const chatListScrollRef = useRef<HTMLDivElement>(null);
+  const fetchMoreChatsRef = useRef(fetchMoreChats);
+  const observer = useRef<IntersectionObserver | null>(null);
 
-  const handleRenameItem = async (id: string, title: string, itemType: "chat" | "group") => {
-    if (itemType === "chat") {
-      await renameChat(id, title);
-    } else {
-      try {
-        await api.patch(`/group/${id}`, { title, userId: user?.id });
-        updateGroup(id, { title });
-        toast.success("Group chat renamed successfully.");
-      } catch (err) {
-        console.error("Failed to rename group:", err);
-        toast.error("Could not rename group chat.");
-        throw err;
-      }
-    }
-  };
+  useEffect(() => {
+    fetchMoreChatsRef.current = fetchMoreChats;
+  }, [fetchMoreChats]);
 
-  const handlePinItem = async (id: string, itemType: "chat" | "group") => {
-    if (itemType === "chat") {
-      await pinChat(id);
-    } else {
-      try {
-        await api.post(`/group/${id}/pin`, { userId: user?.id });
-        updateGroup(id, { isPinned: true, updatedAt: new Date().toISOString() });
-        toast.success("Group chat pinned.");
-      } catch (err) {
-        console.error("Failed to pin group:", err);
-        toast.error("Could not pin group chat.");
-      }
+  const observerTargetRef = useCallback((node: HTMLDivElement | null) => {
+    if (observer.current) {
+      observer.current.disconnect();
     }
-  };
 
-  const handleUnpinItem = async (id: string, itemType: "chat" | "group") => {
-    if (itemType === "chat") {
-      await unpinChat(id);
-    } else {
-      try {
-        await api.post(`/group/${id}/unpin`, { userId: user?.id });
-        updateGroup(id, { isPinned: false, updatedAt: new Date().toISOString() });
-        toast.success("Group chat unpinned.");
-      } catch (err) {
-        console.error("Failed to unpin group:", err);
-        toast.error("Could not unpin group chat.");
-      }
-    }
-  };
+    if (!node || !hasMore) return;
+
+    observer.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore) {
+          fetchMoreChatsRef.current();
+        }
+      },
+      {
+        root: chatListScrollRef.current,
+        threshold: 0,
+        rootMargin: "100px",
+      },
+    );
+
+    observer.current.observe(node);
+  }, [hasMore]);
 
   const [showRecent, setShowRecent] = useState(true);
   const [deleteConfig, setDeleteConfig] = useState<{
@@ -607,11 +613,12 @@ const Sidebar = () => {
 
   useEffect(() => {
     if (!user) return;
-    api.get("/user/profile")
+    api
+      .get("/user/profile")
       .then(({ data }) => {
         setIsAdmin(data.role === "admin");
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Failed to fetch user role for sidebar:", err);
       });
   }, [user]);
@@ -634,7 +641,65 @@ const Sidebar = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  const handleRenameItem = async (
+    id: string,
+    title: string,
+    itemType: "chat" | "group",
+  ) => {
+    if (itemType === "chat") {
+      await renameChat(id, title);
+      return;
+    }
 
+    try {
+      await api.patch(`/group/${id}`, { title, userId: user?.id });
+      updateGroup(id, { title });
+      toast.success("Group chat renamed successfully.");
+    } catch (err) {
+      console.error("Failed to rename group:", err);
+      toast.error("Could not rename group chat.");
+      throw err;
+    }
+  };
+
+  const handlePinItem = async (id: string, itemType: "chat" | "group") => {
+    if (itemType === "chat") {
+      await pinChat(id);
+      return;
+    }
+
+    try {
+      await api.post(`/group/${id}/pin`, { userId: user?.id });
+      updateGroup(id, { isPinned: true, updatedAt: new Date().toISOString() });
+      toast.success("Group chat pinned.");
+    } catch (err) {
+      console.error("Failed to pin group:", err);
+      toast.error("Could not pin group chat.");
+    }
+  };
+
+  const handleUnpinItem = async (id: string, itemType: "chat" | "group") => {
+    if (itemType === "chat") {
+      await unpinChat(id);
+      return;
+    }
+
+    try {
+      await api.post(`/group/${id}/unpin`, { userId: user?.id });
+      updateGroup(id, { isPinned: false, updatedAt: new Date().toISOString() });
+      toast.success("Group chat unpinned.");
+    } catch (err) {
+      console.error("Failed to unpin group:", err);
+      toast.error("Could not unpin group chat.");
+    }
+  };
+
+  const activeChatId = urlChatId || currentChatId;
+  const isSearchNavigation = new URLSearchParams(location.search).has("highlight");
+  const isStreamingActiveChat = Boolean(
+    activeChatId && isStreaming && streamingChatId === activeChatId,
+  );
+  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
   const filteredChats = useMemo(() => {
     return chats
       .filter((c) => (c.isArchived ?? false) === viewingArchived)
@@ -643,14 +708,20 @@ const Sidebar = () => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
 
-        // 2. Sort by update time (most recent first).
+        // 2. Search-selected or currently streaming chats sit at the top of
+        // their section, below pinned chats.
+        if (shouldPromoteActiveChat) {
+          if (a._id === activeChatId) return -1;
+          if (b._id === activeChatId) return 1;
+        }
+
+        // 3. Finally, sort by update time (most recent first).
         const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return dateB - dateA;
       });
-  }, [chats, viewingArchived]);
+  }, [activeChatId, chats, shouldPromoteActiveChat, viewingArchived]);
 
-  const observerTarget = useRef<HTMLDivElement>(null);
 
   // Merge and sort chats and groups
   const unifiedList = useMemo(() => {
@@ -672,17 +743,22 @@ const Sidebar = () => {
     ];
     
     return combined.sort((a, b) => {
-      // 1. Pinned chats stay first.
+      // 1. Pinned items stay first.
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
-      // 2. Sort by update time (most recent first).
+      // 2. Search-selected or currently streaming chat stays near the top.
+      if (shouldPromoteActiveChat) {
+        if (a.itemType === "chat" && a._id === activeChatId) return -1;
+        if (b.itemType === "chat" && b._id === activeChatId) return 1;
+      }
+
+      // 3. Sort by update time (most recent first).
       const dateA = new Date(a.updatedAt).getTime();
       const dateB = new Date(b.updatedAt).getTime();
       return dateB - dateA;
     });
-  }, [filteredChats, groups, viewingArchived]);
-  const chatListScrollRef = useRef<HTMLDivElement>(null);
+  }, [activeChatId, filteredChats, groups, shouldPromoteActiveChat, viewingArchived]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -731,28 +807,6 @@ const Sidebar = () => {
   };
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      async (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isFetchingMore && !loading) {
-          setIsFetchingMore(true);
-          try {
-            await fetchMoreChats();
-          } finally {
-            setIsFetchingMore(false);
-          }
-        }
-      },
-      { threshold: 1.0 },
-    );
-
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
-    }
-
-    return () => observer.disconnect();
-  }, [hasMore, fetchMoreChats, isFetchingMore, loading]);
-
-  useEffect(() => {
     if (user?.id) {
       api
         .get("/group/user-groups", { params: { userId: user.id } })
@@ -761,6 +815,16 @@ const Sidebar = () => {
         });
     }
   }, [user?.id, setGroups]);
+
+  useEffect(() => {
+    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
 
   // Scroll active chat into view on initial mount/reload
   useEffect(() => {
@@ -819,7 +883,13 @@ const Sidebar = () => {
 
         <div className="flex flex-col gap-3">
           <button
-            onClick={createChat}
+            onClick={() => {
+              if (isTemporaryChatActive) {
+                useTemporaryChatStore.getState().setTemporaryChatActive(false);
+                clearTemporaryChatStore();
+              }
+              createChat();
+            }}
             className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
           >
             <Plus size={16} strokeWidth={3} />
@@ -828,9 +898,9 @@ const Sidebar = () => {
 
           <button
             onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-white/8"
+            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10"
           >
-            <ImageIcon size={16} />
+            <ImageIcon size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
             <span>Gallery</span>
           </button>
         </div>
@@ -843,8 +913,12 @@ const Sidebar = () => {
             <Search size={14} className="mr-3" />
             <span>Search conversations...</span>
             <div className="ml-auto flex items-center gap-1 opacity-40">
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">⌘</kbd>
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">K</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                ⌘
+              </kbd>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                K
+              </kbd>
             </div>
           </button>
         </div>
@@ -936,7 +1010,10 @@ const Sidebar = () => {
           )}
 
           {showRecent && (
-            <div ref={chatListScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-2">
+            <div
+              ref={chatListScrollRef}
+              className="min-h-0 flex-1 overflow-y-auto pr-2"
+            >
               <div className="flex flex-col gap-3">
                 {unifiedList.length === 0 ? (
                   <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
@@ -990,11 +1067,11 @@ const Sidebar = () => {
                 )}
 
                 {/* Intersection Observer Sentinel */}
-                {(hasMore || filteredChats.length > 0) && (
-                  <div ref={observerTarget} className="h-4 w-full mt-2" />
+                {hasMore && (
+                  <div ref={observerTargetRef} className="h-4 w-full mt-2" />
                 )}
 
-                {hasMore && (loading || isFetchingMore) && (
+                {hasMore && loading && (
                   <div className="flex justify-center p-4">
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                   </div>
@@ -1009,11 +1086,13 @@ const Sidebar = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 w-full p-2 rounded-2xl transition-all group text-left border border-transparent hover:bg-slate-800/50 data-[state=open]:bg-white/10 outline-none focus:ring-0">
-                <div className={`h-9 w-9 rounded-xl overflow-hidden transition-all shadow-inner ${
-                  isAdmin 
-                    ? "border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/20" 
-                    : "border border-white/5"
-                }`}>
+                <div
+                  className={`h-9 w-9 rounded-xl overflow-hidden transition-all shadow-inner ${
+                    isAdmin
+                      ? "border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/20"
+                      : "border border-white/5"
+                  }`}
+                >
                   {user?.imageUrl ? (
                     <img
                       src={user.imageUrl}
@@ -1033,6 +1112,11 @@ const Sidebar = () => {
                   {isAdmin && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">
                       Admin
+                    </span>
+                  )}
+                  {isTemporaryChatActive && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[7px] font-bold uppercase tracking-widest border border-emerald-500/20 mt-0.5 shadow-[0_0_8px_rgba(16,185,129,0.15)] ml-1">
+                      Temp Chat
                     </span>
                   )}
                 </div>
@@ -1070,6 +1154,35 @@ const Sidebar = () => {
                 <span>Profile</span>
               </DropdownMenuItem>
 
+              {(isNewChat || !currentChatId || isTemporaryChatActive) && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+                    const newActive = !currentActive;
+
+                    useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
+
+                    if (newActive) {
+                      useChatStore.getState().setCurrentChat(null);
+                      useChatStore.getState().setIsNewChat(true);
+                      useChatStore.getState().setMessages([]);
+                      useTemporaryChatStore.getState().clearStore();
+                      useChatStore.getState().setIsStreaming(false);
+                      useChatStore.getState().setLoading(false);
+                    } else {
+                      useTemporaryChatStore.getState().clearStore();
+                    }
+                    navigate("/chat");
+                  }}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                >
+                  <ShieldAlert size={16} className={isTemporaryChatActive ? "text-emerald-400 animate-pulse" : "text-slate-400"} />
+                  <span className={isTemporaryChatActive ? "text-emerald-400 font-extrabold" : ""}>
+                    Temporary Chat
+                  </span>
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={() => {
                   setSettingsTab("personalization");
@@ -1077,7 +1190,7 @@ const Sidebar = () => {
                 }}
                 className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
-                <Sparkles size={16} className="text-slate-400"  />
+                <Sparkles size={16} className="text-slate-400" />
                 <span>Personalization</span>
               </DropdownMenuItem>
 
@@ -1158,9 +1271,9 @@ const Sidebar = () => {
           initialTab={settingsTab}
         />
 
-        <SearchModal 
-          isOpen={searchModalOpen} 
-          onClose={() => setSearchModalOpen(false)} 
+        <SearchModal
+          isOpen={searchModalOpen}
+          onClose={() => setSearchModalOpen(false)}
         />
       </Suspense>
     </>

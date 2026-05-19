@@ -15,6 +15,14 @@ export type Message = {
         size?: number;
     }[];
     sources?: WebSource[];
+    metadata?: {
+        selection?: {
+            selectedText: string;
+            originalSourceMessage: string;
+            sourceMessageId: string;
+            actionType: string;
+        };
+    };
 };
 
 export type Chat = {

@@ -36,8 +36,11 @@ type ChatState = {
   updateChatPin: (id: string, isPinned: boolean) => void;
   setViewingArchived: (viewing: boolean) => void;
   clearMessages: () => void;
-  setMessageFeedback: (messageId: string, feedback: "like" | "dislike" | null) => void;
-}
+  setMessageFeedback: (
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) => void;
+};
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -242,7 +245,7 @@ export const useChatStore = create<ChatState>()(
       setMessageFeedback: (messageId, feedback) =>
         set((state) => ({
           messages: state.messages.map((m) =>
-            m.id === messageId ? { ...m, feedback } : m
+            m.id === messageId ? { ...m, feedback } : m,
           ),
         })),
     }),

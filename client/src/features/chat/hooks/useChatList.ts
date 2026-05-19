@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useUser } from "@clerk/react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -36,6 +36,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     setViewingArchived,
     upsertChat,
     currentChat,
+    setLoading,
   } = useChatStore();
 
   const createChat = () => {
@@ -182,10 +183,11 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
   const { isDown } = useServerStatus();
   const isSharedChatRoute = location.pathname.startsWith("/shared/");
 
-  const fetchMoreChats = async () => {
+  const fetchMoreChats = useCallback(async () => {
     if (!user?.id || loading || isStreaming || !hasMore) return;
 
     try {
+      setLoading(true);
       const nextPage = page + 1;
       const res = await api.get("/chat", {
         params: { page: nextPage, limit: 20, isArchived: viewingArchived },
@@ -200,8 +202,21 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
       setPage(nextPage);
     } catch (err) {
       console.error("Error fetching more chats", err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [
+    user?.id,
+    loading,
+    isStreaming,
+    hasMore,
+    page,
+    viewingArchived,
+    setLoading,
+    setHasMore,
+    appendChats,
+    setPage,
+  ]);
 
   const searchChats = async (query: string) => {
     if (!query.trim()) return [];
@@ -241,6 +256,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
 
     const fetchChats = async () => {
       try {
+        setLoading(true);
         const res = await api.get("/chat", {
           params: { page: 1, limit: 20, isArchived: viewingArchived },
         });
@@ -275,6 +291,8 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
         if (!isDown) {
           toast.error("Could not load chats.");
         }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -290,6 +308,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     setHasMore,
     viewingArchived,
     shouldFetch,
+    setLoading,
   ]);
 
   const deleteChats = async (chatIds: string[]) => {

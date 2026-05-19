@@ -11,6 +11,8 @@ import sharedChatRoutes from "./routes/sharedChat.routes";
 import adminRoutes from "./routes/admin.routes";
 import { groupChatRoutes } from "./routes/groupChat.routes";
 import { GroupChatController } from "./controllers/groupChat.controller";
+import mcpRoutes from "./routes/mcp.routes";
+import temporaryChatRoutes from "./routes/temporaryChat.routes";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
@@ -56,6 +58,7 @@ app.get("/api/ping", (req, res) => {
 // Routes
 app.use("/api/group", groupChatRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
+app.use("/api/temporary-chat", requireAuth, temporaryChatRoutes);
 app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/user", requireAuth, userRoutes);
 app.use("/api/upload", requireAuth, uploadRoutes);
@@ -63,6 +66,7 @@ app.use("/api/memory", requireAuth, memoryRoutes);
 app.use("/api/admin", requireAuth, adminRoutes);
 app.use("/api/shared-chat", sharedChatRoutes);
 app.use("/api/web-search", webSearchRoutes);
+app.use("/api/mcp", requireAuth, mcpRoutes);
 
 // Error Handler Middleware
 app.use(errorHandler);

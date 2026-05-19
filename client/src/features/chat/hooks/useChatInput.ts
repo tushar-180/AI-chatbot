@@ -10,6 +10,8 @@ export interface Attachment {
   size?: number;
 }
 
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
+
 interface UseChatInputProps {
   onSubmit: (
     input: string,
@@ -52,7 +54,8 @@ export const useChatInput = ({
 
   const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim() && attachments.length === 0) return;
+    const selectionContext = useComposerStore.getState().selectionContext;
+    if (!input.trim() && attachments.length === 0 && !selectionContext) return;
 
     const currentInput = input;
     const currentAttachments = [...attachments];

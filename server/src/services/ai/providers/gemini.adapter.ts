@@ -8,6 +8,7 @@ import {
 } from "../constants";
 import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
+import { mcpClientService } from "../../mcpClient.service";
 
 dotenv.config();
 
@@ -36,6 +37,20 @@ export class GeminiAdapter implements IAIService {
     this.model = model;
   }
 
+  private mergeUsage(
+    current: ReturnType<typeof normalizeGeminiUsageMetadata>,
+    next: ReturnType<typeof normalizeGeminiUsageMetadata>,
+  ): ReturnType<typeof normalizeGeminiUsageMetadata> {
+    if (!next) return current;
+    if (!current) return next;
+
+    return {
+      promptTokens: current.promptTokens + next.promptTokens,
+      completionTokens: current.completionTokens + next.completionTokens,
+      totalTokens: current.totalTokens + next.totalTokens,
+    };
+  }
+
   private async formatContents(messages: AIMessage[]) {
     const isVision = supportsVision(this.model);
 
@@ -47,23 +62,22 @@ export class GeminiAdapter implements IAIService {
 
           if (msg.attachments && msg.attachments.length > 0) {
             if (isVision) {
-              // Parallel fetch and convert images to base64
               const imageParts = await Promise.all(
                 msg.attachments.map(async (att) => {
                   try {
-                    // Check Cache First
                     if (GeminiAdapter.imageCache.has(att.url)) {
                       const cached = GeminiAdapter.imageCache.get(att.url)!;
                       return { inlineData: cached };
                     }
 
-                    if (!att.url.startsWith('http')) {
+                    if (!att.url.startsWith("http")) {
                       throw new Error(`Invalid image URL: ${att.url}`);
                     }
 
                     const response = await fetch(att.url);
-                    if (!response.ok)
+                    if (!response.ok) {
                       throw new Error(`Fetch failed: ${response.statusText}`);
+                    }
 
                     const arrayBuffer = await response.arrayBuffer();
                     const base64Data =
@@ -85,7 +99,6 @@ export class GeminiAdapter implements IAIService {
               );
               parts.push(...imageParts);
             } else {
-              // Fallback for text-only models
               const attachmentText = msg.attachments
                 .map((a) => `\n[Image: ${a.url}]`)
                 .join("");
@@ -122,7 +135,8 @@ OUTPUT RULES (STRICTLY ENFORCED):
   private collapseConsecutiveRoles(messages: AIMessage[]): AIMessage[] {
     const collapsed: AIMessage[] = [];
     for (const msg of messages.filter((entry) => entry.role !== "system")) {
-      const last = collapsed.length > 0 ? collapsed[collapsed.length - 1] : null;
+      const last =
+        collapsed.length > 0 ? collapsed[collapsed.length - 1] : null;
       if (last && last.role === msg.role) {
         if (msg.role === "user") {
           const currentName = msg.username || msg.userId || msg.role;
@@ -140,14 +154,75 @@ OUTPUT RULES (STRICTLY ENFORCED):
             : msg.content;
         collapsed.push({
           ...msg,
-          content: finalContent
+          content: finalContent,
         });
       }
     }
     return collapsed;
   }
 
-  async generateResponse(messages: AIMessage[]) {
+  private mapJsonSchemaToGemini(schema: any): any {
+    if (!schema) return undefined;
+
+    const mapped: any = {};
+
+    if (schema.type) {
+      mapped.type = String(schema.type).toUpperCase();
+    } else {
+      mapped.type = "STRING";
+    }
+
+    if (schema.description) {
+      mapped.description = schema.description;
+    }
+
+    if (schema.properties) {
+      mapped.properties = Object.fromEntries(
+        Object.entries(schema.properties).map(
+          ([key, propSchema]: [string, any]) => [
+            key,
+            this.mapJsonSchemaToGemini(propSchema),
+          ],
+        ),
+      );
+    }
+
+    if (schema.required) {
+      mapped.required = schema.required;
+    }
+
+    if (schema.items) {
+      mapped.items = this.mapJsonSchemaToGemini(schema.items);
+    } else if (mapped.type === "ARRAY") {
+      mapped.items = { type: "STRING" };
+    }
+
+    if (schema.enum) {
+      mapped.enum = schema.enum;
+    }
+
+    return mapped;
+  }
+
+  private mapMcpToolsToGemini(tools?: any[]) {
+    if (!tools || tools.length === 0) return undefined;
+
+    return [
+      {
+        functionDeclarations: tools.map((t) => ({
+          name: t.name,
+          description: t.description || "",
+          parameters: this.mapJsonSchemaToGemini(t.inputSchema) || {
+            type: "OBJECT",
+            properties: {},
+            required: [],
+          },
+        })),
+      },
+    ];
+  }
+
+  async generateResponse(messages: AIMessage[], tools?: any[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
     const contents = await this.formatContents(collapsedMessages);
@@ -156,23 +231,96 @@ OUTPUT RULES (STRICTLY ENFORCED):
       .map((msg) => msg.content)
       .join("\n\n---\n\n");
 
-    try {
-      const res = await this.ai.models.generateContent({
-        model: this.model,
-        contents,
-        config: {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
-        },
-      });
+    const geminiTools = this.mapMcpToolsToGemini(tools);
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+    let finalOutput = "";
+    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
 
-      const text =
-        res?.candidates?.[0]?.content?.parts?.[0]?.text || res?.text || "";
+    try {
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
+
+        const config: any = {
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
+        };
+        if (geminiTools) {
+          config.tools = geminiTools;
+        }
+
+        const res = await this.ai.models.generateContent({
+          model: this.model,
+          contents,
+          config,
+        });
+
+        totalUsage = this.mergeUsage(
+          totalUsage,
+          normalizeGeminiUsageMetadata(
+            (res as any).usageMetadata ?? (res as any).usage_metadata,
+          ),
+        );
+
+        const text =
+          res?.candidates?.[0]?.content?.parts?.[0]?.text || res?.text || "";
+        if (text) {
+          finalOutput += text;
+        }
+
+        const functionCalls = res.functionCalls;
+        if (functionCalls && functionCalls.length > 0) {
+          hasToolCalls = true;
+
+          const modelContent = res.candidates?.[0]?.content;
+          contents.push({
+            role: "model",
+            parts:
+              modelContent?.parts && modelContent.parts.length > 0
+                ? modelContent.parts
+                : functionCalls.map((f) => ({
+                    functionCall: {
+                      name: f.name,
+                      args: f.args,
+                    },
+                  })),
+          } as any);
+
+          const responseParts = await Promise.all(
+            functionCalls.map(async (f) => {
+              try {
+                const result = await mcpClientService.executeTool(
+                  f.name!,
+                  f.args,
+                );
+                return {
+                  functionResponse: {
+                    name: f.name!,
+                    response: { result },
+                  },
+                };
+              } catch (err: any) {
+                return {
+                  functionResponse: {
+                    name: f.name!,
+                    response: { error: err.message || String(err) },
+                  },
+                };
+              }
+            }),
+          );
+
+          contents.push({
+            role: "user",
+            parts: responseParts,
+          } as any);
+        }
+      }
 
       return {
-        text: text.trim() || "No response generated.",
-        usage: normalizeGeminiUsageMetadata(
-          (res as any).usageMetadata ?? (res as any).usage_metadata,
-        ),
+        text: finalOutput.trim() || "No response generated.",
+        usage: totalUsage,
       };
     } catch (error: any) {
       console.error("Gemini Adapter Error:", error);
@@ -183,6 +331,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
   async generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
+    tools?: any[],
   ): Promise<AIStreamResponse> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
@@ -192,99 +341,177 @@ OUTPUT RULES (STRICTLY ENFORCED):
       .map((msg) => msg.content)
       .join("\n\n---\n\n");
 
-    let streamedText = "";
+    const geminiTools = this.mapMcpToolsToGemini(tools);
+    let latestUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+    let settleUsage: (
+      usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
+    ) => void = () => undefined;
+    let usageSettled = false;
+    const usage = new Promise<
+      ReturnType<typeof normalizeGeminiUsageMetadata>
+    >((resolve) => {
+      settleUsage = (value) => {
+        if (!usageSettled) {
+          usageSettled = true;
+          resolve(value);
+        }
+      };
+    });
+    const adapter = this;
 
-    try {
-      const res = await this.ai.models.generateContentStream({
-        model: this.model,
-        contents,
-        config: {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
-        },
-      } as any);
+    return {
+      usage,
+      async *[Symbol.asyncIterator]() {
+        try {
+          let hasToolCalls = true;
+          let loopCount = 0;
+          const maxLoops = 10;
 
-      let latestUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
-      let settleUsage: (
-        usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
-      ) => void = () => undefined;
-      let usageSettled = false;
-      const usage = new Promise<
-        ReturnType<typeof normalizeGeminiUsageMetadata>
-      >((resolve) => {
-        settleUsage = (value) => {
-          if (!usageSettled) {
-            usageSettled = true;
-            resolve(value);
-          }
-        };
-      });
+          while (hasToolCalls && loopCount < maxLoops) {
+            loopCount++;
+            hasToolCalls = false;
 
-      return {
-        usage,
-        async *[Symbol.asyncIterator]() {
-          try {
+            const config: any = {
+              systemInstruction:
+                adapter.getSystemInstruction(combinedSystemPrompt),
+            };
+            if (geminiTools) {
+              config.tools = geminiTools;
+            }
+
+            const res = await adapter.ai.models.generateContentStream({
+              model: adapter.model,
+              contents,
+              config,
+            } as any);
+
+            const activeFunctionCalls: any[] = [];
+            const accumulatedParts: any[] = [];
+
             for await (const chunk of res) {
               if (signal?.aborted) {
                 return;
               }
-              const normalizedUsage = normalizeGeminiUsageMetadata(
-                (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
+
+              latestUsage = adapter.mergeUsage(
+                latestUsage,
+                normalizeGeminiUsageMetadata(
+                  (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
+                ),
               );
-              if (normalizedUsage) {
-                latestUsage = normalizedUsage;
-              }
+
               const text = chunk.text;
               if (text) {
-                streamedText += text;
                 yield text;
               }
+
+              const parts = chunk.candidates?.[0]?.content?.parts;
+              if (parts && parts.length > 0) {
+                accumulatedParts.push(...parts);
+              }
+
+              const functionCalls = chunk.functionCalls;
+              if (functionCalls && functionCalls.length > 0) {
+                activeFunctionCalls.push(...functionCalls);
+              }
             }
-          } finally {
-            settleUsage(latestUsage);
+
+            if (activeFunctionCalls.length === 0) {
+              break;
+            }
+
+            hasToolCalls = true;
+            contents.push({
+              role: "model",
+              parts:
+                accumulatedParts.length > 0
+                  ? accumulatedParts
+                  : activeFunctionCalls.map((f) => ({
+                      functionCall: {
+                        name: f.name,
+                        args: f.args,
+                      },
+                    })),
+            } as any);
+
+            const responseParts = [];
+            for (const f of activeFunctionCalls) {
+              if (!f.name) continue;
+
+              yield `\n\n⚙️ *Running tool \`${f.name}\`...*\n`;
+
+              try {
+                const result = await mcpClientService.executeTool(
+                  f.name,
+                  f.args,
+                );
+                yield `\n\n✅ *Tool \`${f.name}\` completed.* \n\n`;
+
+                responseParts.push({
+                  functionResponse: {
+                    name: f.name,
+                    response: { result },
+                  },
+                });
+              } catch (err: any) {
+                yield `\n\n❌ *Tool \`${f.name}\` failed: ${
+                  err.message || err
+                }*\n\n`;
+
+                responseParts.push({
+                  functionResponse: {
+                    name: f.name,
+                    response: { error: err.message || String(err) },
+                  },
+                });
+              }
+            }
+
+            contents.push({
+              role: "user",
+              parts: responseParts,
+            } as any);
           }
-        },
-      };
-    } catch (error: any) {
-      if (signal?.aborted) {
-        return {
-          usage: Promise.resolve(undefined),
-          async *[Symbol.asyncIterator]() {},
-        };
-      }
+        } catch (error: any) {
+          if (signal?.aborted) {
+            return;
+          }
 
-      console.error("Gemini Adapter Stream Error:", error);
+          console.error("Gemini Adapter Stream Error:", error);
 
-      if (error?.message?.includes("Incomplete JSON segment")) {
-        const fallbackResponse = await this.ai.models.generateContent({
-          model: this.model,
-          contents,
-          config: {
-            systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
-          },
-        });
-        const text =
-          fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          fallbackResponse?.text ||
-          "";
-
-        if (text.trim()) {
-          const fallbackText = text.trim();
-          return {
-            usage: Promise.resolve(
+          if (error?.message?.includes("Incomplete JSON segment")) {
+            const fallbackResponse = await adapter.ai.models.generateContent({
+              model: adapter.model,
+              contents,
+              config: {
+                systemInstruction:
+                  adapter.getSystemInstruction(combinedSystemPrompt),
+              },
+            });
+            latestUsage = adapter.mergeUsage(
+              latestUsage,
               normalizeGeminiUsageMetadata(
                 (fallbackResponse as any).usageMetadata ??
                   (fallbackResponse as any).usage_metadata,
               ),
-            ),
-            async *[Symbol.asyncIterator]() {
-              yield fallbackText;
-            },
-          };
-        }
-      }
+            );
+            const text =
+              fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
+              fallbackResponse?.text ||
+              "";
 
-      throw new AIServiceError(error.message, error.status || 500);
-    }
+            if (text.trim()) {
+              yield text.trim();
+              return;
+            }
+          }
+
+          throw new AIServiceError(error.message, error.status || 500);
+        } finally {
+          settleUsage(latestUsage);
+        }
+      },
+    };
   }
 
   async generateEmbedding(text: string, retries = 2): Promise<number[]> {
@@ -302,7 +529,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
         error,
       );
       if (retries > 0) {
-        await new Promise((r) => setTimeout(r, 1000)); // Wait 1s
+        await new Promise((r) => setTimeout(r, 1000));
         return this.generateEmbedding(text, retries - 1);
       }
       return [];
