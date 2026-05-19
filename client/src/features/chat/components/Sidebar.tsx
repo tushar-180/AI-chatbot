@@ -63,6 +63,7 @@ interface UnifiedItem {
   title: string;
   updatedAt: string;
   itemType: "chat" | "group";
+  isPinned?: boolean;
 }
 
 interface ItemProps {
@@ -542,10 +543,11 @@ const Sidebar = () => {
   const isStreamingActiveChat = Boolean(
     activeChatId && isStreaming && streamingChatId === activeChatId,
   );
-  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
+  const isSearchTargetActive = isSearchNavigation && urlChatId === activeChatId;
+  const shouldPromoteActiveChat = isSearchTargetActive || isStreamingActiveChat;
   const filteredChats = useMemo(() => {
     return chats
-      .filter((c) => c.isArchived === viewingArchived)
+      .filter((c) => (c.isArchived ?? false) === viewingArchived)
       .sort((a, b) => {
         // 1. Pinned chats stay first.
       if (a.isPinned && !b.isPinned) return -1;
@@ -573,40 +575,58 @@ const Sidebar = () => {
       ...filteredChats.map((c) => ({
         _id: c._id,
         title: c.title,
-        updatedAt: c.updatedAt || "",
+        updatedAt: c.updatedAt || new Date().toISOString(),
         itemType: "chat" as const,
+        isPinned: c.isPinned,
       })),
       ...(!viewingArchived ? groups.map((g) => ({
         _id: g._id,
         title: g.title,
-        updatedAt: g.updatedAt,
+        updatedAt: g.updatedAt || new Date().toISOString(),
         itemType: "group" as const,
+        isPinned: false, // Groups currently don't have pin status
       })) : []),
     ];
-    return combined.sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
-  }, [filteredChats, groups, viewingArchived]);
+    
+    return combined.sort((a, b) => {
+      // 1. Pinned chats stay first.
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+
+      // 2. Search-selected or currently streaming chats sit at the top of their section, below pinned chats.
+      const isAActive = shouldPromoteActiveChat && a._id === activeChatId;
+      const isBActive = shouldPromoteActiveChat && b._id === activeChatId;
+      if (isAActive && !isBActive) return -1;
+      if (!isAActive && isBActive) return 1;
+
+      // 3. Finally, sort by update time (most recent first).
+      const dateA = new Date(a.updatedAt).getTime();
+      const dateB = new Date(b.updatedAt).getTime();
+      return dateB - dateA;
+    });
+  }, [filteredChats, groups, viewingArchived, shouldPromoteActiveChat, activeChatId]);
   const chatListScrollRef = useRef<HTMLDivElement>(null);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredChats.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredChats.map((c) => c._id)));
-    }
-  };
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredChats.length) {
+        return new Set();
+      }
+      return new Set(filteredChats.map((c) => c._id));
+    });
+  }, [filteredChats]);
 
-  const toggleSelect = (id: string) => {
-    const newSelected = new Set(selectedIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
-    } else {
-      newSelected.add(id);
-    }
-    setSelectedIds(newSelected);
-  };
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
+      return newSelected;
+    });
+  }, []);
 
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;

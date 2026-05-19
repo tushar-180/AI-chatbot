@@ -12,6 +12,8 @@ import type { GroupMessage } from "../store/useGroupStore";
 
 interface GroupMessageItemProps {
   message: GroupMessage;
+  onCitationClick?: (id: number) => void;
+  onSourcesClick?: (sources: any[], activeId?: number) => void;
 }
 
 const MessageAvatar = ({
@@ -55,7 +57,52 @@ const MessageAvatar = ({
   </div>
 );
 
-const GroupMessageItem = ({ message: msg }: GroupMessageItemProps) => {
+/**
+ * Renders a list of attachments (e.g. images)
+ */
+const AttachmentList = ({ attachments }: { attachments: any[] }) => {
+  if (!attachments || attachments.length === 0) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-3">
+      {attachments.map((attachment, index) => (
+        <div
+          key={index}
+          className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
+        >
+          {attachment.mimeType?.startsWith("image/") ||
+          attachment.url.startsWith("data:image") ? (
+            <img
+              src={attachment.url}
+              alt={attachment.name || "Attachment"}
+              className="h-auto w-full object-contain max-h-100"
+            />
+          ) : (
+            <div className="flex items-center gap-3 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
+                <span className="text-xs font-bold uppercase tracking-tighter">
+                  File
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-white truncate max-w-50">
+                  {attachment.name || "File"}
+                </span>
+                {attachment.size && (
+                  <span className="text-[10px] text-slate-400">
+                    {(attachment.size / 1024).toFixed(1)} KB
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const GroupMessageItem = ({ message: msg, onCitationClick, onSourcesClick }: GroupMessageItemProps) => {
   const { user } = useUser();
   
   // Robust check for AI vs User
@@ -128,6 +175,39 @@ const GroupMessageItem = ({ message: msg }: GroupMessageItemProps) => {
     );
   };
 
+  let processedContent = msg.content || "";
+  if (isAssistant) {
+    processedContent = processedContent.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>');
+  } else {
+    processedContent = processedContent.replace(/(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g, (match) => {
+      const hasLeadingSpace = match.startsWith(" ") || match.startsWith("\n") || match.startsWith("\r");
+      const mentionText = match.trim();
+      return (hasLeadingSpace ? " " : "") + `<span class="text-emerald-400 font-medium">${mentionText}</span>`;
+    });
+  }
+
+  const citationComponents = isAssistant
+    ? {
+        ...assistantMarkdownComponents,
+        cite: ({ node }: any) => {
+          const id = Number(node?.properties?.dataId);
+          if (isNaN(id)) return null;
+          return (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                onCitationClick?.(id);
+              }}
+              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+              title={`Source ${id}`}
+            >
+              {id}
+            </button>
+          );
+        },
+      }
+    : undefined;
+
   return (
     <div className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}>
       <div
@@ -195,18 +275,32 @@ const GroupMessageItem = ({ message: msg }: GroupMessageItemProps) => {
                   rehypePlugins={[rehypeRaw]}
                   components={
                     isAssistant
-                      ? assistantMarkdownComponents
+                      ? citationComponents || assistantMarkdownComponents
                       : userMarkdownComponents
                   }
                 >
-                  {(msg.content || "").replace(/(?:^|\s)@([a-zA-Z0-9-:_/.]+)/g, (match) => {
-                    const hasLeadingSpace = match.startsWith(" ") || match.startsWith("\n") || match.startsWith("\r");
-                  const mentionText = match.trim();
-                  return (hasLeadingSpace ? " " : "") + `<span class="text-emerald-400 font-medium">${mentionText}</span>`;
-                })}
-              </ReactMarkdown>
-            </>
-          )}
+                  {processedContent}
+                </ReactMarkdown>
+
+                <AttachmentList attachments={msg.attachments || []} />
+
+                {isAssistant && msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-3 flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        if (msg.sources?.length) {
+                          onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                      title="View sources"
+                    >
+                      Sources
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>

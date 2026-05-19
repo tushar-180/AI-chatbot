@@ -1,12 +1,23 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import GroupMessageItem from "./GroupMessageItem";
 import { useGroupStore } from "../store/useGroupStore";
+import { Globe, ChevronDown } from "lucide-react";
+import { useParams } from "react-router-dom";
 
-const GroupMessageList = () => {
-  const { groupMessages, loading, isAiThinking } = useGroupStore();
+interface GroupMessageListProps {
+  onCitationClick?: (id: number) => void;
+  onSourcesClick?: (sources: any[], activeId?: number) => void;
+}
+
+const GroupMessageList = ({ onCitationClick, onSourcesClick }: GroupMessageListProps) => {
+  const { groupMessages, loading, isAiThinking, isWebSearching } = useGroupStore();
+  const { groupId } = useParams<{ groupId: string }>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement>(null);
+  
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const shouldAutoScrollRef = useRef(true);
   const prevMessageCountRef = useRef(0);
+  const prevGroupIdRef = useRef<string | null>(null);
 
   const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
@@ -14,11 +25,18 @@ const GroupMessageList = () => {
     ) as HTMLDivElement | null;
   }, []);
 
+  const isAtBottom = useCallback(() => {
+    const container = getScrollContainer();
+    if (!container) return true;
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight < 120
+    );
+  }, [getScrollContainer]);
+
   const scrollToBottom = useCallback(
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-
       container.scrollTo({
         top: container.scrollHeight,
         behavior: smooth ? "smooth" : "auto",
@@ -27,24 +45,53 @@ const GroupMessageList = () => {
     [getScrollContainer],
   );
 
+  const handleScroll = useCallback(() => {
+    const atBottom = isAtBottom();
+    shouldAutoScrollRef.current = atBottom;
+    setShowScrollToBottom(!atBottom);
+  }, [isAtBottom]);
+
+  // ATTACH SCROLL LISTENER
   useEffect(() => {
-    if (groupMessages.length > 0 || isAiThinking) {
-      scrollToBottom(true);
-    }
-  }, [groupMessages, isAiThinking, scrollToBottom]);
+    const container = getScrollContainer();
+    if (!container) return;
+    container.addEventListener("scroll", handleScroll);
+    handleScroll();
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, [getScrollContainer, handleScroll]);
 
+  // AUTO SCROLL ON MESSAGE CHANGES / CHAT SWITCH
   useLayoutEffect(() => {
-    const messageCountChanged =
-      groupMessages.length !== prevMessageCountRef.current;
+    const messageCountChanged = groupMessages.length !== prevMessageCountRef.current;
+    const groupChanged = groupId !== prevGroupIdRef.current;
 
-    if (!loading || messageCountChanged) {
+    // Reset scroll state on switching groups
+    if (groupChanged) {
+      shouldAutoScrollRef.current = true;
+      setShowScrollToBottom(false);
+    }
+
+    if (
+      groupChanged ||
+      (!loading && shouldAutoScrollRef.current && (messageCountChanged || isAiThinking))
+    ) {
       requestAnimationFrame(() => {
         scrollToBottom(false);
       });
     }
 
     prevMessageCountRef.current = groupMessages.length;
-  }, [groupMessages.length, loading, scrollToBottom]);
+    prevGroupIdRef.current = groupId || null;
+  }, [groupMessages.length, groupId, loading, isAiThinking, scrollToBottom]);
+
+  // CONTINUOUS FOLLOW FOR STREAMING
+  useEffect(() => {
+    if (shouldAutoScrollRef.current && (groupMessages.length > 0 || isAiThinking)) {
+      scrollToBottom(true);
+    }
+  }, [groupMessages, isAiThinking, scrollToBottom]);
+
+  const isStreaming = groupMessages.some((msg) => msg.status === "streaming");
 
   return (
     <div
@@ -79,7 +126,12 @@ const GroupMessageList = () => {
         ) : (
           <>
             {groupMessages.map((msg) => (
-              <GroupMessageItem key={msg._id} message={msg} />
+              <GroupMessageItem 
+                key={msg._id} 
+                message={msg} 
+                onCitationClick={onCitationClick}
+                onSourcesClick={onSourcesClick}
+              />
             ))}
             {isAiThinking && (
               <div key="group-active-thinking-loader" className="flex w-full justify-start duration-300 animate-in fade-in slide-in-from-bottom-2">
@@ -97,18 +149,54 @@ const GroupMessageList = () => {
                       Velora
                     </span>
                     <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] px-5 py-3.5 shadow-sm">
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.3s]" />
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.15s]" />
-                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400" />
-                      <span className="ml-1 text-xs font-medium tracking-wide text-slate-400 animate-pulse">
-                        generating response
-                      </span>
+                      {isWebSearching ? (
+                        <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-slate-400">
+                          <Globe
+                            size={14}
+                            className="animate-pulse"
+                          />
+                          <span>Searching the web...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.3s]" />
+                          <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.15s]" />
+                          <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400" />
+                          <span className="ml-1 text-xs font-medium tracking-wide text-slate-400 animate-pulse">
+                            generating response
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             )}
-            <div ref={scrollAnchorRef} className="h-4 w-full" />
+
+            {/* SCROLL TO BOTTOM BUTTON */}
+            {showScrollToBottom && groupMessages.length > 0 && (
+              <div className="pointer-events-none sticky bottom-10 z-20 flex justify-center animate-in fade-in slide-in-from-bottom-3 duration-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    shouldAutoScrollRef.current = true;
+                    scrollToBottom(true);
+                  }}
+                  aria-label="Scroll to bottom"
+                  className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
+                >
+                  {isStreaming ? (
+                    <div className="flex items-center gap-1">
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:100ms]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/70 animate-pulse [animation-delay:200ms]" />
+                    </div>
+                  ) : (
+                    <ChevronDown size={20} />
+                  )}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

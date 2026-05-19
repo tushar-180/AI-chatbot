@@ -1,14 +1,17 @@
 import React, { useState, useRef, useEffect, memo } from "react";
-import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic } from "lucide-react";
+import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X } from "lucide-react";
 import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
+import type { Attachment } from "@/features/chat/hooks/useChatInput";
+import { supportsVision } from "@/features/chat/constants/chat.constants";
 
 interface GroupInputAreaProps {
-  onSubmit: (content: string, webSearchEnabled?: boolean) => Promise<void>;
+  onSubmit: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[]) => Promise<void>;
   isStreaming?: boolean;
   onStop?: () => void;
+  onTyping?: (isTyping: boolean) => void;
 }
 
 interface Provider {
@@ -57,7 +60,7 @@ const WebSearchToggle = ({
   );
 };
 
-const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming = false, onStop }) => {
+const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming = false, onStop, onTyping }) => {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
@@ -65,9 +68,24 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const [filterText, setFilterText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isCurrentlyTyping, setIsCurrentlyTyping] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const sharedTextStyles: React.CSSProperties = {
+    lineHeight: "1.5rem",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    fontWeight: "inherit",
+    letterSpacing: "inherit",
+    boxSizing: "border-box",
+    margin: 0,
+  };
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
     onResult: (text) => {
@@ -91,6 +109,23 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   const hasMention = hasAiMention(input);
+
+  const getMentionedModelId = () => {
+    const mentions = input.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+    for (const m of mentions) {
+      const mentionText = m.substring(1).toLowerCase();
+      if (mentionText === "velora") return "gemini:gemini-3.1-flash-lite-preview";
+      const provider = availableProviders.find(p => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      });
+      if (provider) return provider.id;
+    }
+    return null;
+  };
+
+  const mentionedModelId = getMentionedModelId();
+  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : false;
 
   useEffect(() => {
     if (!hasMention) {
@@ -134,7 +169,12 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       }
     };
     window.addEventListener("keydown", handleGlobalKeyDown);
-    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Sync scroll positions and size height
@@ -209,23 +249,78 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || isSending) return;
+    if (!input.trim() && attachments.length === 0) return;
+    if (isSending || isUploading) return;
 
     if (hasMultipleModelMentions(input)) {
       toast.error("Multiple AI model mentions are not allowed");
       return;
     }
 
+    if (onTyping) {
+      setIsCurrentlyTyping(false);
+      onTyping(false);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+    }
+
     setIsSending(true);
     try {
-      await onSubmit(input, webSearchEnabled);
+      await onSubmit(input, webSearchEnabled, attachments);
       setInput("");
       setWebSearchEnabled(false);
       setShowModelDropdown(false);
       setFilterText("");
+      setAttachments([]);
     } finally {
       setIsSending(false);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Only image uploads are supported currently");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await api.post("/upload/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      const newAttachment: Attachment = {
+        url: res.data.url,
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+      };
+
+      setAttachments((prev) => [...prev, newAttachment]);
+      toast.success("Image uploaded");
+    } catch (err) {
+      console.error("Upload failed", err);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSelectModel = (cleanModelName: string) => {
@@ -343,6 +438,23 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     const value = e.target.value;
     setInput(value);
 
+    // Typing acknowledgment triggers
+    if (onTyping) {
+      if (!isCurrentlyTyping && value.trim().length > 0) {
+        setIsCurrentlyTyping(true);
+        onTyping(true);
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsCurrentlyTyping(false);
+        onTyping(false);
+      }, 3000);
+    }
+
     // Detect cursor and split words before cursor to check for active @mention trigger
     const selectionStart = e.target.selectionStart;
     const textBeforeCursor = value.substring(0, selectionStart);
@@ -422,10 +534,60 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 onToggle={setWebSearchEnabled}
               />
             )}
+            {canUpload && (
+              <>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/*"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  aria-label="Upload image"
+                >
+                  {isUploading ? (
+                    <Loader2 size={12} className="animate-spin text-white shrink-0" />
+                  ) : (
+                    <Paperclip size={12} className="shrink-0" />
+                  )}
+                  <span>Attach</span>
+                </button>
+              </>
+            )}
             <div className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
               Type @ to search & mention AI models
             </div>
           </div>
+
+          {/* Attachment Previews */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-white/5">
+              {attachments.map((att, i) => (
+                <div
+                  key={att.url}
+                  className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                >
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(i)}
+                    className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="flex items-end gap-2 pr-2">
             <div className="relative flex-1 min-w-0">
@@ -433,9 +595,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               <div
                 ref={backdropRef}
                 className="absolute inset-0 pointer-events-none select-none overflow-y-auto scrollbar-hide whitespace-pre-wrap break-words px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 bg-transparent border border-transparent"
-                style={{
-                  lineHeight: "1.5rem",
-                }}
+                style={sharedTextStyles}
               >
                 {highlightMentions(input)}
               </div>
@@ -448,10 +608,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 onScroll={handleScroll}
                 rows={1}
                 placeholder="Message group..."
-                className="relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide max-h-50 md:max-h-75 min-h-12 md:min-h-14 block"
-                style={{
-                  lineHeight: "1.5rem",
-                }}
+                className="relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent"
+                style={sharedTextStyles}
               />
             </div>
 
@@ -507,14 +665,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             ) : (
               <button
                 type="submit"
-                disabled={isSending || !input.trim()}
+                disabled={isSending || isUploading || (!input.trim() && attachments.length === 0)}
                 className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  isSending || !input.trim()
+                  isSending || isUploading || (!input.trim() && attachments.length === 0)
                     ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                     : "bg-white text-slate-900 hover:bg-slate-200"
                 }`}
               >
-                {isSending ? (
+                {isSending || isUploading ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
                   <ArrowUp size={18} strokeWidth={2.5} />

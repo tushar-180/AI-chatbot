@@ -14,6 +14,8 @@ const SharedChatPage = lazy(() => import("./pages/SharedChatPage"));
 const Admin = lazy(() => import("./pages/Admin"));
 const GroupChat = lazy(() => import("./pages/GroupChat"));
 const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
+const ChatLayout = lazy(() => import("./features/chat/components/ChatLayout"));
+
 function App() {
   const { isSignedIn, isLoaded } = useUser();
   const { isDown, isRetrying, retry } = useServerStatus();
@@ -43,23 +45,42 @@ function App() {
                 }
               />
 
-              {/* Protected Chat Routes */}
-              <Route
-                path="/chat"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/chat/:chatId"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Persistent Chat Layout */}
+              <Route element={<ChatLayout />}>
+                {/* Protected Chat Routes */}
+                <Route
+                  path="/chat"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:chatId"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Public Shared Chat Route */}
+                <Route
+                  path="/shared/:sharedChatId"
+                  element={<SharedChatPage />}
+                />
+
+                {/* Group Chat Routes */}
+                <Route
+                  path="/group/:groupId"
+                  element={
+                    <ProtectedRoute>
+                      <GroupChat />
+                    </ProtectedRoute>
+                  }
+                />
+              </Route>
 
               {/* Protected Admin Route */}
               <Route
@@ -71,21 +92,6 @@ function App() {
                 }
               />
 
-              {/* Public Shared Chat Route */}
-              <Route
-                path="/shared/:sharedChatId"
-                element={<SharedChatPage />}
-              />
-
-              {/* Group Chat Routes */}
-              <Route
-                path="/group/:groupId"
-                element={
-                  <ProtectedRoute>
-                    <GroupChat />
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="/join/:inviteCode"
                 element={

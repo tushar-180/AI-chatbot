@@ -292,6 +292,8 @@ export const useChatStream = (hookOptions?: {
           upsertChat({
             _id: nextChatId,
             title: optimisticTitle || "New Chat",
+            isArchived: false,
+            isPinned: false,
             updatedAt: new Date().toISOString(),
           });
           const shouldSelectResolvedChat =

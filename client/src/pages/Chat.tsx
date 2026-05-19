@@ -1,7 +1,6 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
-import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
 import MessageList from "@/features/chat/components/MessageList";
 import InputArea from "@/features/chat/components/InputArea";
@@ -168,9 +167,7 @@ const Chat = () => {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
-      <Sidebar />
-
+    <>
       <main className="relative flex flex-1 flex-col h-screen overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
         {/* Spotlight Component - Positioned correctly */}
         <Spotlight
@@ -252,7 +249,7 @@ const Chat = () => {
           onClose={handleSourcesClose}
         />
       )}
-    </div>
+    </>
   );
 };
 

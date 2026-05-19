@@ -42,6 +42,14 @@ const groupMessageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    attachments: [
+      {
+        url: String,
+        name: String,
+        mimeType: String,
+        size: Number,
+      },
+    ],
   },
   { timestamps: true }
 );

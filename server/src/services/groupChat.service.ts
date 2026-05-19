@@ -1,7 +1,7 @@
 import { GroupChat, GroupMessage } from "../models/GroupChat.model";
 import { Message, Chat } from "../models/Chat.model";
 import { User } from "../models/User.model";
-import { groupSseManager } from "../utils/groupSse";
+import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
 import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import { webSearchService, type WebGroundingContext } from "../modules/web-search";
@@ -30,6 +30,8 @@ export class GroupChatService {
       type: message.type,
       createdAt: message.createdAt.toISOString(),
       metadata: message.metadata,
+      sources: message.metadata?.sources || undefined,
+      attachments: message.attachments || [],
     };
   }
 
@@ -71,6 +73,7 @@ export class GroupChatService {
       content: msg.content,
       type: msg.type,
       metadata: msg.metadata,
+      attachments: msg.attachments || [],
       createdAt: msg.createdAt,
     }));
 
@@ -111,12 +114,12 @@ export class GroupChatService {
         type: "event",
       });
 
-      groupSseManager.broadcast(group._id.toString(), {
+      groupSocketManager.broadcast(group._id.toString(), {
         type: "message",
         message: joinMsg,
       });
       
-      groupSseManager.broadcast(group._id.toString(), {
+      groupSocketManager.broadcast(group._id.toString(), {
         type: "member_joined",
         member: { userId: clerkId, username, userImage, joinedAt: new Date() }
       });
@@ -156,12 +159,12 @@ export class GroupChatService {
       type: "event",
     });
 
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "message",
       message: leaveMsg,
     });
 
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "member_left",
       userId: clerkId,
     });
@@ -176,12 +179,12 @@ export class GroupChatService {
         type: "event",
       });
 
-      groupSseManager.broadcast(groupId, {
+      groupSocketManager.broadcast(groupId, {
         type: "message",
         message: adminChangeMsg,
       });
 
-      groupSseManager.broadcast(groupId, {
+      groupSocketManager.broadcast(groupId, {
         type: "admin_changed",
         creatorId: newAdmin.userId,
       });
@@ -215,12 +218,12 @@ export class GroupChatService {
       type: "event",
     });
 
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "message",
       message: removeMsg,
     });
 
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "member_left",
       userId: memberClerkId,
       reason: "removed",
@@ -233,7 +236,7 @@ export class GroupChatService {
     return await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
   }
 
-  static async addMessage(groupId: string, clerkId: string, content: string, role: "user" | "assistant" = "user", webSearchEnabled = false) {
+  static async addMessage(groupId: string, clerkId: string, content: string, role: "user" | "assistant" = "user", webSearchEnabled = false, attachments: any[] = []) {
     const group = await GroupChat.findById(groupId);
     if (!group) throw new Error("Group not found");
 
@@ -256,9 +259,10 @@ export class GroupChatService {
       content,
       status: "completed",
       metadata: webSearchEnabled ? { webSearchEnabled: true } : {},
+      attachments,
     });
 
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "message",
       message: this.serializeGroupMessage(message),
     });
@@ -273,9 +277,10 @@ export class GroupChatService {
         return cleanName === mention || p.id.toLowerCase() === mention;
       });
       if (isAiMention) {
-        groupSseManager.broadcast(groupId, {
+        groupSocketManager.broadcast(groupId, {
           type: "ai_thinking",
           isThinking: true,
+          webSearchEnabled,
         });
         this.handleAiResponse(groupId, content, webSearchEnabled).catch(console.error);
       }
@@ -372,7 +377,7 @@ export class GroupChatService {
       for await (const chunk of stream) {
         fullResponse += chunk;
         groupStreamRegistry.updateResponse(groupId, fullResponse);
-        groupSseManager.broadcast(groupId, {
+        groupSocketManager.broadcast(groupId, {
           type: "ai_stream",
           chunk,
           tempId,
@@ -392,7 +397,7 @@ export class GroupChatService {
           const citations = webGrounding.citationsMarkdown;
           fullResponse = `${fullResponse.trimEnd()}${citations}`;
           groupStreamRegistry.updateResponse(groupId, fullResponse);
-          groupSseManager.broadcast(groupId, {
+          groupSocketManager.broadcast(groupId, {
             type: "ai_stream",
             chunk: citations,
             tempId,
@@ -403,6 +408,20 @@ export class GroupChatService {
         }
       }
 
+      const metadata: any = {};
+      if (webSearchEnabled) {
+        metadata.webSearchEnabled = true;
+      }
+      if (webGrounding && webGrounding.sources.length > 0) {
+        metadata.sources = webGrounding.sources.map(({ id, title, url, hostname, snippet }) => ({
+          id,
+          title,
+          url,
+          hostname,
+          snippet,
+        }));
+      }
+
       // Save final message
       const aiMsg = await GroupMessage.create({
         groupId,
@@ -411,12 +430,12 @@ export class GroupChatService {
         role: "assistant",
         content: fullResponse,
         status: "completed",
-        metadata: webSearchEnabled ? { webSearchEnabled: true } : {},
+        metadata,
       });
 
       groupStreamRegistry.delete(groupId);
 
-      groupSseManager.broadcast(groupId, {
+      groupSocketManager.broadcast(groupId, {
         type: "ai_stream",
         tempId,
         done: true,
@@ -447,7 +466,7 @@ export class GroupChatService {
       groupStreamRegistry.delete(groupId);
 
       // Broadcast the error message to all SSE clients to clear the stream and show the error!
-      groupSseManager.broadcast(groupId, {
+      groupSocketManager.broadcast(groupId, {
         type: "ai_stream",
         tempId,
         done: true,
@@ -480,7 +499,7 @@ export class GroupChatService {
     });
 
     // Broadcast stopped message state
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "ai_stream",
       tempId: activeStream.tempId,
       done: true,
@@ -508,7 +527,7 @@ export class GroupChatService {
     }
 
     // Broadcast to all active SSE clients that the group is deleted
-    groupSseManager.broadcast(groupId, {
+    groupSocketManager.broadcast(groupId, {
       type: "group_deleted",
       groupId,
     });

@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
 import { GroupChatService } from "../services/groupChat.service";
-import { groupSseManager } from "../utils/groupSse";
-import { setSseHeaders } from "../utils/sse";
 
 export class GroupChatController {
   static async createGroup(req: Request, res: Response) {
@@ -93,41 +91,18 @@ export class GroupChatController {
   static async sendMessage(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { content, userId, webSearchEnabled } = req.body;
+      const { content, userId, webSearchEnabled, attachments } = req.body;
       const clerkId = (userId as string) || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
       if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
-      const message = await GroupChatService.addMessage(groupId, clerkId, content, "user", Boolean(webSearchEnabled));
+      const message = await GroupChatService.addMessage(groupId, clerkId, content, "user", Boolean(webSearchEnabled), attachments || []);
       res.json(message);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   }
 
-  static async subscribeToGroup(req: Request, res: Response) {
-    try {
-      const groupId = req.params.groupId as string;
-      const userId = req.query.userId as string;
-      const clerkId = userId || (req as any).auth?.userId || (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
 
-      setSseHeaders(res);
-      groupSseManager.addConnection(groupId, res);
-      
-      // Keep connection alive
-      const keepAlive = setInterval(() => {
-        res.write(`: keep-alive\n\n`);
-      }, 30000);
-
-      res.on("close", () => {
-        clearInterval(keepAlive);
-      });
-    } catch (error: any) {
-      if (!res.headersSent) {
-        res.status(500).json({ error: error.message });
-      }
-    }
-  }
 
   static async getUserGroups(req: Request, res: Response) {
     try {
