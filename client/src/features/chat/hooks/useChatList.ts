@@ -130,20 +130,25 @@ export const useChatList = () => {
       toast.error("Could not unpin chat.");
     }
   };
-  const selectChat = async (chatId: string) => {
-    // If it's already the current chat, we still check if it's visible in the current view
+  const selectChat = async (chatId: string, highlight?: string) => {
+    const queryStr = highlight ? `?highlight=${encodeURIComponent(highlight)}` : "";
+    
+    // If it's already the current chat, just navigate to handle highlight/focus
+    if (chatId === currentChatId) {
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}${queryStr}`, { replace: true });
+      return;
+    }
+
+    // If it's in the current sidebar list
     const existingChat = chats.find((c) => c._id === chatId);
 
     if (existingChat) {
-      if (chatId === currentChatId) {
-        setSidebarOpen(false);
-        return;
-      }
       setIsNewChat(false);
       setCurrentChat(chatId, existingChat);
       setMessages([]);
       setSidebarOpen(false);
-      navigate(`/chat/${chatId}`);
+      navigate(`/chat/${chatId}${queryStr}`);
       return;
     }
 
@@ -158,10 +163,11 @@ export const useChatList = () => {
       }
 
       setIsNewChat(false);
+      upsertChat(chat); // Ensure it's in the sidebar list
       setCurrentChat(chatId, chat);
       setMessages([]);
       setSidebarOpen(false);
-      navigate(`/chat/${chatId}`);
+      navigate(`/chat/${chatId}${queryStr}`);
     } catch (err) {
       console.error("Error selecting chat", err);
       // Fallback for safety
@@ -169,7 +175,7 @@ export const useChatList = () => {
       setCurrentChat(chatId);
       setMessages([]);
       setSidebarOpen(false);
-      navigate(`/chat/${chatId}`);
+      navigate(`/chat/${chatId}${queryStr}`);
     }
   };
 
@@ -194,6 +200,17 @@ export const useChatList = () => {
       setPage(nextPage);
     } catch (err) {
       console.error("Error fetching more chats", err);
+    }
+  };
+
+  const searchChats = async (query: string) => {
+    if (!query.trim()) return [];
+    try {
+      const res = await api.get("/chat/search", { params: { q: query } });
+      return res.data || [];
+    } catch (err) {
+      console.error("Error searching chats", err);
+      return [];
     }
   };
 
@@ -284,6 +301,17 @@ export const useChatList = () => {
       }
       
       toast.success(`${chatIds.length} chats deleted successfully.`);
+
+      // If the list is now empty but there might be more on the server, re-fetch page 1
+      if (chats.length === 0 && hasMore) {
+        setPage(1);
+        const res = await api.get("/chat", {
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
+        });
+        const fetchedChats = res.data || [];
+        setChats(fetchedChats);
+        setHasMore(fetchedChats.length === 20);
+      }
     } catch (err) {
       console.error("Error deleting chats", err);
       toast.error("Could not delete some chats.");
@@ -303,7 +331,9 @@ export const useChatList = () => {
     unpinChat,
     selectChat,
     fetchMoreChats,
+    searchChats,
     hasMore,
+    loading,
     viewingArchived,
     setViewingArchived,
     upsertChat,

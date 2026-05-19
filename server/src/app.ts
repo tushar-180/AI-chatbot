@@ -8,6 +8,7 @@ import uploadRoutes from "./routes/upload.routes";
 import memoryRoutes from "./routes/memory.routes";
 import webSearchRoutes from "./routes/webSearch.routes";
 import sharedChatRoutes from "./routes/sharedChat.routes";
+import adminRoutes from "./routes/admin.routes";
 import { groupChatRoutes } from "./routes/groupChat.routes";
 import { GroupChatController } from "./controllers/groupChat.controller";
 import morgan from "morgan";
@@ -59,6 +60,7 @@ app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/user", requireAuth, userRoutes);
 app.use("/api/upload", requireAuth, uploadRoutes);
 app.use("/api/memory", requireAuth, memoryRoutes);
+app.use("/api/admin", requireAuth, adminRoutes);
 app.use("/api/shared-chat", sharedChatRoutes);
 app.use("/api/web-search", webSearchRoutes);
 

@@ -14,6 +14,7 @@ export type Message = {
         mimeType?: string;
         size?: number;
     }[];
+    sources?: WebSource[];
 };
 
 export type Chat = {
@@ -26,6 +27,7 @@ export type Chat = {
     updatedAt?: string;
 };
 export type StreamEventPayload = {
+    type?: "message" | "sources";
     chatId?: string;
     requestId?: string;
     model?: string;
@@ -34,4 +36,13 @@ export type StreamEventPayload = {
     status?: "streaming" | "stopped" | "completed" | "failed";
     error?: string;
     messageId?: string;
+    sources?: WebSource[];
 };
+
+export type WebSource = {
+    id: number;
+    title: string;
+    hostname: string;
+    url: string;
+    snippet: string;
+}

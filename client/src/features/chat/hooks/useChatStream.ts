@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser, useAuth } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
@@ -8,6 +8,7 @@ import {
 } from "@/features/chat/services/chat.service";
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
+import type { WebSource } from "../types/chat.types";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
 
@@ -116,8 +117,7 @@ export const useChatStream = (hookOptions?: {
 
     scheduleOptimisticFlush();
   };
-
-  const setOptimisticMessagesForChat = (
+  const setOptimisticMessagesForChat = useCallback((
     chatId: string | null,
     next: Message[] | null,
   ) => {
@@ -126,8 +126,7 @@ export const useChatStream = (hookOptions?: {
       ...current,
       [key]: next,
     }));
-  };
-
+  }, []);
   const isStreamingCurrentChat =
     isStreaming &&
     streamingChatId === getActiveChatKey(currentChatId) &&
@@ -293,6 +292,7 @@ export const useChatStream = (hookOptions?: {
           upsertChat({
             _id: nextChatId,
             title: optimisticTitle || "New Chat",
+            updatedAt: new Date().toISOString(),
           });
           const shouldSelectResolvedChat =
             useChatStore.getState().currentChatId === initialChatId;
@@ -396,6 +396,38 @@ export const useChatStream = (hookOptions?: {
           return { ...current, [key]: next };
         });
       }
+
+      if ("sources" in data && data.sources && Array.isArray(data.sources)) {
+       const sources = data.sources as WebSource[];
+      const key = resolvedChatId ?? initialKey;
+
+      setOptimisticMessagesByChatId((current) => {
+      const messagesForChat = current[key];
+      if (!messagesForChat?.length) return current;
+
+      // Find the last assistant message (the streaming one)
+      const lastAssistantIdx = messagesForChat.findLastIndex(
+        (m) => m.role === "assistant" && m.status === "streaming"
+      );
+      if (lastAssistantIdx === -1) return current;
+
+      const next = [...messagesForChat];
+      next[lastAssistantIdx] = {
+        ...next[lastAssistantIdx],
+        sources,
+        isWebSearching: false, // sources are ready, stop spinning globe
+      };
+      return { ...current, [key]: next };
+    });
+
+    // Also mark the placeholder as having sources (if needed)
+    // Optionally flush any pending updates
+    if (pendingOptimisticUpdateRef.current[key]) {
+      // force a flush to show sources immediately
+      flushOptimisticUpdates();
+    }
+    return; // no further processing for this event
+  }
 
       if (data.done) {
         if (pendingOptimisticFrameRef.current !== null) {
@@ -682,6 +714,17 @@ export const useChatStream = (hookOptions?: {
       assistantPlaceholder,
     ]);
 
+    // Optimistically move the chat to the top of the sidebar when activity starts.
+    const activeChat =
+      storeState.currentChat ??
+      storeState.chats.find((chat) => chat._id === effectiveCurrentChatId);
+
+    if (effectiveCurrentChatId && activeChat) {
+      upsertChat({
+        ...activeChat,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     setLoading(true);
     setIsStreaming(true, activeKey);
     stopRequestedRef.current = false;

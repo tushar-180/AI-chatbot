@@ -2,7 +2,8 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useGroupStore } from "../store/useGroupStore";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
+import { api } from "@/lib/api";
 import {
   Plus,
   X,
@@ -24,6 +25,9 @@ import {
   User,
   Settings,
   LogOut,
+  Search,
+  ListChecks,
+  Shield,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -37,7 +41,6 @@ import {
 import ShareModal from "./ShareModal";
 import CreateGroupModal from "./CreateGroupModal";
 import GroupLinkModal from "./GroupLinkModal";
-import { api } from "@/lib/api";
 import {
   Avatar,
   AvatarFallback,
@@ -49,6 +52,7 @@ import {
 const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
+const SearchModal = lazy(() => import("./SearchModal"));
 
 /**
  * Sidebar Component
@@ -172,7 +176,7 @@ const SidebarItem = memo(
         }}
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
           isActive
-            ? "bg-white text-black border-white shadow-[0_10px_30px_-5px_rgba(255,255,255,0.1)]"
+            ? "bg-white text-black border-white shadow-[0_15px_35px_-5px_rgba(255,255,255,0.15)] scale-[1.02] z-10"
             : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
         } ${isSelected ? "border-emerald-500/50! bg-emerald-500/5" : ""} ${
           isEditing ? "cursor-default" : "cursor-pointer"
@@ -453,10 +457,25 @@ const SidebarItem = memo(
       </div>
     );
   },
+  (prevProps, nextProps) => {
+    return (
+      prevProps.isActive === nextProps.isActive &&
+      prevProps.isSelected === nextProps.isSelected &&
+      prevProps.isSelectionMode === nextProps.isSelectionMode &&
+      prevProps.item._id === nextProps.item._id &&
+      prevProps.item.title === nextProps.item.title &&
+      prevProps.isPinned === nextProps.isPinned &&
+      prevProps.isArchived === nextProps.isArchived &&
+      prevProps.item.updatedAt === nextProps.item.updatedAt
+    );
+  }
 );
 
 const Sidebar = () => {
-  const { sidebarOpen, setSidebarOpen } = useChatStore();
+  const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
+  const location = useLocation();
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
+    useChatStore();
   const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup } =
     useGroupStore();
   const { user } = useUser();
@@ -475,6 +494,7 @@ const Sidebar = () => {
     selectChat,
     fetchMoreChats,
     hasMore,
+    loading,
     viewingArchived,
   } = useChatList();
 
@@ -486,19 +506,62 @@ const Sidebar = () => {
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState("general");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    api.get("/user/profile")
+      .then(({ data }) => {
+        setIsAdmin(data.role === "admin");
+      })
+      .catch(err => {
+        console.error("Failed to fetch user role for sidebar:", err);
+      });
+  }, [user]);
+
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Multi-select state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
+  const activeChatId = urlChatId || currentChatId;
+  const isSearchNavigation = new URLSearchParams(location.search).has("highlight");
+  const isStreamingActiveChat = Boolean(
+    activeChatId && isStreaming && streamingChatId === activeChatId,
+  );
+  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
   const filteredChats = useMemo(() => {
     return chats
       .filter((c) => c.isArchived === viewingArchived)
       .sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
+        // 1. Pinned chats stay first.
+      if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
-        return 0;
+  
+      // 2. Search-selected or currently streaming chats sit at the top of
+      // their section, below pinned chats.
+      if (shouldPromoteActiveChat) {
+        if (a._id === activeChatId) return -1;
+        if (b._id === activeChatId) return 1;
+      }
+
+      // 3. Finally, sort by update time (most recent first).
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
       });
   }, [chats, viewingArchived]);
 
@@ -525,6 +588,7 @@ const Sidebar = () => {
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   }, [filteredChats, groups, viewingArchived]);
+  const chatListScrollRef = useRef<HTMLDivElement>(null);
 
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredChats.length) {
@@ -596,6 +660,16 @@ const Sidebar = () => {
     }
   }, [user?.id, setGroups]);
 
+  useEffect(() => {
+    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
+
   return (
     <>
       {/* Backdrop for mobile */}
@@ -650,6 +724,20 @@ const Sidebar = () => {
           </button>
         </div>
 
+        <div className="px-2">
+          <button
+            onClick={() => setSearchModalOpen(true)}
+            className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
+          >
+            <Search size={14} className="mr-3" />
+            <span>Search conversations...</span>
+            <div className="ml-auto flex items-center gap-1 opacity-40">
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">⌘</kbd>
+              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">K</kbd>
+            </div>
+          </button>
+        </div>
+
         <div className="flex min-h-0 flex-1 flex-col gap-1">
           <div className="flex items-center justify-between px-2 pb-2">
             <div
@@ -671,32 +759,37 @@ const Sidebar = () => {
             {filteredChats.length > 0 && showRecent && (
               <button
                 onClick={() => {
-                  setIsSelectionMode(!isSelectionMode);
-                  setSelectedIds(new Set());
+                  if (isSelectionMode) {
+                    setIsSelectionMode(false);
+                    setSelectedIds(new Set());
+                  } else {
+                    setIsSelectionMode(true);
+                  }
                 }}
-                className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
                   isSelectionMode
-                    ? "text-emerald-400"
-                    : "text-slate-600 hover:text-slate-400"
+                    ? "bg-emerald-500/10 text-emerald-400"
+                    : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
                 }`}
+                title={isSelectionMode ? "Exit Selection" : "Bulk Actions"}
               >
-                {isSelectionMode ? "Done" : "Edit"}
+                {isSelectionMode ? <X size={14} /> : <ListChecks size={14} />}
               </button>
             )}
           </div>
 
           {isSelectionMode && showRecent && (
-            <div className="flex items-center justify-between px-3 py-2 mb-2 rounded-xl bg-white/5 border border-white/5 animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
               <button
                 onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+                className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
               >
                 <div
-                  className={`flex h-4 w-4 items-center justify-center rounded border transition-all ${
+                  className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
                     selectedIds.size === filteredChats.length &&
                     filteredChats.length > 0
-                      ? "border-emerald-500 bg-emerald-500 text-white"
-                      : "border-slate-700 bg-transparent"
+                      ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                      : "border-emerald-500/30 bg-transparent"
                   }`}
                 >
                   {selectedIds.size === filteredChats.length &&
@@ -704,32 +797,44 @@ const Sidebar = () => {
                       <Check size={10} strokeWidth={4} />
                     )}
                 </div>
-                <span>Select All</span>
+                <span>All</span>
               </button>
 
-              {selectedIds.size > 0 && (
+              <div className="flex items-center gap-3">
+                {selectedIds.size > 0 && (
+                  <button
+                    onClick={handleBulkDelete}
+                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete ({selectedIds.size})</span>
+                  </button>
+                )}
+
                 <button
-                  onClick={handleBulkDelete}
-                  className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-500 hover:text-rose-400 transition-all"
+                  onClick={() => {
+                    setIsSelectionMode(false);
+                    setSelectedIds(new Set());
+                  }}
+                  className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
                 >
-                  <Trash2 size={12} />
-                  <span>Delete ({selectedIds.size})</span>
+                  Cancel
                 </button>
-              )}
+              </div>
             </div>
           )}
 
-          {unifiedList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
-                Empty
-              </p>
-            </div>
-          ) : (
-            showRecent && (
-              <div className="min-h-0 flex-1 overflow-y-auto pr-2">
-                <div className="flex flex-col gap-3">
-                  {unifiedList.map((item) => {
+          {showRecent && (
+            <div ref={chatListScrollRef} className="min-h-0 flex-1 overflow-y-auto pr-2">
+              <div className="flex flex-col gap-3">
+                {unifiedList.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
+                      Empty
+                    </p>
+                  </div>
+                ) : (
+                  unifiedList.map((item) => {
                     const chat = chats.find((c) => c._id === item._id);
                     return (
                       <SidebarItem
@@ -738,7 +843,7 @@ const Sidebar = () => {
                         isActive={
                           item.itemType === "chat"
                             ? currentChatId === item._id
-                            : currentGroupId === item._id
+                            : urlGroupId === item._id
                         }
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedIds.has(item._id)}
@@ -762,17 +867,21 @@ const Sidebar = () => {
                         isArchived={chat?.isArchived || false}
                       />
                     );
-                  })}
-                  {/* Intersection Observer Sentinel */}
-                  <div ref={observerTarget} className="h-4 w-full" />
-                  {hasMore && (
-                    <div className="flex justify-center p-4">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                    </div>
-                  )}
-                </div>
+                  })
+                )}
+
+                {/* Intersection Observer Sentinel */}
+                {(hasMore || filteredChats.length > 0) && (
+                  <div ref={observerTarget} className="h-4 w-full mt-2" />
+                )}
+
+                {hasMore && loading && (
+                  <div className="flex justify-center p-4">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                  </div>
+                )}
               </div>
-            )
+            </div>
           )}
         </div>
 
@@ -781,7 +890,11 @@ const Sidebar = () => {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex items-center gap-3 w-full p-2 rounded-2xl transition-all group text-left border border-transparent hover:bg-slate-800/50 data-[state=open]:bg-white/10 outline-none focus:ring-0">
-                <div className="h-9 w-9 rounded-xl overflow-hidden border border-white/5 transition-colors shadow-inner">
+                <div className={`h-9 w-9 rounded-xl overflow-hidden transition-all shadow-inner ${
+                  isAdmin 
+                    ? "border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/20" 
+                    : "border border-white/5"
+                }`}>
                   {user?.imageUrl ? (
                     <img
                       src={user.imageUrl}
@@ -798,9 +911,11 @@ const Sidebar = () => {
                   <p className="text-sm font-semibold text-white truncate leading-tight">
                     {user?.fullName || "User"}
                   </p>
-                  <p className="text-[10px] text-emerald-500 font-bold uppercase tracking-[0.2em] mt-0.5 opacity-80">
-                    Premium
-                  </p>
+                  {isAdmin && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">
+                      Admin
+                    </span>
+                  )}
                 </div>
                 <MoreVertical
                   size={16}
@@ -815,6 +930,16 @@ const Sidebar = () => {
               sideOffset={12}
               className="w-72 bg-slate-900/95 backdrop-blur-xl border border-white/5 p-1.5 animate-in fade-in zoom-in-95 duration-200 outline-none focus:ring-0"
             >
+              {isAdmin && (
+                <DropdownMenuItem
+                  onClick={() => navigate("/admin")}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-amber-400 focus:bg-amber-500/10 focus:text-amber-400 bg-amber-500/5 border border-amber-500/10 mb-1.5 transition-all cursor-pointer"
+                >
+                  <Shield size={16} className="text-amber-400 animate-pulse" />
+                  <span>Admin Panel</span>
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={() => {
                   setSettingsTab("general");
@@ -912,6 +1037,11 @@ const Sidebar = () => {
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
           initialTab={settingsTab}
+        />
+
+        <SearchModal 
+          isOpen={searchModalOpen} 
+          onClose={() => setSearchModalOpen(false)} 
         />
       </Suspense>
     </>

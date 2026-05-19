@@ -1,17 +1,18 @@
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
 import MessageList from "@/features/chat/components/MessageList";
 import InputArea from "@/features/chat/components/InputArea";
+import SourcesSidebar from "@/features/chat/components/SourceSidebar";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
 import { useChatInput } from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
-import { useGroupStore } from "@/features/chat/store/useGroupStore";
+import type { WebSource } from "@/features/chat/types/chat.types";
 
 /**
  * Chat Page Component
@@ -32,9 +33,6 @@ const Chat = () => {
     setMessages,
     setIsNewChat,
   } = useChatStore();
-
-  const { setCurrentGroup } = useGroupStore();
-
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
@@ -49,23 +47,27 @@ const Chat = () => {
     pendingState?.prefetchedChatId === currentChatId;
   const isArchived = currentChat?.isArchived || false;
 
+  // Sources sidebar state
+  const [selectedSources, setSelectedSources] = useState<WebSource[]>([]);
+  const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSelectedSources([]);
+    setActiveSourceId(null);
+  }, [currentChatId]);
+
   // Sync URL parameter with store when chatId changes from URL
   useEffect(() => {
-    if (chatId) {
-      setCurrentGroup(null); // Deselect group chat when in a private chat
-    }
-
     if (chatId && chatId !== currentChatId) {
       setCurrentChat(chatId);
       setMessages([]);
       setIsNewChat(false);
     } else if (!chatId && currentChatId) {
-      // If no chatId in URL but currentChatId exists, reset to new chat
       setCurrentChat(null);
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [chatId, currentChatId, setCurrentChat, setMessages, setIsNewChat, setCurrentGroup]);
+  }, [chatId]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -106,6 +108,7 @@ const Chat = () => {
   } = useChatInput({
     onSubmit: (input, provider, attachments, options) =>
       streamMessage(input, provider, attachments, {
+        forceNewChat: Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
       }),
   });
@@ -145,8 +148,24 @@ const Chat = () => {
     location.pathname,
   ]);
 
-  // Determine which messages to display (prefer optimistic during streaming)
   const displayMessages = optimisticMessages ?? messages;
+
+  const handleSourcesOpen = useCallback(
+    (sources: WebSource[], sourceId?: number) => {
+      setSelectedSources(sources);
+      setActiveSourceId(sourceId ?? sources[0]?.id ?? null);
+    },
+    [],
+  );
+
+  const handleCitationClick = useCallback((id: number) => {
+    setActiveSourceId(id);
+  }, []);
+
+  const handleSourcesClose = useCallback(() => {
+    setSelectedSources([]);
+    setActiveSourceId(null);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
@@ -188,9 +207,11 @@ const Chat = () => {
                 })
               }
               onEditStart={stopGeneration}
-              onRetryMessage={(messageId) => 
+              onRetryMessage={(messageId) =>
                 retryMessage(messageId, selectedProvider)
               }
+              onCitationClick={handleCitationClick}
+              onSourcesClick={handleSourcesOpen}
             />
           </div>
         </div>
@@ -222,6 +243,15 @@ const Chat = () => {
         {/* Minimal Noise Overlay for Texture */}
         <div className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] z-50" />
       </main>
+
+      {selectedSources.length > 0 && (
+        <SourcesSidebar
+          sources={selectedSources}
+          activeId={activeSourceId}
+          onSelect={setActiveSourceId}
+          onClose={handleSourcesClose}
+        />
+      )}
     </div>
   );
 };
