@@ -538,13 +538,13 @@ const MessageItem = ({
               >
                 <button
                   onClick={handleCopy}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
                   title="Copy to clipboard"
                 >
                   {copied ? (
-                    <Check size={14} className="text-emerald-500" />
+                    <Check size={17} className="text-emerald-500" />
                   ) : (
-                    <Copy size={14} />
+                    <Copy size={17} />
                   )}
                 </button>
 
@@ -552,11 +552,11 @@ const MessageItem = ({
                   onClick={() =>
                     onFeedback?.(msg.feedback === "like" ? null : "like")
                   }
-                  className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
                   title="Like"
                 >
                   <ThumbsUp
-                    size={14}
+                    size={17}
                     fill={msg.feedback === "like" ? "currentColor" : "none"}
                   />
                 </button>
@@ -565,21 +565,21 @@ const MessageItem = ({
                   onClick={() =>
                     onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
                   }
-                  className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
                   title="Dislike"
                 >
                   <ThumbsDown
-                    size={14}
+                    size={17}
                     fill={msg.feedback === "dislike" ? "currentColor" : "none"}
                   />
                 </button>
 
                 <button
                   onClick={onRetry}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
                   title="Regenerate response"
                 >
-                  <RotateCcw size={14} />
+                  <RotateCcw size={17} />
                 </button>
 
                 {!!msg.sources?.length && (
@@ -605,22 +605,22 @@ const MessageItem = ({
             >
               <button
                 onClick={handleCopy}
-                className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
                 title="Copy to clipboard"
               >
                 {copied ? (
-                  <Check size={14} className="text-emerald-500" />
+                  <Check size={17} className="text-emerald-500" />
                 ) : (
-                  <Copy size={14} />
+                  <Copy size={17} />
                 )}
               </button>
 
               <button
                 onClick={handleEditStart}
-                className="p-1.5 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
                 title="Edit message"
               >
-                <Pencil size={14} />
+                <Pencil size={17} />
               </button>
             </div>
           )}
