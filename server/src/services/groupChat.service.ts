@@ -3,7 +3,7 @@ import { Message, Chat } from "../models/Chat.model";
 import { User } from "../models/User.model";
 import { groupSseManager } from "../utils/groupSse";
 import { aiService } from "./ai.service";
-import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
+import { BASE_SYSTEM_PROMPT, GROUP_CHAT_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import crypto from "crypto";
 
 export class GroupChatService {
@@ -299,7 +299,7 @@ export class GroupChatService {
     // Add system prompt
     promptMessages.unshift({
       role: "system",
-      content: BASE_SYSTEM_PROMPT + "\n\nThis is a group chat. Differentiate users by their usernames if provided in context. You are Velora."
+      content: BASE_SYSTEM_PROMPT + GROUP_CHAT_SYSTEM_PROMPT
     });
 
     let targetProvider: string | undefined = undefined;

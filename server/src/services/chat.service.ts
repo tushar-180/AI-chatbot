@@ -190,7 +190,6 @@ const getEnabledMcpTools = async (userId: string) => {
     (tool) => !disabledMcpServers.includes(tool._serverName),
   );
 };
-
 const buildPromptMessages = async (
   userId: string,
   chatMessages: ChatMessage[],
@@ -280,8 +279,10 @@ ${userRequest}`;
     });
   }
 
+  const finalPromptMessages = [...systemMessages, ...promptMessages];
+
   return {
-    promptMessages: [...systemMessages, ...promptMessages],
+    promptMessages: finalPromptMessages,
     webGrounding,
   };
 };
