@@ -131,27 +131,28 @@ const buildGroundingMetadata = (
   webGrounding: WebGroundingContext | SearchRejection | null,
 ) => {
   if (!webGrounding || "rejected" in webGrounding) return undefined;
-const buildGroundingMetadata = (
-  webGrounding: WebGroundingContext | SearchRejection | null,
-) => {
-  if (!webGrounding || "rejected" in webGrounding) return undefined;
-  return {
-    grounded: true,
-    query: webGrounding.query,
-    resolvedQuery: webGrounding.resolvedQuery,
-    normalizedQuery: webGrounding.normalizedQuery,
-    liveDataQuery: webGrounding.liveDataQuery,
-    confidence: webGrounding.confidence,
-    debug: webGrounding.debug,
-    sources: webGrounding.sources.map(
-      ({ id, title, url, hostname, snippet }) => ({
-        id,
-        title,
-        url,
-        hostname,
-        snippet,
-      }),
-    ),
+  const buildGroundingMetadata = (
+    webGrounding: WebGroundingContext | SearchRejection | null,
+  ) => {
+    if (!webGrounding || "rejected" in webGrounding) return undefined;
+    return {
+      grounded: true,
+      query: webGrounding.query,
+      resolvedQuery: webGrounding.resolvedQuery,
+      normalizedQuery: webGrounding.normalizedQuery,
+      liveDataQuery: webGrounding.liveDataQuery,
+      confidence: webGrounding.confidence,
+      debug: webGrounding.debug,
+      sources: webGrounding.sources.map(
+        ({ id, title, url, hostname, snippet }) => ({
+          id,
+          title,
+          url,
+          hostname,
+          snippet,
+        }),
+      ),
+    };
   };
 };
 
@@ -192,10 +193,13 @@ const CONTEXT_SIZE_LIMITS = {
 
 const EXTERNAL_CALL_TIMEOUT_MS = 10000; // 10 seconds per call
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
   return Promise.race([
     promise,
-    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs))
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
 }
 
@@ -219,7 +223,7 @@ const buildPromptMessages = async (
 
   // Apply selection logic from staging (if present)
   if (lastUserMsg?.metadata?.selection) {
-    const selection = lastUserMsg.metadata.selection;
+    const selection = lastUserMsg.metadata.selection as any;
     const userRequest = lastUserMsg.content?.trim() || "Explain this.";
     lastUserMsg.content = `User selected text from a previous assistant message.
 
@@ -238,42 +242,46 @@ ${userRequest}`;
     latestUserMessage ?? lastUserMsg?.content ?? "";
 
   // 3. Parallel external calls with timeouts
-  const [personalizationResult, memoryResult, youtubeResult, webGroundingResult] =
-    await Promise.allSettled([
-      withTimeout(
-        userService.getPersonalizationContext(userId),
+  const [
+    personalizationResult,
+    memoryResult,
+    youtubeResult,
+    webGroundingResult,
+  ] = await Promise.allSettled([
+    withTimeout(
+      userService.getPersonalizationContext(userId),
+      EXTERNAL_CALL_TIMEOUT_MS,
+    ),
+    withTimeout(
+      memoryService.getMemoryContext(userId, effectiveLatestUserMessage),
+      EXTERNAL_CALL_TIMEOUT_MS,
+    ),
+    (async () => {
+      if (!effectiveLatestUserMessage) return null;
+      const youtubeRegex =
+        /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = effectiveLatestUserMessage.match(youtubeRegex);
+      if (!match) return null;
+      const result = await withTimeout(
+        extractTranscript({ videoIdOrUrl: match[1], maxLength: sizeLimit }),
         EXTERNAL_CALL_TIMEOUT_MS,
-      ),
-      withTimeout(
-        memoryService.getMemoryContext(userId, effectiveLatestUserMessage),
+      );
+      return result?.success ? result.text : null;
+    })(),
+    (async () => {
+      if (!webSearchEnabled || !effectiveLatestUserMessage) return null;
+      const result = await withTimeout(
+        webSearchService.buildGroundingContext(
+          effectiveLatestUserMessage,
+          chatMessages,
+          userId,
+          isGemini,
+        ),
         EXTERNAL_CALL_TIMEOUT_MS,
-      ),
-      (async () => {
-        if (!effectiveLatestUserMessage) return null;
-        const youtubeRegex =
-          /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-        const match = effectiveLatestUserMessage.match(youtubeRegex);
-        if (!match) return null;
-        const result = await withTimeout(
-          extractTranscript({ videoIdOrUrl: match[1], maxLength: sizeLimit }),
-          EXTERNAL_CALL_TIMEOUT_MS,
-        );
-        return result?.success ? result.text : null;
-      })(),
-      (async () => {
-        if (!webSearchEnabled || !effectiveLatestUserMessage) return null;
-        const result = await withTimeout(
-          webSearchService.buildGroundingContext(
-            effectiveLatestUserMessage,
-            chatMessages,
-            userId,
-            isGemini,
-          ),
-          EXTERNAL_CALL_TIMEOUT_MS,
-        );
-        return result && !("rejected" in result) ? result : null;
-      })(),
-    ]);
+      );
+      return result && !("rejected" in result) ? result : null;
+    })(),
+  ]);
 
   // Extract values (null on failure)
   const personalizationContext =
@@ -285,9 +293,7 @@ ${userRequest}`;
   const youtubeTranscriptContent =
     youtubeResult.status === "fulfilled" ? youtubeResult.value : null;
   const webGrounding =
-    webGroundingResult.status === "fulfilled"
-      ? webGroundingResult.value
-      : null;
+    webGroundingResult.status === "fulfilled" ? webGroundingResult.value : null;
 
   // 4. Build sorted system messages
   const systemMessageSources = [
@@ -320,7 +326,6 @@ ${userRequest}`;
     webGrounding,
   };
 };
-
 
 // const buildPromptMessages = async (
 //   userId: string,
@@ -784,7 +789,8 @@ export const chatService = {
 
   async *createChatStream(input: CreateChatInput) {
     const resolvedUserId = requireUserId(input.userId);
-    const trimmedMessage = (input.message?.trim() || "") || (input.selection ? "Explain this" : "");
+    const trimmedMessage =
+      input.message?.trim() || "" || (input.selection ? "Explain this" : "");
     if (!input.selection) {
       requireMessage(
         input.message,
@@ -1389,14 +1395,12 @@ export const chatService = {
     console.log("Chat messages count:", chat.messages.length);
     console.log(
       "Last 2 messages:",
-      chat.messages
-        .slice(-2)
-        .map((m: any) => ({
-          id: m.id,
-          _id: m._id,
-          requestId: m.requestId,
-          role: m.role,
-        })),
+      chat.messages.slice(-2).map((m: any) => ({
+        id: m.id,
+        _id: m._id,
+        requestId: m.requestId,
+        role: m.role,
+      })),
     );
 
     let assistantMessage = (chat.messages as any[]).find(
