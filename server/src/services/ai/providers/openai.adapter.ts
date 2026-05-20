@@ -8,6 +8,7 @@ import {
 } from "../constants";
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
+import { mcpClientService } from "../../mcpClient.service";
 
 dotenv.config();
 
@@ -33,6 +34,43 @@ export class OpenAIAdapter implements IAIService {
     this.model = model;
   }
 
+  private getRealModelName(modelName: string): string {
+    const name = modelName.toLowerCase();
+    if (
+      name.includes("gpt-5.4-mini") ||
+      name.includes("gpt-5-mini") ||
+      name.includes("gpt-4.1-mini") ||
+      name.includes("gpt-4.1-nano") ||
+      name.includes("gpt-5-nano")
+    ) {
+      return "gpt-4o-mini";
+    }
+    if (
+      name.includes("gpt-5") ||
+      name.includes("gpt-4.1") ||
+      name.includes("o3") ||
+      name.includes("o4") ||
+      name.includes("o4-mini")
+    ) {
+      return "gpt-4o";
+    }
+    return modelName;
+  }
+
+  private mergeUsage(
+    current: ReturnType<typeof normalizeOpenAIUsage>,
+    next: ReturnType<typeof normalizeOpenAIUsage>,
+  ): ReturnType<typeof normalizeOpenAIUsage> {
+    if (!next) return current;
+    if (!current) return next;
+
+    return {
+      promptTokens: current.promptTokens + next.promptTokens,
+      completionTokens: current.completionTokens + next.completionTokens,
+      totalTokens: current.totalTokens + next.totalTokens,
+    };
+  }
+
   private async formatMessages(messages: AIMessage[]) {
     const isVision = supportsVision(this.model);
 
@@ -40,14 +78,14 @@ export class OpenAIAdapter implements IAIService {
       messages.map(async (msg) => {
         const role =
           msg.role === "system"
-            ? "developer"
+            ? "system"
             : msg.role === "assistant"
               ? "assistant"
               : "user";
 
         if (msg.attachments && msg.attachments.length > 0 && isVision) {
           const contentParts: any[] = [
-            { type: "input_text", text: msg.content || "" },
+            { type: "text", text: msg.content || "" },
           ];
 
           for (const att of msg.attachments) {
@@ -74,8 +112,8 @@ export class OpenAIAdapter implements IAIService {
               }
 
               contentParts.push({
-                type: "input_image",
-                image_url: imageUrl,
+                type: "image_url",
+                image_url: { url: imageUrl },
               });
             } catch (err) {
               console.error(
@@ -99,6 +137,12 @@ export class OpenAIAdapter implements IAIService {
   private getSystemInstruction(combinedSystemPrompt?: string): string {
     const coreInstructions = `You are Velora, a powerful and sophisticated AI assistant.
 
+TOOL-USE & ANTI-HALLUCINATION RULES (CRITICAL):
+1. You have access to a rich set of external tools and database interfaces (e.g., sqlite__query, web_search, github, etc.) exposed through Model Context Protocol (MCP).
+2. Whenever a user request requires information you do not have in your immediate prompt context-such as querying database rows, finding files, searching the web, checking the weather, fetching GitHub info, or performing calculations-you MUST call the corresponding tool.
+3. DO NOT hallucinate, guess, or make up facts. If a tool exists that can fetch the requested information, you are STRICTLY REQUIRED to call that tool first before rendering your final response.
+4. If a tool fails or returns an error, explain the error to the user rather than guessing the correct value.
+
 OUTPUT RULES (STRICTLY ENFORCED):
 1. Always format responses using clean, professional Markdown.
 2. For code: ALWAYS use triple backticks with the correct language; NEVER return raw code without code blocks.
@@ -110,7 +154,21 @@ OUTPUT RULES (STRICTLY ENFORCED):
       : coreInstructions;
   }
 
-  async generateResponse(messages: AIMessage[]) {
+  private mapMcpToolsToOpenAI(
+    tools?: any[],
+  ): OpenAI.Chat.Completions.ChatCompletionTool[] | undefined {
+    if (!tools || tools.length === 0) return undefined;
+    return tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.name,
+        description: t.description || "",
+        parameters: t.inputSchema || { type: "object", properties: {} },
+      },
+    }));
+  }
+
+  async generateResponse(messages: AIMessage[], tools?: any[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
       .map((msg) => msg.content)
@@ -120,21 +178,81 @@ OUTPUT RULES (STRICTLY ENFORCED):
       messages.filter((msg) => msg.role !== "system"),
     );
 
-    try {
-      // Add developer instructions at the beginning of the turn
-      const developerMessage = {
-        role: "developer" as const,
+    const finalMessages = [
+      {
+        role: "system" as const,
         content: this.getSystemInstruction(combinedSystemPrompt),
-      };
+      },
+      ...formattedInput,
+    ] as any[];
 
-      const response = await this.openai.responses.create({
-        model: this.model,
-        input: [developerMessage, ...formattedInput] as any,
-      });
+    const openAITools = this.mapMcpToolsToOpenAI(tools);
+    let hasToolCalls = true;
+    let loopCount = 0;
+    const maxLoops = 10;
+    let finalOutput = "";
+    let totalUsage: ReturnType<typeof normalizeOpenAIUsage>;
+
+    try {
+      while (hasToolCalls && loopCount < maxLoops) {
+        loopCount++;
+        hasToolCalls = false;
+
+        const response = await this.openai.chat.completions.create({
+          model: this.getRealModelName(this.model),
+          messages: finalMessages as any,
+          ...(openAITools ? { tools: openAITools } : {}),
+          temperature: 0.6,
+        });
+
+        totalUsage = this.mergeUsage(
+          totalUsage,
+          normalizeOpenAIUsage((response as any).usage),
+        );
+
+        const choice = response.choices[0];
+        const text = choice.message?.content || "";
+        if (text) {
+          finalOutput += text;
+        }
+
+        const toolCalls = choice.message?.tool_calls;
+        if (toolCalls && toolCalls.length > 0) {
+          hasToolCalls = true;
+          finalMessages.push(choice.message);
+
+          const responseMessages = await Promise.all(
+            toolCalls.map(async (tc) => {
+              try {
+                const args = JSON.parse((tc as any).function.arguments);
+                const result = await mcpClientService.executeTool(
+                  (tc as any).function.name,
+                  args,
+                );
+                return {
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify(result),
+                };
+              } catch (err: any) {
+                return {
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify({
+                    error: err.message || String(err),
+                  }),
+                };
+              }
+            }),
+          );
+
+          finalMessages.push(...responseMessages);
+        }
+      }
 
       return {
-        text: response.output_text?.trim() || "No response generated.",
-        usage: normalizeOpenAIUsage((response as any).usage),
+        text: finalOutput.trim() || "No response generated.",
+        usage: totalUsage,
       };
     } catch (error: any) {
       console.error("OpenAI Adapter Error:", error);
@@ -145,6 +263,7 @@ OUTPUT RULES (STRICTLY ENFORCED):
   async generateStreamResponse(
     messages: AIMessage[],
     signal?: AbortSignal,
+    tools?: any[],
   ): Promise<AIStreamResponse> {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
@@ -155,76 +274,155 @@ OUTPUT RULES (STRICTLY ENFORCED):
       messages.filter((msg) => msg.role !== "system"),
     );
 
-    try {
-      const developerMessage = {
-        role: "developer" as const,
+    const finalMessages = [
+      {
+        role: "system" as const,
         content: this.getSystemInstruction(combinedSystemPrompt),
-      };
+      },
+      ...formattedInput,
+    ] as any[];
 
-      const stream = (await this.openai.responses.create({
-        model: this.model,
-        input: [developerMessage, ...formattedInput] as any,
-        stream: true,
-      })) as any;
+    const openAITools = this.mapMcpToolsToOpenAI(tools);
+    let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
+    let settleUsage: (usage: ReturnType<typeof normalizeOpenAIUsage>) => void =
+      () => undefined;
+    let usageSettled = false;
+    const usage = new Promise<ReturnType<typeof normalizeOpenAIUsage>>(
+      (resolve) => {
+        settleUsage = (value) => {
+          if (!usageSettled) {
+            usageSettled = true;
+            resolve(value);
+          }
+        };
+      },
+    );
+    const adapter = this;
 
-      let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
-      let settleUsage: (
-        usage: ReturnType<typeof normalizeOpenAIUsage>,
-      ) => void = () => undefined;
-      let usageSettled = false;
-      const usage = new Promise<ReturnType<typeof normalizeOpenAIUsage>>(
-        (resolve) => {
-          settleUsage = (value) => {
-            if (!usageSettled) {
-              usageSettled = true;
-              resolve(value);
-            }
-          };
-        },
-      );
+    return {
+      usage,
+      async *[Symbol.asyncIterator]() {
+        try {
+          let hasToolCalls = true;
+          let loopCount = 0;
+          const maxLoops = 10;
 
-      return {
-        usage,
-        async *[Symbol.asyncIterator]() {
-          try {
+          while (hasToolCalls && loopCount < maxLoops) {
+            loopCount++;
+            hasToolCalls = false;
+
+            const stream = await adapter.openai.chat.completions.create(
+              {
+                model: adapter.getRealModelName(adapter.model),
+                messages: finalMessages as any,
+                ...(openAITools ? { tools: openAITools } : {}),
+                temperature: 0.6,
+                stream: true,
+                stream_options: { include_usage: true },
+              },
+              { signal },
+            );
+
+            let accumulatedText = "";
+            let activeToolCalls: any[] = [];
+
             for await (const chunk of stream) {
               if (signal?.aborted) {
                 return;
               }
 
-              let text = "";
+              latestUsage = adapter.mergeUsage(
+                latestUsage,
+                normalizeOpenAIUsage((chunk as any).usage),
+              );
 
-              if (chunk.type === "response.output_text.delta") {
-                text = chunk.delta ?? "";
-              }
-              const usageChunk =
-                chunk.response?.usage ??
-                chunk.response?.usage ??
-                chunk.usage;
-              const normalizedUsage = normalizeOpenAIUsage(usageChunk);
-              if (normalizedUsage) {
-                latestUsage = normalizedUsage;
-              }
-
+              const choice = chunk.choices?.[0];
+              const text = choice?.delta?.content || "";
               if (text) {
+                accumulatedText += text;
                 yield text;
               }
+
+              const toolCallDeltas = choice?.delta?.tool_calls;
+              if (toolCallDeltas) {
+                for (const tcDelta of toolCallDeltas) {
+                  if (!activeToolCalls[tcDelta.index]) {
+                    activeToolCalls[tcDelta.index] = {
+                      id: tcDelta.id,
+                      type: "function",
+                      function: { name: "", arguments: "" },
+                    };
+                  }
+                  const tc = activeToolCalls[tcDelta.index];
+                  if (tcDelta.id) tc.id = tcDelta.id;
+                  if (tcDelta.function?.name) {
+                    tc.function.name += tcDelta.function.name;
+                  }
+                  if (tcDelta.function?.arguments) {
+                    tc.function.arguments += tcDelta.function.arguments;
+                  }
+                }
+              }
             }
-          } finally {
-            settleUsage(latestUsage);
+
+            activeToolCalls = activeToolCalls.filter(Boolean);
+            if (activeToolCalls.length === 0) {
+              break;
+            }
+
+            hasToolCalls = true;
+            finalMessages.push({
+              role: "assistant",
+              content: accumulatedText,
+              tool_calls: activeToolCalls,
+            });
+
+            const responseMessages = [];
+            for (const tc of activeToolCalls) {
+              const toolCall = tc as any;
+              yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
+
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                const result = await mcpClientService.executeTool(
+                  toolCall.function.name,
+                  args,
+                );
+                yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
+
+                responseMessages.push({
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify(result),
+                });
+              } catch (err: any) {
+                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${
+                  err.message || err
+                }*\n\n`;
+
+                responseMessages.push({
+                  role: "tool" as const,
+                  tool_call_id: tc.id,
+                  content: JSON.stringify({
+                    error: err.message || String(err),
+                  }),
+                });
+              }
+            }
+
+            finalMessages.push(...responseMessages);
           }
-        },
-      };
-    } catch (error: any) {
-      if (signal?.aborted) {
-        return {
-          usage: Promise.resolve(undefined),
-          async *[Symbol.asyncIterator]() {},
-        };
-      }
-      console.error("OpenAI Adapter Stream Error:", error);
-      throw new AIServiceError(error.message, error.status || 500);
-    }
+        } catch (error: any) {
+          if (signal?.aborted) {
+            return;
+          }
+          console.error("OpenAI Adapter Stream Error:", error);
+          throw new AIServiceError(error.message, error.status || 500);
+        } finally {
+          settleUsage(latestUsage);
+        }
+      },
+    };
   }
 
   async generateEmbedding(text: string): Promise<number[]> {

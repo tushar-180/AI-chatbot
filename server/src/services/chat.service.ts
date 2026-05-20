@@ -24,6 +24,7 @@ import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { memoryService } from "./memory.service";
 import { userService } from "./user.service";
+import { mcpClientService } from "./mcpClient.service";
 import {
   TokenUsage,
   calculateUsage,
@@ -202,6 +203,16 @@ function withTimeout<T>(
     new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
   ]);
 }
+
+const getEnabledMcpTools = async (userId: string) => {
+  const user = await userService.getUserByClerkId(userId);
+  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
+  const allTools = await mcpClientService.getActiveTools();
+
+  return allTools.filter(
+    (tool) => !disabledMcpServers.includes(tool._serverName),
+  );
+};
 
 const buildPromptMessages = async (
   userId: string,
@@ -531,9 +542,11 @@ async function* streamAssistantResponse(
   let firstTokenTimedOut = false;
 
   try {
+    const tools = await getEnabledMcpTools(String(chat.userId));
     const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
+      tools,
     );
 
     // 30s timeout for first token
@@ -742,7 +755,11 @@ export const chatService = {
       let reply = "";
       let usage: TokenUsage | undefined;
       try {
-        const response = await aiProvider.generateResponse(promptMessages);
+        const tools = await getEnabledMcpTools(String(resolvedUserId));
+        const response = await aiProvider.generateResponse(
+          promptMessages,
+          tools,
+        );
         reply = response.text;
         usage = response.usage;
       } catch (err) {
@@ -891,7 +908,8 @@ export const chatService = {
     let reply = "";
     let usage: TokenUsage | undefined;
     try {
-      const response = await aiProvider.generateResponse(promptMessages);
+      const tools = await getEnabledMcpTools(String(chat.userId));
+      const response = await aiProvider.generateResponse(promptMessages, tools);
       reply = response.text;
       usage = response.usage;
     } catch (err) {

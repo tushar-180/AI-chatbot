@@ -294,7 +294,7 @@ const InputArea = ({
             const customEvent = e as CustomEvent<{ text: string }>;
             const textToInsert = customEvent.detail.text;
             onInputChange(textToInsert);
-            
+
             setTimeout(() => {
                 if (textareaRef.current) {
                     textareaRef.current.focus();
