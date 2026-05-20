@@ -234,8 +234,6 @@ const Chat = () => {
             onMenuClick={() => setSidebarOpen(true)}
           />
 
-          {isTemporaryChatActive && <TempChatBanner />}
-
           <div className="relative flex-1">
             <MessageList
               messages={displayMessages}

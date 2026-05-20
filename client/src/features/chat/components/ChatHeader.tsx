@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { UserButton } from "@clerk/react";
-import { Menu, Share, LogOut } from "lucide-react";
+import { Menu, Share, LogOut, ShieldAlert, Ghost } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useState } from "react";
@@ -18,19 +18,31 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
   const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
   const streamingChatId = useChatStore((state) => state.streamingChatId);
+  const isNewChat = useChatStore((state) => state.isNewChat);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const navigate = useNavigate();
 
-  const handleExitTempChat = () => {
-    useTemporaryChatStore.getState().setTemporaryChatActive(false);
-    useTemporaryChatStore.getState().clearStore();
+  const handleToggleTempChat = () => {
+    const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+    const newActive = !currentActive;
+
+    useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
+
+    if (newActive) {
+      useChatStore.getState().setCurrentChat(null);
+      useChatStore.getState().setIsNewChat(true);
+      useChatStore.getState().setMessages([]);
+      useTemporaryChatStore.getState().clearStore();
+      useChatStore.getState().setIsStreaming(false);
+      useChatStore.getState().setLoading(false);
+    } else {
+      useTemporaryChatStore.getState().clearStore();
+    }
     navigate("/chat");
   };
 
   const currentChat = chats.find((chat) => chat._id === currentChatId);
-  chatTitle = isTemporaryChatActive
-    ? "Temporary Chat"
-    : chatTitle || currentChat?.title || "New Conversation";
+  chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
@@ -71,15 +83,25 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
 
         {/* Right Section */}
         <div className="flex items-center justify-end gap-4">
-          {isTemporaryChatActive && (
+          {/* Temporary Chat Toggle Button */}
+          {(isNewChat || !currentChatId || isTemporaryChatActive) && (
             <button
-              onClick={handleExitTempChat}
-              className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-rose-500/25 bg-rose-950/20 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400 backdrop-blur-md transition-all hover:bg-rose-500/25 hover:text-rose-200 hover:border-rose-500/40 hover:scale-[1.02] active:scale-[0.98] shadow-[0_0_12px_rgba(244,63,94,0.08)] cursor-pointer"
-              title="Exit"
+              onClick={handleToggleTempChat}
+              className={
+                isTemporaryChatActive
+                  ? "group relative flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-950/20 text-emerald-400 backdrop-blur-md transition hover:bg-emerald-500/25 hover:text-emerald-200 hover:border-emerald-500/40 active:scale-[0.95] shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer"
+                  : "group relative flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 backdrop-blur-md transition hover:bg-white/10 hover:text-white hover:border-white/10 active:scale-[0.95] cursor-pointer"
+              }
+              title={isTemporaryChatActive ? "Exit Temporary Chat" : "Start Temporary Chat"}
             >
-              <span className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-rose-500/10 to-rose-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <LogOut size={13} className="transition-transform group-hover:translate-x-0.5 duration-300 relative z-10" />
-              <span className="relative z-10 hidden sm:inline">Exit</span>
+              <Ghost
+                size={16}
+                className={
+                  isTemporaryChatActive
+                    ? "text-emerald-400 animate-pulse"
+                    : "text-slate-400 group-hover:text-white transition-colors"
+                }
+              />
             </button>
           )}
 
