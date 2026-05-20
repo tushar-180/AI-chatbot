@@ -1,6 +1,7 @@
 import {
     type SyntheticEvent,
     type KeyboardEvent,
+    type ComponentType,
     useRef,
     useEffect,
     memo,
@@ -79,7 +80,7 @@ export interface InputAreaProps {
  */
 const getProviderIcon = (providerId: string, size = 14) => {
     const p = providerId.split(":")[0].toLowerCase();
-    const mapping: Record<string, any> = {
+    const mapping: Record<string, ComponentType<{ size?: number }>> = {
         gemini: Gemini.Color,
         claude: Anthropic,
         openai: OpenAI,
@@ -309,6 +310,25 @@ const InputArea = ({
             window.removeEventListener("insert-quote", handleInsertQuote);
         };
     }, [onInputChange]);
+
+    // Focus prompt input listener
+    useEffect(() => {
+        const handleFocusPrompt = () => {
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                    // Place cursor at the end
+                    textareaRef.current.selectionStart = textareaRef.current.value.length;
+                    textareaRef.current.selectionEnd = textareaRef.current.value.length;
+                }
+            }, 50);
+        };
+
+        window.addEventListener("focus-prompt-input", handleFocusPrompt);
+        return () => {
+            window.removeEventListener("focus-prompt-input", handleFocusPrompt);
+        };
+    }, []);
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === "Enter" && !e.shiftKey) {

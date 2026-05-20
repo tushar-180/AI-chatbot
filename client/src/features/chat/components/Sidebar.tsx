@@ -30,6 +30,7 @@ import {
   Search,
   ListChecks,
   Shield,
+  Keyboard,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -57,6 +58,7 @@ const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
 const SearchModal = lazy(() => import("./SearchModal"));
+const ShortcutsCheatsheetModal = lazy(() => import("./ShortcutsCheatsheetModal"));
 
 /**
  * Sidebar Component
@@ -537,7 +539,7 @@ const SidebarItem = memo(
 const Sidebar = () => {
   const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId, isNewChat } =
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
     useChatStore();
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
@@ -617,17 +619,135 @@ const Sidebar = () => {
   }, [user]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  const getShortcutsSettings = useCallback(() => {
+    try {
+      const stored = localStorage.getItem("velora-shortcuts-settings");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Core toggle shortcuts modal: Ctrl/Cmd + /
+      // This is ALWAYS allowed as a failsafe!
+      if (e.key === "/" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      // Check settings to see if shortcuts are enabled
+      const settings = getShortcutsSettings() || {
+        globalEnabled: true,
+        toggleSidebar: true,
+        newChat: true,
+        openSettings: true,
+        openGallery: true,
+        toggleTempChat: true,
+        focusInput: true,
+      };
+
+      if (!settings.globalEnabled) return;
+
+      // 2. Toggle Search Modal: Ctrl/Cmd + K
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setSearchModalOpen((prev) => !prev);
+        return;
+      }
+
+      // 3. Toggle Sidebar: Ctrl/Cmd + \ or Ctrl/Cmd + B
+      if (settings.toggleSidebar && ((e.key === "\\" && (e.metaKey || e.ctrlKey)) || (e.key === "b" && (e.metaKey || e.ctrlKey)))) {
+        e.preventDefault();
+        setSidebarOpen(!sidebarOpen);
+        return;
+      }
+
+      // 4. Start New Chat: Ctrl/Cmd + Shift + O
+      if (settings.newChat && e.key === "O" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        if (isTemporaryChatActive) {
+          useTemporaryChatStore.getState().setTemporaryChatActive(false);
+          clearTemporaryChatStore();
+        }
+        createChat();
+        return;
+      }
+
+      // 5. Open Settings Modal: Ctrl/Cmd + ,
+      if (settings.openSettings && e.key === "," && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSettingsTab("general");
+        setSettingsOpen(true);
+        return;
+      }
+
+      // 6. Open Gallery Modal: Ctrl/Cmd + Shift + G
+      if (settings.openGallery && e.key === "G" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        setGalleryOpen(true);
+        return;
+      }
+
+      // 7. Toggle Temporary Chat Mode: Ctrl/Cmd + Shift + Y
+      if (settings.toggleTempChat && (e.key === "Y" || e.key === "y") && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+        const newActive = !currentActive;
+        useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
+        if (newActive) {
+          useChatStore.getState().setCurrentChat(null);
+          useChatStore.getState().setIsNewChat(true);
+          useChatStore.getState().setMessages([]);
+          useTemporaryChatStore.getState().clearStore();
+          useChatStore.getState().setIsStreaming(false);
+          useChatStore.getState().setLoading(false);
+        } else {
+          useTemporaryChatStore.getState().clearStore();
+        }
+        navigate("/chat");
+        return;
+      }
+
+      // 8. Focus Prompt / Dismiss: Esc
+      if (e.key === "Escape") {
+        if (shortcutsOpen) {
+          e.preventDefault();
+          setShortcutsOpen(false);
+          return;
+        }
+        if (searchModalOpen) return; // let SearchModal close itself
+        if (settingsOpen) return;    // let SettingsModal close itself
+        if (galleryOpen) return;     // let GalleryModal close itself
+
+        // Focus input
+        if (settings.focusInput) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent("focus-prompt-input"));
+        }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [
+    sidebarOpen,
+    searchModalOpen,
+    settingsOpen,
+    galleryOpen,
+    shortcutsOpen,
+    isTemporaryChatActive,
+    createChat,
+    clearTemporaryChatStore,
+    navigate,
+    setSidebarOpen,
+    getShortcutsSettings
+  ]);
 
   // Multi-select state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -1170,6 +1290,14 @@ const Sidebar = () => {
                 <span>Settings</span>
               </DropdownMenuItem>
 
+              <DropdownMenuItem
+                onClick={() => setShortcutsOpen(true)}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+              >
+                <Keyboard size={16} className="text-slate-400" />
+                <span>Keyboard Shortcuts</span>
+              </DropdownMenuItem>
+
               <DropdownMenuSeparator className="bg-white/5" />
 
               <SignOutButton>
@@ -1239,6 +1367,11 @@ const Sidebar = () => {
         <SearchModal
           isOpen={searchModalOpen}
           onClose={() => setSearchModalOpen(false)}
+        />
+
+        <ShortcutsCheatsheetModal
+          isOpen={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
         />
       </Suspense>
     </>

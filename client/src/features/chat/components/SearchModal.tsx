@@ -16,6 +16,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const { searchChats, selectChat } = useChatList();
   const inputRef = useRef<HTMLInputElement>(null);
   const searchChatsRef = useRef(searchChats);
@@ -23,6 +24,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
   const handleClose = useCallback(() => {
     setQuery("");
     setResults([]);
+    setActiveIndex(-1);
     setLoading(false);
     onClose();
   }, [onClose]);
@@ -46,9 +48,11 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
         const res = await searchChatsRef.current(query);
         if (cancelled) return;
         setResults(res);
+        setActiveIndex(res.length > 0 ? 0 : -1);
         setLoading(false);
       } else {
         setResults([]);
+        setActiveIndex(-1);
       }
     }, 300);
 
@@ -57,6 +61,14 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
       clearTimeout(timer);
     };
   }, [query]);
+
+  // Smooth scroll to highlighted result
+  useEffect(() => {
+    if (activeIndex >= 0) {
+      const activeEl = document.querySelector(`[data-search-index="${activeIndex}"]`);
+      activeEl?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [activeIndex]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -67,10 +79,27 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
       if (e.key === "Escape" && isOpen) {
         handleClose();
       }
+
+      if (!isOpen || results.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev + 1) % results.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev - 1 + results.length) % results.length);
+      } else if (e.key === "Enter") {
+        if (activeIndex >= 0 && activeIndex < results.length) {
+          e.preventDefault();
+          const selected = results[activeIndex];
+          selectChat(selected._id, query);
+          handleClose();
+        }
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleClose, isOpen]);
+  }, [handleClose, isOpen, results, activeIndex, selectChat, query]);
 
   if (!isOpen) return null;
 
@@ -131,22 +160,28 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
             </div>
           ) : results.length > 0 ? (
             <div className="p-3">
-              {results.map((result) => (
+              {results.map((result, index) => (
                 <button
                   key={result._id}
+                  data-search-index={index}
+                  onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => {
                     selectChat(result._id, query);
                     handleClose();
                   }}
-                  className="w-full flex items-start gap-4 p-4 rounded-2xl hover:bg-white/5 transition-all group text-left mb-1 last:mb-0"
+                  className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all group text-left mb-1 last:mb-0 border ${
+                    activeIndex === index
+                      ? "bg-white/5 border-emerald-500/25 text-emerald-400"
+                      : "border-transparent hover:bg-white/5 text-slate-400 hover:text-white"
+                  }`}
                 >
-                  <div className="h-10 w-10 rounded-xl bg-slate-800 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/10 transition-colors">
-                    <MessageSquare size={18} className="text-slate-400 group-hover:text-emerald-400" />
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${activeIndex === index ? "bg-emerald-500/10" : "bg-slate-800 group-hover:bg-emerald-500/10"}`}>
+                    <MessageSquare size={18} className={`transition-colors ${activeIndex === index ? "text-emerald-400" : "text-slate-400 group-hover:text-emerald-400"}`} />
                   </div>
                   
                   <div className="flex-1 min-w-0 py-0.5">
                     <div className="flex items-center justify-between gap-4 mb-1">
-                      <h4 className="font-semibold text-white truncate group-hover:text-emerald-400 transition-colors">
+                      <h4 className={`font-semibold truncate transition-colors ${activeIndex === index ? "text-emerald-400" : "text-white group-hover:text-emerald-400"}`}>
                         {highlightMatch(result.title || "Untitled Session", query)}
                       </h4>
                       <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 shrink-0">

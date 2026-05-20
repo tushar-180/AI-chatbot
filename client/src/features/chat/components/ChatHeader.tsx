@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { UserButton } from "@clerk/react";
-import { Menu, Share, LogOut, ShieldAlert, Ghost } from "lucide-react";
+import { Menu, Share, Ghost } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useState } from "react";
