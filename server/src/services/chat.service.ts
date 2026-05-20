@@ -213,7 +213,6 @@ const getEnabledMcpTools = async (userId: string) => {
     (tool) => !disabledMcpServers.includes(tool._serverName),
   );
 };
-
 const buildPromptMessages = async (
   userId: string,
   chatMessages: ChatMessage[],
@@ -332,8 +331,10 @@ ${userRequest}`;
       type: "text",
     }));
 
+  const finalPromptMessages = [...systemMessages, ...rawPromptMessages];
+
   return {
-    promptMessages: [...systemMessages, ...rawPromptMessages],
+    promptMessages: finalPromptMessages,
     webGrounding,
   };
 };
@@ -652,8 +653,8 @@ async function* streamAssistantResponse(
       (aiError instanceof Error && aiError.message.includes("timed out")) ||
       firstTokenTimedOut;
     const errorMessage = isTimeout
-      ? "AI generation timed out. Please try again."
-      : "Server Error: AI failed to respond.";
+      ? "AI generation timed out."
+      : "An unexpected error occurred during generation.";
 
     if (activeStream.abortController.signal.aborted && !isTimeout) {
       const promptText = serializePromptMessages(promptMessages);
@@ -688,13 +689,15 @@ async function* streamAssistantResponse(
       "",
       promptAttachmentCount,
     );
+    const detailedErrorMessage = `⚠️ **Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
+      content: detailedErrorMessage,
       status: "failed",
       tokens,
     });
 
-    chatStreamRegistry.fail(requestId, errorMessage);
-    yield { error: errorMessage, status: "failed" };
+    chatStreamRegistry.fail(requestId, detailedErrorMessage);
+    yield { error: detailedErrorMessage, status: "failed" };
   }
 }
 

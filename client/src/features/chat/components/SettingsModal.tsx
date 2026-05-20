@@ -178,7 +178,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isMemoryLoading, setIsMemoryLoading] = useState(true);
   const [isMoreMemoryLoading, setIsMoreMemoryLoading] = useState(false);
   const [hasMoreMemory, setHasMoreMemory] = useState(true);
-  const [memorySkip, setMemorySkip] = useState(0);
+  const memorySkipRef = React.useRef(0);
 
   // Local Archive State
   const [localArchivedChats, setLocalArchivedChats] = useState<any[]>([]);
@@ -235,13 +235,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
       if (isInitial) {
         setIsMemoryLoading(true);
-        setMemorySkip(0);
+        memorySkipRef.current = 0;
       } else {
         setIsMoreMemoryLoading(true);
       }
 
       try {
-        const currentSkip = isInitial ? 0 : memorySkip + LIMIT;
+        const currentSkip = isInitial ? 0 : memorySkipRef.current + LIMIT;
         const { data } = await api.get("/memory", {
           params: { limit: LIMIT, skip: currentSkip },
         });
@@ -253,7 +253,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         }
 
         setHasMoreMemory(data.length === LIMIT);
-        setMemorySkip(currentSkip);
+        memorySkipRef.current = currentSkip;
       } catch (error) {
         console.error("Memory Fetch Error:", error);
         toast.error("Failed to sync neural bank");
@@ -262,7 +262,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         setIsMoreMemoryLoading(false);
       }
     },
-    [user, memorySkip]
+    [user]
   );
 
   // Fetch Archived Chats Independently

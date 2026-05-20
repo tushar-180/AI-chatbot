@@ -547,36 +547,38 @@ const InputArea = ({
                 </button>
               )}
 
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={handleKeyDown}
-                rows={1}
-                placeholder={
-                  currentChatId ? "Ask anything..." : "Start a conversation..."
-                }
-                className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (isListening) {
-                    stop();
-                  } else {
-                    start();
-                  }
-                }}
-                className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                  isListening
-                    ? "bg-rose-500/20 text-rose-400"
-                    : "text-slate-500 hover:bg-white/5 hover:text-white"
-                }`}
-                aria-label="Voice input"
-              >
-                {isListening && !isSpeaking && (
-                  <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
-                )}
+                            <textarea
+                                ref={textareaRef}
+                                value={input}
+                                onChange={(e) => onInputChange(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                rows={1}
+                                placeholder={
+                                    currentChatId
+                                        ? "Ask anything..."
+                                        : "Start a conversation..."
+                                }
+                                className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (isListening) {
+                                        stop();
+                                    } else {
+                                        start();
+                                    }
+                                }}
+                                className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
+                                    isListening
+                                        ? "bg-rose-500/20 text-rose-400"
+                                        : "text-slate-500 hover:bg-white/5 hover:text-white"
+                                }`}
+                                aria-label="Voice input"
+                            >
+                                {isListening && !isSpeaking && (
+                                    <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
+                                )}
 
                 {isSpeaking && (
                   <>

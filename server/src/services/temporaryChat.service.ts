@@ -215,8 +215,8 @@ export const temporaryChatService = {
         (aiError instanceof Error && aiError.message.includes("timed out")) ||
         firstTokenTimedOut;
       const errorMessage = isTimeout
-        ? "AI generation timed out. Please try again."
-        : "Server Error: AI failed to respond.";
+        ? "AI generation timed out."
+        : "An unexpected error occurred during generation.";
 
       if (activeStream.abortController.signal.aborted && !isTimeout) {
         yield { done: true, chatId, requestId, status: "stopped" };
@@ -224,8 +224,9 @@ export const temporaryChatService = {
       }
 
       console.error("AI Error in temporary chat stream:", aiError);
-      chatStreamRegistry.fail(requestId, errorMessage);
-      yield { error: errorMessage, status: "failed" };
+      const detailedErrorMessage = `⚠️ **Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
+      chatStreamRegistry.fail(requestId, detailedErrorMessage);
+      yield { error: detailedErrorMessage, status: "failed" };
     }
   }
 };

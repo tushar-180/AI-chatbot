@@ -285,7 +285,7 @@ export const chatRepository = {
   async pinChat(chatId: string) {
     return await Chat.findByIdAndUpdate(
       chatId,
-      { $set: { isPinned: true } },
+      { $set: { isPinned: true, updatedAt: new Date() } },
       { new: true }
     );
   },
@@ -293,7 +293,7 @@ export const chatRepository = {
   async unpinChat(chatId: string) {
     return await Chat.findByIdAndUpdate(
       chatId,
-      { $set: { isPinned: false } },
+      { $set: { isPinned: false, updatedAt: new Date() } },
       { new: true }
     );
   },
