@@ -46,7 +46,7 @@ export type ChatMessage = {
   requestId?: string;
   status: ChatMessageStatus;
   feedback?: "like" | "dislike" | null;
-    tokens?: TokenUsage;
+  tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -58,6 +58,12 @@ export type CreateChatInput = {
   requestId?: string;
   attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  selection?: {
+    selectedText: string;
+    originalSourceMessage: string;
+    sourceMessageId: string;
+    actionType: string;
+  };
 };
 
 export type SendMessageInput = {
@@ -67,6 +73,12 @@ export type SendMessageInput = {
   requestId?: string;
   attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  selection?: {
+    selectedText: string;
+    originalSourceMessage: string;
+    sourceMessageId: string;
+    actionType: string;
+  };
 };
 
 export type EditMessageInput = {

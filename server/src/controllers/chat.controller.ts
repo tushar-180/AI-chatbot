@@ -5,6 +5,10 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
 import type { StreamPayload } from "../types/chat.types";
 
+interface AuthenticatedRequest extends Request {
+  clerkId?: string;
+}
+
 const getHttpStatus = (error: unknown) => {
   if (!(error instanceof Error)) return 500;
   if (error.name === "ValidationError") return 400;
@@ -23,7 +27,8 @@ const sendControllerError = (
   fallback: string,
 ) => {
   const status = getHttpStatus(error);
-  return res.status(status).json({ error: getErrorMessage(error, fallback) });
+  const message = getErrorMessage(error, fallback);
+  return res.status(status).json({ error: message });
 };
 
 const pipeStreamResponse = async (
@@ -41,7 +46,9 @@ const pipeStreamResponse = async (
     clientDisconnected = true;
   });
 
-  const writePayload = async (payload: Awaited<typeof firstPayload>["value"]) => {
+  const writePayload = async (
+    payload: Awaited<typeof firstPayload>["value"],
+  ) => {
     if (clientDisconnected) return;
 
     if (payload.chunk) {
@@ -65,7 +72,7 @@ const pipeStreamResponse = async (
   }
 };
 
-export const createChat = asyncHandler(async (req: Request, res: Response) => {
+export const createChat = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const chat = await chatService.createChat({
       ...req.body,
@@ -77,7 +84,7 @@ export const createChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const createChatStream = async (req: Request, res: Response) => {
+export const createChatStream = async (req: AuthenticatedRequest, res: Response) => {
   try {
     await pipeStreamResponse(
       req,
@@ -110,12 +117,11 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
+export const getAllChats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const isArchived = req.query.isArchived === "true";
-    // @ts-ignore - fixing temporary compilation issue
     const chats = await chatService.getAllChats(
       req.clerkId!,
       page,
@@ -128,13 +134,12 @@ export const getAllChats = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const searchChats = asyncHandler(async (req: Request, res: Response) => {
+export const searchChats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const query = req.query.q as string;
     if (!query) {
       return res.json([]);
     }
-    // @ts-ignore - fixing temporary compilation issue
     const chats = await chatService.searchChats(req.clerkId!, query);
     return res.json(chats);
   } catch (error) {
@@ -142,7 +147,7 @@ export const searchChats = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const getChatById = asyncHandler(async (req: Request, res: Response) => {
+export const getChatById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const chatId = String(req.params.id);
     const currentUserId = req.clerkId!;
@@ -199,17 +204,19 @@ export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const updateChatTitle = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const chat = await chatService.updateChatTitle(
-      String(req.params.id),
-      req.body.title
-    );
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to update chat title");
-  }
-});
+export const updateChatTitle = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.updateChatTitle(
+        String(req.params.id),
+        req.body.title,
+      );
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to update chat title");
+    }
+  },
+);
 
 export const archiveChat = asyncHandler(async (req: Request, res: Response) => {
   try {
@@ -220,14 +227,16 @@ export const archiveChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const unarchiveChat = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const chat = await chatService.unarchiveChat(String(req.params.id));
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to unarchive chat");
-  }
-});
+export const unarchiveChat = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.unarchiveChat(String(req.params.id));
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to unarchive chat");
+    }
+  },
+);
 
 export const pinChat = asyncHandler(async (req: Request, res: Response) => {
   try {
@@ -247,7 +256,7 @@ export const unpinChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const getGallery = asyncHandler(async (req: Request, res: Response) => {
+export const getGallery = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
     const gallery = await chatService.getGallery(req.clerkId!);
     return res.json(gallery);
@@ -349,19 +358,21 @@ export const streamEditMessage = async (req: Request, res: Response) => {
   }
 };
 
-export const retryMessage = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const chat = await chatService.retryMessage({
-      chatId: String(req.params.id),
-      messageId: String(req.params.messageId),
-      ...req.body,
-    });
+export const retryMessage = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.retryMessage({
+        chatId: String(req.params.id),
+        messageId: String(req.params.messageId),
+        ...req.body,
+      });
 
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to retry message");
-  }
-});
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to retry message");
+    }
+  },
+);
 
 export const streamRetryMessage = async (req: Request, res: Response) => {
   try {

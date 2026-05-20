@@ -45,6 +45,8 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
+import { ComposerQuotePreview } from "./ComposerQuotePreview";
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
 
 export interface InputAreaProps {
   input: string;
@@ -259,6 +261,7 @@ const InputArea = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isUploading, setIsUploading] = useState(false);
+    const selectionContext = useComposerStore((state) => state.selectionContext);
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
     onResult: (text) => {
@@ -274,16 +277,38 @@ const InputArea = ({
 
   const canUpload = supportsVision(selectedProvider);
 
-  // Auto-resize logic
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        200,
-      )}px`;
-    }
-  }, [input]);
+    // Auto-resize logic
+    useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = "auto";
+            textareaRef.current.style.height = `${Math.min(
+                textareaRef.current.scrollHeight,
+                200,
+            )}px`;
+        }
+    }, [input]);
+
+    // Quote insertion listener with focus and cursor placement
+    useEffect(() => {
+        const handleInsertQuote = (e: Event) => {
+            const customEvent = e as CustomEvent<{ text: string }>;
+            const textToInsert = customEvent.detail.text;
+            onInputChange(textToInsert);
+            
+            setTimeout(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.focus();
+                    textareaRef.current.selectionStart = textareaRef.current.value.length;
+                    textareaRef.current.selectionEnd = textareaRef.current.value.length;
+                }
+            }, 50);
+        };
+
+        window.addEventListener("insert-quote", handleInsertQuote);
+        return () => {
+            window.removeEventListener("insert-quote", handleInsertQuote);
+        };
+    }, [onInputChange]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -410,48 +435,51 @@ const InputArea = ({
     onAttachmentsChange?.(next);
   };
 
-  return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
-      {isArchived ? (
-        <div className="mx-auto max-w-4xl pointer-events-auto px-4 md:px-0">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
-            <div className="flex items-center gap-4">
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
-                <Archive size={20} />
-              </div>
-              <div className="text-left">
-                <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.15em] mb-0.5">
-                  Archived Session
-                </h4>
-                <p className="text-[10px] text-slate-500 font-medium leading-tight">
-                  This conversation is preserved in the vault.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onUnarchive}
-              className="w-full md:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
-            >
-              <ArrowUp size={14} className="rotate-180" />
-              <span>Restore to continue</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form
-          onSubmit={onSubmit}
-          className="mx-auto max-w-4xl relative pointer-events-auto"
-        >
-          <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
-            <ModelSelector
-              availableProviders={availableProviders}
-              selectedProvider={selectedProvider}
-              onProviderChange={onProviderChange}
-              webSearchEnabled={webSearchEnabled}
-              onWebSearchToggle={onWebSearchToggle}
-              quotaStatus={quotaStatus}
-              isQuotaLoading={isQuotaLoading}
-            />
+    return (
+        <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
+            {isArchived ? (
+                <div className="mx-auto max-w-4xl pointer-events-auto px-4 md:px-0">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
+                        <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                                <Archive size={20} />
+                            </div>
+                            <div className="text-left">
+                                <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.15em] mb-0.5">
+                                    Archived Session
+                                </h4>
+                                <p className="text-[10px] text-slate-500 font-medium leading-tight">
+                                    This conversation is preserved in the vault.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={onUnarchive}
+                            className="w-full md:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
+                        >
+                            <ArrowUp size={14} className="rotate-180" />
+                            <span>Restore to continue</span>
+                        </button>
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <form
+                        onSubmit={onSubmit}
+                        className="mx-auto max-w-4xl relative pointer-events-auto"
+                    >
+                    <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+                        <ComposerQuotePreview />
+
+                        <ModelSelector
+                            availableProviders={availableProviders}
+                            selectedProvider={selectedProvider}
+                            onProviderChange={onProviderChange}
+                            webSearchEnabled={webSearchEnabled}
+                            onWebSearchToggle={onWebSearchToggle}
+                            quotaStatus={quotaStatus}
+                            isQuotaLoading={isQuotaLoading}
+                        />
 
             {/* Attachment Previews */}
             {attachments.length > 0 && (
@@ -584,12 +612,14 @@ const InputArea = ({
                   disabled={
                     loading ||
                     isUploading ||
-                    (!input.trim() && attachments.length === 0)
+                    (!input.trim() && attachments.length === 0 &&
+                                            !selectionContext)
                   }
                   className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
                     loading ||
                     isUploading ||
-                    (!input.trim() && attachments.length === 0)
+                    (!input.trim() && attachments.length === 0 &&
+                                            !selectionContext)
                       ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                       : "bg-white text-slate-900 hover:bg-slate-200"
                   }`}
@@ -604,6 +634,7 @@ const InputArea = ({
             </div>
           </div>
         </form>
+            </>
       )}
     </div>
   );

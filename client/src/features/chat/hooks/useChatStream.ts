@@ -658,9 +658,15 @@ export const useChatStream = (hookOptions?: {
     options?: {
       forceNewChat?: boolean;
       webSearchEnabled?: boolean;
+      selection?: {
+        selectedText: string;
+        originalSourceMessage: string;
+        sourceMessageId: string;
+        actionType: string;
+      };
     },
   ) => {
-    if (!input.trim() && attachments.length === 0) return;
+    if (!input.trim() && attachments.length === 0 && !options?.selection) return;
     if (loading || !user?.id) return;
 
     const forceNewChat = options?.forceNewChat === true;
@@ -673,10 +679,11 @@ export const useChatStream = (hookOptions?: {
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content: input,
+      content: input.trim() || (options?.selection ? "Explain this" : ""),
       model: provider,
       status: "completed",
       attachments: attachments,
+      metadata: options?.selection ? { selection: options.selection } : undefined,
     };
     const requestId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
@@ -755,6 +762,7 @@ export const useChatStream = (hookOptions?: {
           requestId,
           attachments,
           webSearchEnabled,
+          selection: options?.selection,
         }),
       });
 
