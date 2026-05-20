@@ -64,6 +64,7 @@ export type CreateChatInput = {
     sourceMessageId: string;
     actionType: string;
   };
+  documentFile?: Express.Multer.File | null;
 };
 
 export type SendMessageInput = {
@@ -79,6 +80,7 @@ export type SendMessageInput = {
     sourceMessageId: string;
     actionType: string;
   };
+  documentFile?: Express.Multer.File | null;
 };
 
 export type EditMessageInput = {

@@ -40,8 +40,12 @@ const Chat = () => {
     setMessages,
     setIsNewChat,
   } = useChatStore();
-  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
-  const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
+  const isTemporaryChatActive = useTemporaryChatStore(
+    (state) => state.isTemporaryChatActive,
+  );
+  const clearTemporaryChatStore = useTemporaryChatStore(
+    (state) => state.clearStore,
+  );
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
@@ -121,7 +125,12 @@ const Chat = () => {
         clearTemporaryChatStore();
       }
     }
-  }, [chatId, location.pathname, isTemporaryChatActive, clearTemporaryChatStore]);
+  }, [
+    chatId,
+    location.pathname,
+    isTemporaryChatActive,
+    clearTemporaryChatStore,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -148,7 +157,9 @@ const Chat = () => {
       const selectionContext = useComposerStore.getState().selectionContext;
       useComposerStore.getState().clearSelectionContext();
       const res = await streamMessage(input, provider, attachments, {
-        forceNewChat: isTemporaryChatActive ? false : Boolean(messagesError && currentChatId),
+        forceNewChat: isTemporaryChatActive
+          ? false
+          : Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
         selection: selectionContext || undefined,
       });
@@ -191,8 +202,6 @@ const Chat = () => {
     location.pathname,
   ]);
 
-
-
   const handleSourcesOpen = useCallback(
     (sources: WebSource[], sourceId?: number) => {
       setSelectedSources(sources);
@@ -210,14 +219,28 @@ const Chat = () => {
     setActiveSourceId(null);
   }, []);
 
+  const handleDocumentSubmit = (file: File) => {
+    const selectionContext = useComposerStore.getState().selectionContext;
+    useComposerStore.getState().clearSelectionContext();
+    streamMessage(input, selectedProvider, attachments, {
+      forceNewChat: isTemporaryChatActive
+        ? false
+        : Boolean(messagesError && currentChatId),
+      webSearchEnabled,
+      selection: selectionContext || undefined,
+      documentFile: file,
+    });
+  };
+
   return (
     <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
-
-      <main className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
-        isTemporaryChatActive
-          ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
-          : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
-      }`}>
+      <main
+        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
+          isTemporaryChatActive
+            ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
+            : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
+        }`}
+      >
         {/* Spotlight Component - Positioned correctly */}
         {!isTemporaryChatActive && (
           <Spotlight
@@ -257,11 +280,19 @@ const Chat = () => {
               onEditStart={stopGeneration}
               onFeedback={(messageId, feedback) => {
                 if (isTemporaryChatActive) {
-                  useTemporaryChatStore.getState().setMessageFeedback(messageId, feedback);
+                  useTemporaryChatStore
+                    .getState()
+                    .setMessageFeedback(messageId, feedback);
                 } else {
-                  useChatStore.getState().setMessageFeedback(messageId, feedback);
+                  useChatStore
+                    .getState()
+                    .setMessageFeedback(messageId, feedback);
                   if (currentChatId) {
-                    chatService.updateMessageFeedback(currentChatId, messageId, feedback);
+                    chatService.updateMessageFeedback(
+                      currentChatId,
+                      messageId,
+                      feedback,
+                    );
                   }
                 }
               }}
@@ -280,6 +311,7 @@ const Chat = () => {
               input={input}
               onInputChange={setInput}
               onSubmit={handleFormSubmit}
+              onSubmitDocument={handleDocumentSubmit}
               loading={isCurrentChatLoading}
               isStreaming={isStreaming}
               onStop={stopGeneration}

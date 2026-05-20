@@ -1,16 +1,19 @@
 import { Router } from "express";
 import * as ChatController from "../controllers/chat.controller";
 
+import multer from "multer";
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
 const router = Router();
 
 // Create new chat
-router.post("/", ChatController.createChat);
-router.post("/stream", ChatController.createChatStream);
+router.post("/", upload.single('document'), ChatController.createChat);
+router.post("/stream", upload.single('document'), ChatController.createChatStream);
 router.post("/stop", ChatController.stopStream);
 
 // Add message to existing chat
-router.post("/:id", ChatController.sendMessage);
-router.post("/:id/stream", ChatController.streamMessage);
+router.post("/:id", upload.single('document'), ChatController.sendMessage);
+router.post("/:id/stream", upload.single('document'),ChatController.streamMessage);
 router.get("/:id/stream-updates", ChatController.getStreamUpdates);
 
 // Get All Chats

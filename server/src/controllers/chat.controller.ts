@@ -72,26 +72,58 @@ const pipeStreamResponse = async (
   }
 };
 
-export const createChat = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const chat = await chatService.createChat({
-      ...req.body,
-      userId: req.clerkId!,
-    });
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to create chat");
-  }
-});
+export const createChat = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
 
-export const createChatStream = async (req: AuthenticatedRequest, res: Response) => {
+      const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+    const selection = req.body.selection
+      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
+          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
+
+
+      const chat = await chatService.createChat({
+        ...req.body,
+        userId: req.clerkId!,
+        attachments,
+        selection,
+        webSearchEnabled,
+        documentFile: (req as any).file || null,
+      });
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to create chat");
+    }
+  },
+);
+
+export const createChatStream = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
   try {
+    const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+    const selection = req.body.selection
+      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
+          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
+
+
     await pipeStreamResponse(
       req,
       res,
       chatService.createChatStream({
         ...req.body,
         userId: req.clerkId!,
+        attachments,
+        selection,
+        webSearchEnabled,
+        documentFile: (req as any).file || null,
       }),
     );
   } catch (error) {
@@ -106,9 +138,21 @@ export const createChatStream = async (req: AuthenticatedRequest, res: Response)
 
 export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   try {
+    const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+    const selection = req.body.selection
+      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
+        const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
+
     const chat = await chatService.sendMessage({
       chatId: String(req.params.id),
       ...req.body,
+      attachments,
+      selection,
+      webSearchEnabled,
+      documentFile: (req as any).file || null,
     });
 
     return res.json(chat);
@@ -117,63 +161,84 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const getAllChats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    const isArchived = req.query.isArchived === "true";
-    const chats = await chatService.getAllChats(
-      req.clerkId!,
-      page,
-      limit,
-      isArchived,
-    );
-    return res.json(chats);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to fetch chats");
-  }
-});
-
-export const searchChats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const query = req.query.q as string;
-    if (!query) {
-      return res.json([]);
+export const getAllChats = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const isArchived = req.query.isArchived === "true";
+      const chats = await chatService.getAllChats(
+        req.clerkId!,
+        page,
+        limit,
+        isArchived,
+      );
+      return res.json(chats);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to fetch chats");
     }
-    const chats = await chatService.searchChats(req.clerkId!, query);
-    return res.json(chats);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to search chats");
-  }
-});
+  },
+);
 
-export const getChatById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const chatId = String(req.params.id);
-    const currentUserId = req.clerkId!;
-
-    const chat = await chatService.getChatById(chatId);
-
-    if (!chat?.userId || chat.userId !== currentUserId) {
-      return res
-        .status(403)
-        .json({ error: "You are not allowed to view messages for this chat." });
+export const searchChats = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const query = req.query.q as string;
+      if (!query) {
+        return res.json([]);
+      }
+      const chats = await chatService.searchChats(req.clerkId!, query);
+      return res.json(chats);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to search chats");
     }
+  },
+);
 
-    return res.json(chat);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to fetch chat");
-  }
-});
+export const getChatById = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const chatId = String(req.params.id);
+      const currentUserId = req.clerkId!;
+
+      const chat = await chatService.getChatById(chatId);
+
+      if (!chat?.userId || chat.userId !== currentUserId) {
+        return res
+          .status(403)
+          .json({
+            error: "You are not allowed to view messages for this chat.",
+          });
+      }
+
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to fetch chat");
+    }
+  },
+);
 
 export const streamMessage = async (req: Request, res: Response) => {
   try {
+    const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+    const selection = req.body.selection
+      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
+          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
+
+
     await pipeStreamResponse(
       req,
       res,
       chatService.streamMessage({
         chatId: String(req.params.id),
         ...req.body,
+        attachments,
+        selection,
+        webSearchEnabled,
+        documentFile: (req as any).file || null,
       }),
     );
   } catch (error) {
@@ -256,14 +321,16 @@ export const unpinChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const getGallery = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const gallery = await chatService.getGallery(req.clerkId!);
-    return res.json(gallery);
-  } catch (error) {
-    return sendControllerError(res, error, "Failed to fetch gallery");
-  }
-});
+export const getGallery = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const gallery = await chatService.getGallery(req.clerkId!);
+      return res.json(gallery);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to fetch gallery");
+    }
+  },
+);
 
 export const getStreamUpdates = async (req: Request, res: Response) => {
   const chatId = req.params.id as string;

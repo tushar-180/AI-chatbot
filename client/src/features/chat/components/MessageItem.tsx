@@ -11,6 +11,7 @@ import {
   ThumbsDown,
   Copy,
   AlertCircle,
+  FileText
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -512,8 +513,37 @@ const MessageItem = ({
                     "The AI model failed to respond. Please try again."}
                 </ReactMarkdown>
               </div>
-            ) : (
-              <>
+            ) : (              <>
+                {/* Document preview for user messages (Gemini‑style file card) */}
+                {isUser &&
+                  msg.attachments?.some((a: any) => a.isDocument) && (
+                    <div className="flex items-center gap-3 mb-3 p-3 rounded-lg border border-white/10 bg-white/5">
+                      <FileText
+                        size={18}
+                        className="text-slate-400 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          {
+                            msg.attachments.find(
+                              (a: any) => a.isDocument,
+                            )?.name
+                          }
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {(() => {
+                            const doc = msg.attachments.find(
+                              (a: any) => a.isDocument,
+                            );
+                            return doc?.size
+                              ? `${(doc.size / 1024).toFixed(1)} KB`
+                              : '';
+                          })()}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                 {msg.content && (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}

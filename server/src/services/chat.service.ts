@@ -32,6 +32,8 @@ import {
   serializePromptMessages,
 } from "../utils/tokenCounter";
 
+import { parseDocument } from "../modules/tools/document-parser";
+
 import { extractTranscript } from "../modules/tools/youtube";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
@@ -67,6 +69,20 @@ const createAssistantMessage = (
   status,
   metadata,
 });
+
+const extractDocumentText = async (
+  file: Express.Multer.File,
+): Promise<string> => {
+  const result = await parseDocument(
+    file.buffer,
+    file.originalname,
+    file.mimetype,
+  );
+  if (!result.success) {
+    throw new Error(`Failed to parse document: ${result.error?.message}`);
+  }
+  return result.text;
+};
 
 const createTitle = (message?: string) => {
   return message ? message.slice(0, CHAT_TITLE_MAX_LENGTH) : DEFAULT_CHAT_TITLE;
@@ -206,7 +222,8 @@ function withTimeout<T>(
 
 const getEnabledMcpTools = async (userId: string) => {
   const user = await userService.getUserByClerkId(userId);
-  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
+  const disabledMcpServers = (user?.get("disabledMcpServers") ||
+    []) as string[];
   const allTools = await mcpClientService.getActiveTools();
 
   return allTools.filter(
@@ -230,6 +247,7 @@ const buildPromptMessages = async (
   const lastUserMsg = [...rawPromptMessages]
     .reverse()
     .find((m) => m.role === "user");
+  const documentContext = lastUserMsg?.metadata?.documentText || null;
 
   // Apply selection logic from staging (if present)
   if (lastUserMsg?.metadata?.selection) {
@@ -315,6 +333,12 @@ ${userRequest}`;
         ? `The user provided a YouTube video. Here is its transcript (use it to answer questions about the video):\n\n${youtubeTranscriptContent}`
         : null,
       priority: 30,
+    },
+    {
+      content: documentContext
+        ? `The user provided a document. Use its content to answer any questions. The document text:\n\n${documentContext}`
+        : null,
+      priority: 25,
     },
     { content: webGrounding?.systemPrompt ?? null, priority: 40 },
   ];
@@ -709,6 +733,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    documentFile,
   }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
@@ -729,9 +754,14 @@ export const chatService = {
         provider,
         attachments,
       );
+      let documentText: string | null = null;
+      if (documentFile) {
+        documentText = await extractDocumentText(documentFile);
+      }
       userMessage.metadata = {
         webSearchEnabled: Boolean(webSearchEnabled),
         selection,
+        documentText,
       };
       const userPromptText = userMessage.content || "";
       const attachmentCount = attachments?.length || 0;
@@ -834,9 +864,14 @@ export const chatService = {
       input.provider,
       input.attachments,
     );
+    let documentText: string | null = null;
+    if (input.documentFile) {
+      documentText = await extractDocumentText(input.documentFile);
+    }
     userMsg.metadata = {
       webSearchEnabled: Boolean(input.webSearchEnabled),
       selection: input.selection,
+      documentText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = input.attachments?.length || 0;
@@ -865,6 +900,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    documentFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const chat = await requireChat(chatId);
@@ -876,9 +912,14 @@ export const chatService = {
       provider,
       attachments,
     );
+    let documentText: string | null = null;
+    if (documentFile) {
+      documentText = await extractDocumentText(documentFile);
+    }
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
+      documentText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
@@ -968,6 +1009,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    documentFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const resolvedRequestId = requireRequestId(requestId);
@@ -980,9 +1022,14 @@ export const chatService = {
       provider,
       attachments,
     );
+    let documentText: string | null = null;
+    if (documentFile) {
+      documentText = await extractDocumentText(documentFile);
+    }
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
+      documentText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;

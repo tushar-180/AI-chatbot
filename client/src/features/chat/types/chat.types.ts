@@ -8,12 +8,7 @@ export type Message = {
     feedback?: "like" | "dislike" | null;
     isWebSearching?: boolean;
     type?: "text" | "image" | "file" | "action";
-    attachments?: {
-        url: string;
-        name?: string;
-        mimeType?: string;
-        size?: number;
-    }[];
+    attachments?: Attachment[];
     sources?: WebSource[];
     metadata?: {
         selection?: {
@@ -53,4 +48,12 @@ export type WebSource = {
     hostname: string;
     url: string;
     snippet: string;
+}
+
+export interface Attachment {
+  url?: string;
+  name?: string;
+  mimeType?: string;
+  size?: number;
+  isDocument?: boolean;   // ← add this line
 }
