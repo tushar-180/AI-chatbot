@@ -5,7 +5,7 @@ import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
 import { userService } from "./user.service";
 import { mcpClientService } from "./mcpClient.service";
-import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
+import { BASE_SYSTEM_PROMPT, GROUP_CHAT_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import {
   webSearchService,
   type WebGroundingContext,
@@ -388,9 +388,7 @@ export class GroupChatService {
     // Add system prompt
     promptMessages.unshift({
       role: "system",
-      content:
-        BASE_SYSTEM_PROMPT +
-        "\n\nThis is a group chat. Differentiate users by their usernames if provided in context. Never wrap usernames in brackets like [name]. You are Velora.",
+      content: BASE_SYSTEM_PROMPT + GROUP_CHAT_SYSTEM_PROMPT
     });
 
     if (webGrounding) {
