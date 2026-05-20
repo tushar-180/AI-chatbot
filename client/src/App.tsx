@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useUser } from "@clerk/react";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -7,13 +7,15 @@ import { useAuthSetup } from "./features/auth/hooks/useUserSync";
 import { useServerStatus } from "./contexts/ServerStatusContext";
 import ServerDownBanner from "./components/ui/ServerDownBanner";
 
-const Landing = lazy(() => import("./pages/Landing"));
-const Chat = lazy(() => import("./pages/Chat"));
-const Auth = lazy(() => import("./pages/Auth"));
-const SharedChatPage = lazy(() => import("./pages/SharedChatPage"));
-const Admin = lazy(() => import("./pages/Admin"));
-const GroupChat = lazy(() => import("./pages/GroupChat"));
-const JoinGroupPage = lazy(() => import("./pages/JoinGroupPage"));
+import Landing from "./pages/Landing";
+import Chat from "./pages/Chat";
+import Auth from "./pages/Auth";
+import SharedChatPage from "./pages/SharedChatPage";
+import Admin from "./pages/Admin";
+import GroupChat from "./pages/GroupChat";
+import JoinGroupPage from "./pages/JoinGroupPage";
+import ChatLayout from "./features/chat/components/ChatLayout";
+
 function App() {
   const { isSignedIn, isLoaded } = useUser();
   const { isDown, isRetrying, retry } = useServerStatus();
@@ -43,23 +45,42 @@ function App() {
                 }
               />
 
-              {/* Protected Chat Routes */}
-              <Route
-                path="/chat"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/chat/:chatId"
-                element={
-                  <ProtectedRoute>
-                    <Chat />
-                  </ProtectedRoute>
-                }
-              />
+              {/* Persistent Chat Layout */}
+              <Route element={<ChatLayout />}>
+                {/* Protected Chat Routes */}
+                <Route
+                  path="/chat"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:chatId"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Public Shared Chat Route */}
+                <Route
+                  path="/shared/:sharedChatId"
+                  element={<SharedChatPage />}
+                />
+
+                {/* Group Chat Routes */}
+                <Route
+                  path="/group/:groupId"
+                  element={
+                    <ProtectedRoute>
+                      <GroupChat />
+                    </ProtectedRoute>
+                  }
+                />
+              </Route>
 
               {/* Protected Admin Route */}
               <Route
@@ -71,21 +92,6 @@ function App() {
                 }
               />
 
-              {/* Public Shared Chat Route */}
-              <Route
-                path="/shared/:sharedChatId"
-                element={<SharedChatPage />}
-              />
-
-              {/* Group Chat Routes */}
-              <Route
-                path="/group/:groupId"
-                element={
-                  <ProtectedRoute>
-                    <GroupChat />
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="/join/:inviteCode"
                 element={

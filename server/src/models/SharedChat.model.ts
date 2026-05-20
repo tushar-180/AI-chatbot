@@ -36,6 +36,15 @@ const sharedChatSchema = new mongoose.Schema(
           type: Date,
           default: Date.now,
         },
+
+        attachments: [
+          {
+            url: String,
+            name: String,
+            mimeType: String,
+            size: Number,
+          },
+        ],
       },
     ],
   },

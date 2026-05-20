@@ -42,8 +42,16 @@ const groupMessageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    attachments: [
+      {
+        url: String,
+        name: String,
+        mimeType: String,
+        size: Number,
+      },
+    ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const groupChatSchema = new mongoose.Schema(
@@ -74,8 +82,12 @@ const groupChatSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    isPinned: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const GroupChat = mongoose.model("GroupChat", groupChatSchema);

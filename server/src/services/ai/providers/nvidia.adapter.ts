@@ -353,11 +353,14 @@ OUTPUT RULES (STRICTLY ENFORCED):
             return;
           }
           console.error("NVIDIA generateStreamResponse error:", error);
-          throw new AIServiceError(
-            error.message ||
-              "Failed to generate stream response from NVIDIA NIM",
-            error.status,
-          );
+
+          // 410 Gone = model has been deprecated/removed from NVIDIA NIM
+          const message =
+            error.status === 410
+              ? `The model \`${adapter.model}\` is no longer available on NVIDIA NIM (removed/deprecated). Please switch to a different model.`
+              : error.message || "Failed to generate stream response from NVIDIA NIM";
+
+          throw new AIServiceError(message, error.status);
         } finally {
           settleUsage(latestUsage);
         }

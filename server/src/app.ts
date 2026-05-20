@@ -19,7 +19,7 @@ import { requireAuth } from "./middleware/auth.middleware";
 
 const app = express();
 
-const allowedOrigins = [
+export const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
   //"https://qpqhnchb-5173.inc1.devtunnels.ms",//ani

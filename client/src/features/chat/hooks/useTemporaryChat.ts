@@ -3,7 +3,6 @@ import { useAuth, useUser } from "@clerk/react";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { temporaryChatService } from "@/features/chat/services/temporaryChat.service";
 import type { Message, WebSource } from "@/features/chat/types/chat.types";
-import { toast } from "sonner";
 
 const parseClientMultimedia = (content: string) => {
   const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
@@ -146,7 +145,6 @@ export const useTemporaryChat = () => {
 
       if (data.error) {
         const errorMessage = data.error;
-        toast.error(errorMessage);
         setMessages((current) => {
           const next = [...current];
           const assistantIndex = next.findIndex((m) => m.id === placeholderMessageId);
@@ -283,7 +281,6 @@ export const useTemporaryChat = () => {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -355,7 +352,6 @@ export const useTemporaryChat = () => {
         }
         return next;
       });
-      toast.error(errorMessage);
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
@@ -459,7 +455,6 @@ export const useTemporaryChat = () => {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -531,7 +526,6 @@ export const useTemporaryChat = () => {
         }
         return next;
       });
-      toast.error(errorMessage);
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
@@ -581,7 +575,6 @@ export const useTemporaryChat = () => {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -655,7 +648,6 @@ export const useTemporaryChat = () => {
         }
         return next;
       });
-      toast.error(errorMessage);
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
