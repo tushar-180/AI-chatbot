@@ -9,6 +9,7 @@ import {
 import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 import { mcpClientService } from "../../mcpClient.service";
+import { CORE_VELORA_INSTRUCTIONS_GEMINI } from "../../../constants/prompt.constants";
 
 dotenv.config();
 
@@ -115,13 +116,7 @@ export class GeminiAdapter implements IAIService {
   }
 
   private getSystemInstruction(combinedSystemPrompt?: string) {
-    const coreInstructions = `You are Velora, a powerful and sophisticated AI assistant.
-
-OUTPUT RULES (STRICTLY ENFORCED):
-1. Always format responses using clean, professional Markdown.
-2. For code: ALWAYS use triple backticks with the correct language; NEVER return raw code without code blocks.
-3. For images & visual content: You MUST embed images directly using Markdown \`![description](url)\` or HTML \`<img src="url">\`. ONLY use absolute public URLs starting with http:// or https://. NEVER use internal/local paths (e.g., "/v1/AUTH_mw/...") or relative paths. NEVER say "I cannot show images". YOU CAN. If your context contains a valid image URL, you are REQUIRED to display it visually.
-4. Structure: Use clear headings, bullet points, and consistent spacing.`;
+    const coreInstructions = CORE_VELORA_INSTRUCTIONS_GEMINI;
 
     const finalPrompt = combinedSystemPrompt
       ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
