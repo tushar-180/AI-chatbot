@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
+import { useParams } from "react-router-dom";
 import { DEFAULT_CHAT_PROVIDER } from "@/features/chat/constants/chat.constants";
 
 export interface Attachment {
@@ -37,6 +38,14 @@ export const useChatInput = ({
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const { chatId } = useParams<{ chatId?: string }>();
+
+  // Clear typed input, attachments, and reset web search when chat switching
+  useEffect(() => {
+    setInput("");
+    setAttachments([]);
+    setWebSearchEnabled(false);
+  }, [chatId]);
 
   // Persist provider selection
   useEffect(() => {

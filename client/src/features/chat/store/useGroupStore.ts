@@ -19,6 +19,19 @@ export type GroupMessage = {
   status?: "streaming" | "stopped" | "completed" | "failed";
   type: "text" | "image" | "file" | "action" | "event";
   createdAt: string;
+  metadata?: {
+    webSearchEnabled?: boolean;
+    [key: string]: any;
+  };
+  sources?: Array<{
+    id: number;
+    url: string;
+    title: string;
+    hostname?: string;
+    snippet?: string;
+  }>;
+  attachments?: any[];
+  isWebSearching?: boolean;
 };
 
 export type GroupChat = {
@@ -28,6 +41,7 @@ export type GroupChat = {
   members: GroupMember[];
   inviteCode: string;
   updatedAt: string;
+  isPinned?: boolean;
 };
 
 type GroupState = {
@@ -35,6 +49,8 @@ type GroupState = {
   currentGroupId: string | null;
   groupMessages: GroupMessage[];
   loading: boolean;
+  isAiThinking: boolean;
+  isWebSearching: boolean;
 
   setGroups: (groups: GroupChat[]) => void;
   addGroup: (group: GroupChat) => void;
@@ -44,6 +60,8 @@ type GroupState = {
   ) => void;
   addGroupMessage: (message: GroupMessage) => void;
   setLoading: (loading: boolean) => void;
+  setIsAiThinking: (isAiThinking: boolean) => void;
+  setIsWebSearching: (isWebSearching: boolean) => void;
   removeGroup: (id: string) => void;
   updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
   updateGroup: (groupId: string, updates: Partial<GroupChat>) => void;
@@ -56,6 +74,8 @@ export const useGroupStore = create<GroupState>()(
       currentGroupId: null,
       groupMessages: [],
       loading: false,
+      isAiThinking: false,
+      isWebSearching: false,
 
       setGroups: (groups) => set({ groups }),
       addGroup: (group) =>
@@ -75,6 +95,8 @@ export const useGroupStore = create<GroupState>()(
           groupMessages: [...state.groupMessages, message],
         })),
       setLoading: (loading) => set({ loading }),
+      setIsAiThinking: (isAiThinking) => set({ isAiThinking }),
+      setIsWebSearching: (isWebSearching) => set({ isWebSearching }),
       removeGroup: (id) =>
         set((state) => ({
           groups: state.groups.filter((g) => g._id !== id),

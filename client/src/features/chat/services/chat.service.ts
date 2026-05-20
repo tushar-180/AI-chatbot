@@ -1,5 +1,4 @@
 import { api, API_ORIGIN } from "@/lib/api";
-import axios from "axios";
 import type {
   Chat,
   Message,
@@ -110,38 +109,8 @@ export const chatService = {
   /**
    * Formats API errors for display.
    */
-  getChatErrorMessage(error: unknown): string {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const apiMessage =
-        typeof error.response?.data?.error === "string"
-          ? error.response.data.error
-          : undefined;
-      const retryAfter = error.response?.data?.retryAfter;
-
-      if (apiMessage && retryAfter) {
-        return `${apiMessage} Try again in about ${retryAfter} seconds.`;
-      }
-
-      if (status === 401 || status === 403) {
-        return "Server Error: Authentication failed. Please check API configuration.";
-      }
-
-      if (status && status >= 500) {
-        return "Server Error: AI failed to respond. Please try again later.";
-      }
-
-      return apiMessage || "Server Error: Unable to connect to AI service.";
-    }
-
-    if (error instanceof Error) {
-      if (error.name === "AbortError" || error.message.includes("timed out")) {
-        return "AI generation timed out. Please try again.";
-      }
-      return error.message;
-    }
-
-    return "Server Error: Something went wrong while sending your message.";
+  getChatErrorMessage(_error: unknown): string {
+    return `⚠️ **Failed to generate response.** The model encountered an error or is temporarily unavailable. Please try again.`;
   },
 
   async archiveChat(chatId: string) {

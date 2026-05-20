@@ -93,6 +93,7 @@ const MessageList = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const highlight = searchParams.get("highlight");
+  const showSuggestions = !currentChatId && messages.length === 0;
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
@@ -158,6 +159,24 @@ const MessageList = ({
     handleScroll();
     return () => container.removeEventListener("scroll", handleScroll);
   }, [getScrollContainer, handleScroll]);
+
+  // LOCK SCROLL OVERFLOW WHEN SUGGESTIONS ARE ACTIVE
+  useEffect(() => {
+    const container = getScrollContainer();
+    if (!container) return;
+
+    if (showSuggestions) {
+      container.style.overflowY = "hidden";
+    } else {
+      container.style.overflowY = "auto";
+    }
+
+    return () => {
+      if (container) {
+        container.style.overflowY = "auto";
+      }
+    };
+  }, [showSuggestions, getScrollContainer]);
 
   // CLEAR HIGHLIGHT ON CLICK OR AFTER 3s
   useEffect(() => {
@@ -244,8 +263,6 @@ const MessageList = ({
     scrollToBottom,
     highlight,
   ]);
-
-  const showSuggestions = !currentChatId && messages.length === 0;
 
   return (
     <div
@@ -385,18 +402,6 @@ const MessageList = ({
                 </div>
               );
             })}
-
-            {isStreaming &&
-              messages.length > 0 &&
-              messages[messages.length - 1].role === "user" && (
-                <div className="flex w-full justify-start duration-300">
-                  <div className="flex items-center gap-3 py-6">
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:100ms]" />
-                    <div className="h-1 w-1 rounded-full bg-white/40 animate-pulse [animation-delay:200ms]" />
-                  </div>
-                </div>
-              )}
 
             {/* SCROLL TO BOTTOM BUTTON */}
             {showScrollToBottom && messages.length > 0 && (

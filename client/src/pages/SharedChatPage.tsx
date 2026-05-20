@@ -4,7 +4,6 @@ import { useUser, useClerk } from "@clerk/react";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
-import Sidebar from "@/features/chat/components/Sidebar";
 import ChatHeader from "@/features/chat/components/ChatHeader";
 import MessageList from "@/features/chat/components/MessageList";
 import InputArea from "@/features/chat/components/InputArea";
@@ -19,6 +18,7 @@ interface SharedMessage {
     id: string;
     role: "user" | "assistant";
     content: string;
+    attachments?: any[];
 }
 
 export default function SharedChatPage() {
@@ -54,6 +54,7 @@ export default function SharedChatPage() {
                         id: `shared-${i}`,
                         role: msg.role,
                         content: msg.content,
+                        attachments: msg.attachments || [],
                     }),
                 );
                 setSharedMessages(msgs);
@@ -96,6 +97,7 @@ export default function SharedChatPage() {
                     id: `${newChatId}-seed-${index}`,
                     role: msg.role,
                     content: msg.content,
+                    attachments: msg.attachments || [],
                     status: "completed",
                 }),
             );
@@ -103,6 +105,9 @@ export default function SharedChatPage() {
             upsertChat({
                 _id: newChatId,
                 title: sharedTitle,
+                isArchived: false,
+                isPinned: false,
+                updatedAt: new Date().toISOString(),
             });
             setCurrentChat(newChatId);
             setMessages(forkedMessages);
@@ -148,9 +153,7 @@ export default function SharedChatPage() {
 
     if (error) {
         return (
-            <div className="flex h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
-                <Sidebar />
-
+            <>
                 <main className="relative flex h-screen flex-1 flex-col overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
                     <Spotlight
                         className="-top-40 left-0 opacity-60 md:-top-20 md:left-60"
@@ -189,14 +192,12 @@ export default function SharedChatPage() {
 
                     <div className="pointer-events-none absolute inset-0 z-50 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')]" />
                 </main>
-            </div>
+            </>
         );
     }
 
     return (
-        <div className="flex h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
-            <Sidebar />
-
+        <>
             <main className="relative flex h-screen flex-1 flex-col overflow-hidden bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]">
                 <Spotlight
                     className="-top-40 left-0 opacity-60 md:-top-20 md:left-60"
@@ -249,6 +250,6 @@ export default function SharedChatPage() {
 
                 <div className="pointer-events-none absolute inset-0 z-50 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')]" />
             </main>
-        </div>
+        </>
     );
 }
