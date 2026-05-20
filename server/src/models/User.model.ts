@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema(
       occupation: { type: String, default: "" },
       tone: { type: String, default: "Default" },
     },
+    disabledMcpServers: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

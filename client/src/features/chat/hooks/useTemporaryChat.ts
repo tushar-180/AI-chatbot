@@ -8,10 +8,10 @@ import { toast } from "sonner";
 const parseClientMultimedia = (content: string) => {
   const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
   const htmlImageRegex = /<img.*?src=["'](.*?)["'].*?>/g;
-  
+
   const attachments: any[] = [];
   let imgMatch;
-  
+
   while ((imgMatch = markdownImageRegex.exec(content)) !== null) {
     const url = imgMatch[1];
     if (url && (url.startsWith('data:image') || /\.(jpg|jpeg|png|gif|webp|svg|avif)(\?.*)?$/i.test(url))) {
@@ -33,7 +33,7 @@ const parseClientMultimedia = (content: string) => {
       });
     }
   }
-  
+
   return {
     attachments,
     type: attachments.length > 0 ? 'image' : 'text'

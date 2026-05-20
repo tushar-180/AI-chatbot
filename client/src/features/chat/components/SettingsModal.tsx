@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { api } from "@/lib/api";
@@ -25,6 +26,11 @@ import {
   XCircle,
   Share,
   Users,
+  Globe,
+  Sliders,
+  WifiOff,
+  GitBranch,
+  Database,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 
@@ -95,6 +101,66 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       }
     };
   }, []);
+
+  interface McpServerInfo {
+    name: string;
+    type: "stdio" | "sse";
+    command?: string;
+    args?: string[];
+    url?: string;
+    env?: Record<string, string>;
+    enabled: boolean;
+    connected?: boolean;
+  }
+
+  // MCP Plugins & Apps State
+  const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([]);
+  const [isMcpLoading, setIsMcpLoading] = useState(false);
+  const [isMcpActionLoading, setIsMcpActionLoading] = useState<string | null>(null);
+  const [mcpError, setMcpError] = useState<string | null>(null);
+
+  // Fetch MCP Servers
+  const fetchMcpServers = useCallback(async () => {
+    setIsMcpLoading(true);
+    setMcpError(null);
+    try {
+      const { data } = await api.get("/mcp");
+      setMcpServers(data);
+    } catch (error) {
+      console.error("Failed to fetch MCP integrations:", error);
+      setMcpError("Could not synchronize with MCP Registry");
+    } finally {
+      setIsMcpLoading(false);
+    }
+  }, []);
+
+  // Toggle MCP Server Connection State
+  const toggleMcpServer = async (name: string, currentEnabled: boolean) => {
+    setIsMcpActionLoading(name);
+    try {
+      // Optimistic Update
+      setMcpServers(prev =>
+        prev.map(s => (s.name === name ? { ...s, enabled: !currentEnabled } : s))
+      );
+      
+      const { data } = await api.patch(`/mcp/${name}/toggle`, { enabled: !currentEnabled });
+      toast.success(data.message || `Server connection updated`);
+      
+      // Update with exact status returned
+      setMcpServers(prev =>
+        prev.map(s => (s.name === name ? { ...s, enabled: data.server.enabled, connected: data.connected } : s))
+      );
+    } catch (error) {
+      console.error("Failed to toggle MCP server:", error);
+      toast.error(`Failed to modify connection status`);
+      // Revert Optimistic Update
+      setMcpServers(prev =>
+        prev.map(s => (s.name === name ? { ...s, enabled: currentEnabled } : s))
+      );
+    } finally {
+      setIsMcpActionLoading(null);
+    }
+  };
 
   // Personalization State
   const [isPersonalizationLoading, setIsPersonalizationLoading] =
@@ -355,6 +421,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       if (activeTab === "memory") fetchMemories(true);
       if (activeTab === "archive") fetchArchivedChats();
       if (activeTab === "sharing" || activeTab === "groups") fetchSharingData();
+      if (activeTab === "mcp") fetchMcpServers();
     }
   }, [
     isOpen,
@@ -363,6 +430,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     fetchMemories,
     fetchArchivedChats,
     fetchSharingData,
+    fetchMcpServers,
   ]);
 
   useEffect(() => {
@@ -416,6 +484,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     { id: "general", label: "General", icon: Settings },
     { id: "personalization", label: "Personalization", icon: Sparkles },
     { id: "memory", label: "Memory", icon: Brain },
+    { id: "mcp", label: "Plugins & Apps", icon: Zap },
     { id: "archive", label: "Archive", icon: Archive },
     { id: "sharing", label: "Shared Chats", icon: Share },
     { id: "groups", label: "My Groups", icon: Users },
@@ -501,7 +570,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <p className="text-sm text-slate-500">{user?.primaryEmailAddress?.emailAddress}</p>
                     <div className="mt-3 flex items-center gap-2">
                        <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">Premium</span>
-                       <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
+                        {/* eslint-disable-next-line react-hooks/purity */}
+                        <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
                     </div>
                   </div>
                 </div>
@@ -1355,6 +1425,118 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </div>
                    </button>
                 </div>
+              </div>
+            )}
+
+            {activeTab === "mcp" && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* Header Information Banner */}
+                <div className="p-5 rounded-3xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Zap className="text-amber-400 animate-pulse" size={20} />
+                    <div>
+                      <p className="text-[11px] font-bold text-white uppercase tracking-widest">Plugins & Integrations</p>
+                      <p className="text-[10px] text-amber-400/60 font-medium">Extend Velora with real-time web, data, and developer actions</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Integrations List Panel */}
+                {isMcpLoading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <Loader2 className="w-6 h-6 text-amber-500 animate-spin" />
+                    <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">Synchronizing Active Integrations...</p>
+                  </div>
+                ) : mcpError ? (
+                  <div className="text-center py-20 bg-white/2 border border-dashed border-white/5 rounded-3xl space-y-3">
+                    <WifiOff className="w-10 h-10 text-slate-800 mx-auto opacity-50 animate-pulse" />
+                    <p className="text-rose-400 text-[10px] font-bold uppercase tracking-widest">{mcpError}</p>
+                    <button
+                      onClick={fetchMcpServers}
+                      className="text-[9px] font-bold text-slate-400 hover:text-white uppercase tracking-widest border border-white/5 px-3 py-1.5 rounded-xl hover:bg-white/5"
+                    >
+                      Retry Connection
+                    </button>
+                  </div>
+                ) : mcpServers.length === 0 ? (
+                  <div className="text-center py-20 bg-white/2 border border-dashed border-white/5 rounded-3xl">
+                    <Zap className="w-10 h-10 text-slate-800 mx-auto mb-4 opacity-50" />
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">No active integrations found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {mcpServers.map((server) => {
+                      const isConnected = server.enabled && server.connected;
+                      
+                      // Dynamic Icon Matching
+                      let IconComponent = Sliders;
+                      const serverNameLower = server.name.toLowerCase();
+                      if (serverNameLower.includes("search") || serverNameLower.includes("web")) {
+                        IconComponent = Globe;
+                      } else if (serverNameLower.includes("sqlite") || serverNameLower.includes("db") || serverNameLower.includes("sql")) {
+                        IconComponent = Database;
+                      } else if (serverNameLower.includes("github") || serverNameLower.includes("git")) {
+                        IconComponent = GitBranch;
+                      }
+
+                      return (
+                        <div
+                          key={server.name}
+                          className="group rounded-3xl border transition-all p-5 space-y-4 bg-slate-900/40 border-white/5 hover:border-white/10"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`h-10 w-10 rounded-2xl flex items-center justify-center transition-colors ${
+                                isConnected ? "bg-emerald-500/10 text-emerald-400" : "bg-white/5 text-slate-500"
+                              }`}>
+                                <IconComponent size={20} />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold text-white tracking-wide capitalize">
+                                  {server.name.replace(/_|-/g, " ")}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`h-1.5 w-1.5 rounded-full ${
+                                    isConnected ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" : (server.enabled ? "bg-amber-400 animate-pulse" : "bg-slate-700")
+                                  }`} />
+                                  <span className={`text-[9px] font-bold uppercase tracking-widest ${
+                                    isConnected ? "text-emerald-400" : (server.enabled ? "text-amber-400/80" : "text-slate-600")
+                                  }`}>
+                                    {isConnected ? "Connected" : (server.enabled ? "Reconnecting..." : "Disabled")}
+                                  </span>
+                                  <span className="text-slate-700 text-[9px] font-medium">•</span>
+                                  <span className="text-slate-600 text-[9px] font-semibold uppercase tracking-widest font-mono">
+                                    {server.type}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                              {/* Toggle switch */}
+                              {isMcpActionLoading === server.name ? (
+                                <Loader2 size={16} className="animate-spin text-slate-500 mr-2" />
+                              ) : (
+                                <button
+                                  onClick={() => toggleMcpServer(server.name, server.enabled)}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    server.enabled ? "bg-emerald-500" : "bg-slate-800"
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                      server.enabled ? "translate-x-4" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
