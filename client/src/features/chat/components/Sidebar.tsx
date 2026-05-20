@@ -219,13 +219,7 @@ const SidebarItem = memo(
               size={12}
               strokeWidth={2.5}
               className={`shrink-0 transition-all rotate-[-35deg] ${
-                item.itemType === "group"
-                  ? isActive
-                    ? "text-emerald-600"
-                    : "text-emerald-500"
-                  : isActive
-                    ? "text-black/30"
-                    : "text-slate-500/60"
+                isActive ? "text-emerald-600" : "text-emerald-500"
               }`}
             />
           )}

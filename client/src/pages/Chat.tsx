@@ -19,7 +19,6 @@ import { chatService } from "@/features/chat/services/chat.service";
 import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
-import Sidebar from "@/features/chat/components/Sidebar";
 
 /**
  * Chat Page Component
@@ -212,8 +211,7 @@ const Chat = () => {
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
-      <Sidebar />
+    <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
 
       <main className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
         isTemporaryChatActive

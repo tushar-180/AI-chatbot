@@ -3,6 +3,8 @@ import { Message, Chat } from "../models/Chat.model";
 import { User } from "../models/User.model";
 import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
+import { userService } from "./user.service";
+import { mcpClientService } from "./mcpClient.service";
 import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
 import {
   webSearchService,
@@ -13,6 +15,16 @@ import type { ChatMessage } from "../types/chat.types";
 import type { AIMessage, AIRole } from "./ai/types";
 import { parseMultimedia } from "../utils/chatHistory";
 import crypto from "crypto";
+
+const getEnabledMcpTools = async (userId: string) => {
+  const user = await userService.getUserByClerkId(userId);
+  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
+  const allTools = await mcpClientService.getActiveTools();
+
+  return allTools.filter(
+    (tool) => !disabledMcpServers.includes(tool._serverName),
+  );
+};
 
 export class GroupChatService {
   private static sanitizeAssistantResponse(content: string) {
@@ -315,7 +327,7 @@ export class GroupChatService {
           isThinking: true,
           webSearchEnabled,
         });
-        this.handleAiResponse(groupId, content, webSearchEnabled).catch(
+        this.handleAiResponse(groupId, content, webSearchEnabled, clerkId).catch(
           console.error,
         );
       }
@@ -328,6 +340,7 @@ export class GroupChatService {
     groupId: string,
     userContent: string,
     webSearchEnabled = false,
+    clerkId?: string,
   ) {
     const group = await GroupChat.findById(groupId);
     if (!group) return;
@@ -411,7 +424,7 @@ export class GroupChatService {
     }
 
     if (!targetProvider) {
-      targetProvider = "gemini:gemini-3.1-flash-lite-preview";
+      targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite-preview";
     }
 
     const cleanModelName = targetProvider.includes(":")
@@ -434,10 +447,13 @@ export class GroupChatService {
     });
 
     try {
+      const activeUserId = clerkId || group.creatorId;
+      const tools = await getEnabledMcpTools(activeUserId);
       const aiProvider = aiService.getProvider(targetProvider);
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
         activeStream.abortController.signal,
+        tools,
       );
 
       for await (const chunk of stream) {

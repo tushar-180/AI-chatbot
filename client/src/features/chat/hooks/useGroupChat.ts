@@ -20,6 +20,7 @@ export const useGroupChat = () => {
     updateGroupMembers,
     updateGroup,
     setLoading,
+    isAiThinking,
     setIsAiThinking,
     setIsWebSearching,
   } = useGroupStore();
@@ -353,6 +354,10 @@ export const useGroupChat = () => {
   const stopStream = async () => {
     if (!groupId) return;
 
+    // Immediately clear thinking/searching state so the stop button + indicator disappear at once
+    setIsAiThinking(false);
+    setIsWebSearching(false);
+
     // Immediately stop typewriter animation
     if (typewriterFrameRef.current !== null) {
       cancelAnimationFrame(typewriterFrameRef.current);
@@ -411,7 +416,8 @@ export const useGroupChat = () => {
     stopStream,
     sendTypingStatus,
     typingUsers,
-    isStreaming: groupMessages.some((m) => m.status === "streaming"),
+    isStreaming:
+      isAiThinking || groupMessages.some((m) => m.status === "streaming"),
     currentGroup: groups.find((g) => g._id === groupId),
   };
 };

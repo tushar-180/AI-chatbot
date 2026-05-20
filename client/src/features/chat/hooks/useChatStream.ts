@@ -382,7 +382,6 @@ export const useChatStream = (hookOptions?: {
 
       if (data.error) {
         const errorMessage = data.error;
-        toast.error(errorMessage);
         const key = resolvedChatId ?? initialKey;
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
@@ -541,7 +540,6 @@ export const useChatStream = (hookOptions?: {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -745,7 +743,6 @@ export const useChatStream = (hookOptions?: {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000); // 35s to allow server-side 30s timeout to trigger first
 
@@ -889,7 +886,6 @@ export const useChatStream = (hookOptions?: {
         return { ...current, [key]: next };
       });
 
-      toast.error(errorMessage);
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
@@ -1011,7 +1007,6 @@ export const useChatStream = (hookOptions?: {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -1073,7 +1068,6 @@ export const useChatStream = (hookOptions?: {
         return;
       }
       console.error("Error editing message", err);
-      toast.error(chatService.getChatErrorMessage(err));
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
@@ -1130,7 +1124,6 @@ export const useChatStream = (hookOptions?: {
       connectionTimeoutRef.current = setTimeout(() => {
         if (activeAbortControllerRef.current === abortController) {
           abortController.abort();
-          toast.error("Connection timed out. Please try again.");
         }
       }, 35000);
 
@@ -1186,7 +1179,6 @@ export const useChatStream = (hookOptions?: {
         return;
       }
       console.error("Error retrying message", err);
-      toast.error(chatService.getChatErrorMessage(err));
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;

@@ -10,6 +10,7 @@ import {
   ThumbsUp,
   ThumbsDown,
   Copy,
+  AlertCircle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -130,23 +131,7 @@ const MessageAvatar = ({
     ) : (
       <div className="flex h-full w-full items-center justify-center">
         {failed ? (
-          <div className="text-red-500">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-          </div>
+          <AlertCircle className="h-4 w-4 text-red-400" />
         ) : (
           <img
             src="/logo.png"
@@ -459,7 +444,7 @@ const MessageItem = ({
               isUser
                 ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
                 : isFailed
-                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-red-400"
+                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
                   : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
             }`}
             ref={contentRef}
@@ -515,13 +500,17 @@ const MessageItem = ({
               </div>
             ) : isFailed ? (
               <div className="flex flex-col gap-1">
-                <span className="font-semibold text-red-400/90">
-                  Server Error
+                <span className="font-semibold text-red-300">
+                  AI Response Failed
                 </span>
-                <span className="text-sm opacity-80">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={assistantMarkdownComponents}
+                >
                   {msg.content ||
-                    "AI failed to respond. Please try again later."}
-                </span>
+                    "The AI model failed to respond. Please try again."}
+                </ReactMarkdown>
               </div>
             ) : (
               <>
@@ -540,7 +529,9 @@ const MessageItem = ({
               </>
             )}
 
-            {/* Assistant Action Buttons (ChatGPT Style) */}
+            
+          </div>
+          {/* Assistant Action Buttons (ChatGPT Style) */}
             {!isUser && !isStreaming && (msg.content || isFailed) && (
               <div
                 className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
@@ -606,7 +597,6 @@ const MessageItem = ({
                 )}
               </div>
             )}
-          </div>
 
           {/* User Action Buttons (Copy & Edit) */}
           {isUser && !isEditing && (
