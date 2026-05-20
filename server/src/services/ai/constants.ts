@@ -20,7 +20,6 @@ export const AI_PROVIDERS = {
     id: "nvidia",
     models: [
       "nvidia/nemotron-3-super-120b-a12b",
-      "moonshotai/kimi-k2-instruct",
       "openai/gpt-oss-120b"
     ]
   },

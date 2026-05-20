@@ -20,6 +20,7 @@ export const sharedChatService = {
     const messagesSnapshot = originalChat.messages.map((msg: any) => ({
       role: msg.role,
       content: msg.content,
+      attachments: msg.attachments || [],
       createdAt: msg.createdAt,
     }));
 
@@ -65,6 +66,7 @@ export const sharedChatService = {
       messages: sharedChat.messages.map((msg: any) => ({
         role: msg.role,
         content: msg.content,
+        attachments: msg.attachments || [],
         createdAt: msg.createdAt,
       })),
     };
@@ -94,6 +96,7 @@ export const sharedChatService = {
         role: msg.role as any,
         userId,
         content: msg.content,
+        attachments: (msg.attachments as any) || [],
         status: "completed",
       });
     }

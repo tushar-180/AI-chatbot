@@ -9,6 +9,6 @@
     "skipLibCheck": true,
     "moduleResolution": "node",
     "types": ["node"],
-    "ignoreDeprecations": "5.0"
+    "ignoreDeprecations": "6.0"
   }
 }
