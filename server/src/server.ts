@@ -8,11 +8,14 @@ import { mcpClientService } from "./services/mcpClient.service";
 const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
-  mcpClientService.initialize().then(() => {
-    console.log("[MCP] Dynamic client service initialized.");
-  }).catch(err => {
-    console.error("[MCP] Initialization error:", err);
-  });
+  mcpClientService
+    .initialize()
+    .then(() => {
+      console.log("[MCP] Dynamic client service initialized.");
+    })
+    .catch((err) => {
+      console.error("[MCP] Initialization error:", err);
+    });
 
   app.listen(PORT, () => {
     console.log(`Server Running On Port ${PORT}`);
@@ -27,4 +30,3 @@ const handleShutdown = async () => {
 
 process.on("SIGINT", handleShutdown);
 process.on("SIGTERM", handleShutdown);
-
