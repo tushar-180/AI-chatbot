@@ -234,6 +234,21 @@ const McpAdminTab = () => {
     }
   };
 
+  const handleReconnectServer = async (name: string) => {
+    try {
+      setActionServerName(name);
+      await api.post(`/mcp/${name}/reconnect`);
+      toast.success(`Server "${name}" reconnected successfully`);
+      await fetchMcpData();
+    } catch (error) {
+      console.error("Failed to reconnect server:", error);
+      toast.error(getApiError(error, "Failed to reconnect server"));
+      await fetchMcpData();
+    } finally {
+      setActionServerName(null);
+    }
+  };
+
   const handleToggleExpand = (name: string) => {
     setExpandedServerName((current) => (current === name ? null : name));
   };
@@ -335,6 +350,7 @@ const McpAdminTab = () => {
                 isActionLoading={actionServerName === server.name}
                 onDelete={handleDeleteServer}
                 onEdit={handleEditServer}
+                onReconnect={handleReconnectServer}
                 onToggleEnv={handleToggleEnv}
                 onToggleExpand={handleToggleExpand}
                 onToggleServer={handleToggleServer}

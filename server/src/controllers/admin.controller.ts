@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { User } from "../models/User.model";
 import { Chat, Message } from "../models/Chat.model";
+import { AI_PROVIDERS } from "../services/ai/constants";
 
 const normalizeModelName = (modelName: string): string => {
   if (!modelName) return "None";
@@ -23,6 +24,19 @@ const normalizeModelName = (modelName: string): string => {
   return `${provider}:${cleanModel}`;
 };
 
+// Generate set of valid normalized model names from AI_PROVIDERS to filter out obsolete/deleted/temporary test models
+const getValidModelsSet = (): Set<string> => {
+  const set = new Set<string>();
+  Object.values(AI_PROVIDERS).forEach((provider) => {
+    provider.models.forEach((model) => {
+      set.add(normalizeModelName(`${provider.id}:${model}`));
+    });
+  });
+  return set;
+};
+
+const validModels = getValidModelsSet();
+
 export const adminController = {
   getStats: asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -31,8 +45,9 @@ export const adminController = {
       const totalChatsCount = await Chat.countDocuments();
       const totalMessagesCount = await Message.countDocuments();
 
-      // 1.5 Fetch global token counts
+      // 1.5 Fetch global token counts (from assistant messages only - they have accurate API-reported usage)
       const totalTokensResult = await Message.aggregate([
+        { $match: { role: "assistant" } },
         {
           $group: {
             _id: null,
@@ -53,19 +68,24 @@ export const adminController = {
           $group: {
             _id: "$model",
             count: { $sum: 1 },
-            tokens: { $sum: "$tokens.totalTokens" }
+            tokens: { $sum: "$tokens.totalTokens" },
+            promptTokens: { $sum: "$tokens.promptTokens" },
+            completionTokens: { $sum: "$tokens.completionTokens" }
           }
         },
       ]);
 
       // Normalize and group model usage counts & tokens in JS to prevent double-counting
-      const modelCountsMap = new Map<string, { count: number; tokens: number }>();
+      const modelCountsMap = new Map<string, { count: number; tokens: number; promptTokens: number; completionTokens: number }>();
       for (const item of globalModelUsage) {
         const normalized = normalizeModelName(item._id);
-        const current = modelCountsMap.get(normalized) || { count: 0, tokens: 0 };
+        if (!validModels.has(normalized)) continue; // Skip obsolete or non-existent test models
+        const current = modelCountsMap.get(normalized) || { count: 0, tokens: 0, promptTokens: 0, completionTokens: 0 };
         modelCountsMap.set(normalized, {
           count: current.count + item.count,
-          tokens: current.tokens + (item.tokens || 0)
+          tokens: current.tokens + (item.tokens || 0),
+          promptTokens: current.promptTokens + (item.promptTokens || 0),
+          completionTokens: current.completionTokens + (item.completionTokens || 0)
         });
       }
 
@@ -73,7 +93,9 @@ export const adminController = {
         .map(([model, info]) => ({
           model,
           count: info.count,
-          tokens: info.tokens
+          tokens: info.tokens,
+          promptTokens: info.promptTokens,
+          completionTokens: info.completionTokens
         }))
         .sort((a, b) => b.tokens - a.tokens); // Sort by total tokens used
 
@@ -97,6 +119,7 @@ export const adminController = {
       for (const item of userStats) {
         const userId = item._id.userId;
         const normalized = normalizeModelName(item._id.model);
+        if (!validModels.has(normalized)) continue; // Skip obsolete or non-existent test models
 
         if (!userModelCounts.has(userId)) {
           userModelCounts.set(userId, new Map<string, number>());
@@ -125,8 +148,9 @@ export const adminController = {
         });
       }
 
-      // 4.5 Aggregate token counts per user
+      // 4.5 Aggregate token counts per user (assistant messages only for accurate provider-reported usage)
       const userTokenStats = await Message.aggregate([
+        { $match: { role: "assistant" } },
         {
           $group: {
             _id: "$userId",

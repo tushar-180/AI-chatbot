@@ -182,4 +182,30 @@ export const mcpController = {
       res.status(500).json({ error: error.message || "Failed to get active tools" });
     }
   },
+
+  /**
+   * Force reconnect/restart of an MCP server.
+   */
+  async reconnectServer(req: Request, res: Response) {
+    try {
+      const { name } = req.params;
+
+      const server = await McpServer.findOne({ name });
+      if (!server) {
+        return res.status(404).json({ error: "Server not found." });
+      }
+
+      // Reconnect/start the connection
+      await mcpClientService.connect(server);
+
+      res.status(200).json({
+        message: "Server reconnected successfully",
+        server,
+        connected: mcpClientService.getConnectionState(server.name),
+      });
+    } catch (error: any) {
+      console.error("Error reconnecting MCP server:", error);
+      res.status(500).json({ error: error.message || "Failed to reconnect server" });
+    }
+  },
 };

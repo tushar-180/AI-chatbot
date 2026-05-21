@@ -7,7 +7,7 @@ import InputArea from "@/features/chat/components/InputArea";
 import SourcesSidebar from "@/features/chat/components/SourceSidebar";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
-import { useChatInput } from "@/features/chat/hooks/useChatInput";
+import { useChatInput, type Attachment } from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
@@ -68,7 +68,7 @@ const Chat = () => {
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
-    pendingAttachments?: any[];
+    pendingAttachments?: Attachment[];
     pendingWebSearch?: boolean;
     prefetchedChatId?: string;
     skipInitialFetch?: boolean;
@@ -84,6 +84,7 @@ const Chat = () => {
   const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedSources([]);
     setActiveSourceId(null);
   }, [currentChatId]);
@@ -111,7 +112,7 @@ const Chat = () => {
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [chatId, projectId]);
+  }, [chatId, projectId, currentChatId, setCurrentChat, setMessages, setIsNewChat]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -160,7 +161,11 @@ const Chat = () => {
 
   useEffect(() => {
     return () => {
-      if (useTemporaryChatStore.getState().isTemporaryChatActive) {
+      // Only disable temporary chat if navigating away from the chat feature entirely
+      if (
+        useTemporaryChatStore.getState().isTemporaryChatActive &&
+        !window.location.pathname.startsWith("/chat")
+      ) {
         useTemporaryChatStore.getState().setTemporaryChatActive(false);
         useTemporaryChatStore.getState().clearStore();
       }

@@ -9,20 +9,9 @@ import {
 import { ChevronDown, Code, Lightbulb, PenTool, Terminal, ShieldAlert } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
-import type { WebSource } from "../types/chat.types";
+import type { WebSource, Message } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  sources?: WebSource[];
-  metadata?: {
-    selection?: any;
-  };
-}
 
 const SUGGESTIONS = [
   {
