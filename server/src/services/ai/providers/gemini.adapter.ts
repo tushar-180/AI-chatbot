@@ -346,7 +346,7 @@ export class GeminiAdapter implements IAIService {
       .join("\n\n---\n\n");
 
     const geminiTools = this.mapMcpToolsToGemini(tools);
-    let latestUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
     let settleUsage: (
       usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
     ) => void = () => undefined;
@@ -397,12 +397,13 @@ export class GeminiAdapter implements IAIService {
                 return;
               }
 
-              latestUsage = adapter.mergeUsage(
-                latestUsage,
-                normalizeGeminiUsageMetadata(
-                  (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
-                ),
+              // Gemini reports cumulative usage per chunk, so take the latest value
+              const chunkUsage = normalizeGeminiUsageMetadata(
+                (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
               );
+              if (chunkUsage) {
+                totalUsage = chunkUsage;
+              }
 
               const text = chunk.text;
               if (text) {
@@ -497,13 +498,13 @@ export class GeminiAdapter implements IAIService {
                   adapter.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
               },
             });
-            latestUsage = adapter.mergeUsage(
-              latestUsage,
-              normalizeGeminiUsageMetadata(
+              const fallbackUsage = normalizeGeminiUsageMetadata(
                 (fallbackResponse as any).usageMetadata ??
                   (fallbackResponse as any).usage_metadata,
-              ),
-            );
+              );
+              if (fallbackUsage) {
+                totalUsage = fallbackUsage;
+              }
             const text =
               fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
               fallbackResponse?.text ||
@@ -517,7 +518,7 @@ export class GeminiAdapter implements IAIService {
 
           throw new AIServiceError(error.message, error.status || 500);
         } finally {
-          settleUsage(latestUsage);
+          settleUsage(totalUsage);
         }
       },
     };

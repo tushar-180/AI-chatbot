@@ -22,7 +22,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
   const isNewChat = useChatStore((state) => state.isNewChat);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const navigate = useNavigate();
-  const { activeProject, activeProjectId, setActiveProjectId, projectChats } = useProjectStore();
+  const {  activeProjectId, projectChats } = useProjectStore();
 
   const handleToggleTempChat = () => {
     const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
@@ -48,7 +48,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
-  const isInProject = !!activeProjectId && !!activeProject;
+ 
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712]">

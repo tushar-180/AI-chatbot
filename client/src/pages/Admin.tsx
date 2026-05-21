@@ -7,7 +7,7 @@ import {
   ArrowLeft,
   User as UserIcon,
   MessageSquare,
-  Sparkles,
+
   Search,
   ChevronUp,
   ChevronDown,
@@ -37,6 +37,8 @@ interface GlobalModelUse {
   model: string;
   count: number;
   tokens: number;
+  promptTokens: number;
+  completionTokens: number;
 }
 
 interface UserStat {
@@ -76,22 +78,24 @@ const getModelShortName = (model: string) => {
 // ==========================================
 interface ModelUsageListProps {
   usage: GlobalModelUse[];
-  totalTokens: number;
 }
 
-const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage, totalTokens }) => {
+const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
   const listData = useMemo(() => {
+    const activeTotalTokens = usage.reduce((sum, item) => sum + (item.tokens || 0), 0);
     return usage.map((item) => {
-      const percent = totalTokens > 0 ? (item.tokens / totalTokens) * 100 : 0;
+      const percent = activeTotalTokens > 0 ? (item.tokens / activeTotalTokens) * 100 : 0;
       return {
         name: getModelShortName(item.model),
         value: item.tokens,
+        promptTokens: item.promptTokens,
+        completionTokens: item.completionTokens,
         messages: item.count,
         fullName: item.model,
-        percent
+        percent: Math.min(percent, 100)
       };
     });
-  }, [usage, totalTokens]);
+  }, [usage]);
 
   const getModelBulletColor = (model: string) => {
     const m = model.toLowerCase();
@@ -140,11 +144,27 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage, totalTokens }) =
             </div>
           </div>
 
-          {/* Visual relative ratio bar */}
-          <div className="w-full h-1 bg-slate-800/40 rounded-full overflow-hidden">
+          {/* Per-model token breakdown */}
+          <div className="flex items-center gap-4 text-[10px] font-mono">
+            <span className="flex items-center gap-1.5 text-sky-400/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
+              Input: {(item.promptTokens || 0).toLocaleString()}
+            </span>
+            <span className="flex items-center gap-1.5 text-emerald-400/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Output: {(item.completionTokens || 0).toLocaleString()}
+            </span>
+          </div>
+
+          {/* Stacked ratio bar showing input vs output */}
+          <div className="w-full h-1.5 bg-slate-800/40 rounded-full overflow-hidden flex">
             <div
-              className={`h-full rounded-full bg-gradient-to-r ${getModelProgressColor(item.fullName)}`}
-              style={{ width: `${item.percent}%`, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }}
+              className="h-full bg-sky-500/80"
+              style={{ width: `${item.value > 0 ? (item.promptTokens / item.value) * 100 : 0}%`, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }}
+            />
+            <div
+              className="h-full bg-emerald-500/80"
+              style={{ width: `${item.value > 0 ? (item.completionTokens / item.value) * 100 : 0}%`, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }}
             />
           </div>
         </div>
@@ -168,6 +188,8 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
       name: getModelShortName(item.model),
       messages: item.count,
       tokens: item.tokens,
+      promptTokens: item.promptTokens,
+      completionTokens: item.completionTokens,
       fullName: item.model
     }));
   }, [usage]);
@@ -180,16 +202,22 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
         <div className="bg-slate-950/95 border border-white/10 backdrop-blur-md px-5 py-4 rounded-3xl shadow-2xl flex flex-col gap-1.5 animate-in fade-in leading-relaxed select-none">
           <p className="text-sm font-black text-white uppercase tracking-wider">{data.name}</p>
           <div className="h-[1px] w-full bg-white/5 my-0.5" />
-          <p className="text-xs text-sky-400 font-semibold font-sans flex items-center justify-between gap-4">
-            <span>Query Messages:</span>
+          <p className="text-xs text-slate-300 font-semibold font-sans flex items-center justify-between gap-4">
+            <span>Messages:</span>
             <span className="font-mono text-white font-bold">{data.messages.toLocaleString()}</span>
           </p>
-          <p className="text-xs text-emerald-400 font-semibold font-sans flex items-center justify-between gap-4">
-            <span>Token Volume:</span>
-            <span className="font-mono text-white font-bold">{data.tokens.toLocaleString()}</span>
+          <p className="text-xs text-sky-400 font-semibold font-sans flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input:</span>
+            <span className="font-mono text-white font-bold">{(data.promptTokens || 0).toLocaleString()}</span>
           </p>
-          <p className="text-[10px] text-slate-500 font-mono mt-0.5 uppercase tracking-wider text-center">
-            relative comparison index
+          <p className="text-xs text-emerald-400 font-semibold font-sans flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output:</span>
+            <span className="font-mono text-white font-bold">{(data.completionTokens || 0).toLocaleString()}</span>
+          </p>
+          <div className="h-[1px] w-full bg-white/5 my-0.5" />
+          <p className="text-xs text-purple-400 font-semibold font-sans flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total:</span>
+            <span className="font-mono text-white font-bold">{data.tokens.toLocaleString()}</span>
           </p>
         </div>
       );
@@ -520,11 +548,6 @@ const Admin: React.FC = () => {
     );
   }
 
-  const topModelItem =
-    stats.globalModelUsage.length > 0
-      ? [...stats.globalModelUsage].sort((a, b) => b.count - a.count)[0]
-      : null;
-  const topModel = topModelItem ? topModelItem.model : "N/A";
   const activeModelsCount = stats.globalModelUsage.length;
 
   return (
@@ -576,8 +599,9 @@ const Admin: React.FC = () => {
           </div>
         </div>
 
-        {/* Analytics Summary Cards (5 columns) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        {/* Analytics Summary Cards (6 columns) */}
+        {/* Analytics Summary Cards (4 columns) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Card 1: Users */}
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-indigo-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2">
@@ -621,35 +645,16 @@ const Admin: React.FC = () => {
           <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-purple-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2 min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Tokens</p>
-              <h3
-                className="text-2xl font-display font-bold text-white leading-none group-hover:text-purple-400 transition-colors truncate"
-                title={`Prompt: ${stats.totalPromptTokens?.toLocaleString()} | Completion: ${stats.totalCompletionTokens?.toLocaleString()}`}
-              >
-                {stats.totalTokens?.toLocaleString()}
+              <h3 className="text-2xl font-display font-bold text-white leading-none group-hover:text-purple-400 transition-colors">
+                {(stats.totalTokens || 0).toLocaleString()}
               </h3>
-              <p className="text-[9px] font-mono font-semibold text-slate-500 truncate">
-                P: {((stats.totalPromptTokens || 0) / 1000).toFixed(0)}k | C:{" "}
-                {((stats.totalCompletionTokens || 0) / 1000).toFixed(0)}k
-              </p>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[9px] font-mono text-sky-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>In: {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k</span>
+                <span className="text-[9px] font-mono text-emerald-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Out: {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k</span>
+              </div>
             </div>
             <div className="h-12 w-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0 group-hover:scale-110 transition-transform ml-2 shadow-inner border border-purple-500/10">
               <BarChart3 size={20} />
-            </div>
-          </div>
-
-          {/* Card 5: Top Model */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-amber-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
-            <div className="space-y-2 min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Global Top Model</p>
-              <h3
-                className="text-base font-display font-bold text-white leading-tight truncate group-hover:text-amber-400 transition-colors pr-2"
-                title={topModel}
-              >
-                {getModelShortName(topModel)}
-              </h3>
-            </div>
-            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-110 transition-transform shadow-inner border border-amber-500/10">
-              <Sparkles size={20} />
             </div>
           </div>
         </div>
@@ -729,7 +734,7 @@ const Admin: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                <ModelUsageList usage={stats.globalModelUsage} totalTokens={stats.totalTokens} />
+                <ModelUsageList usage={stats.globalModelUsage} />
               )}
             </div>
 
@@ -939,16 +944,19 @@ const Admin: React.FC = () => {
                             </div>
                           </td>
                           <td className="py-4 text-right pr-4">
-                            <span
-                              className="text-sm font-semibold text-white font-mono"
-                              title={`Prompt: ${u.promptTokens?.toLocaleString()} | Completion: ${u.completionTokens?.toLocaleString()}`}
-                            >
+                            <span className="text-sm font-semibold text-white font-mono">
                               {u.totalTokens?.toLocaleString() || 0}
                             </span>
-                            <p className="text-[9px] text-slate-500 font-mono mt-0.5">
-                              P: {((u.promptTokens || 0) / 1000).toFixed(1)}k | C:{" "}
-                              {((u.completionTokens || 0) / 1000).toFixed(1)}k
-                            </p>
+                            <div className="flex items-center justify-end gap-3 mt-1">
+                              <span className="text-[9px] text-sky-400/80 font-mono font-semibold flex items-center gap-1" title="Input tokens">
+                                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0"/>
+                                {((u.promptTokens || 0) / 1000).toFixed(1)}k
+                              </span>
+                              <span className="text-[9px] text-emerald-400/80 font-mono font-semibold flex items-center gap-1" title="Output tokens">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                                {((u.completionTokens || 0) / 1000).toFixed(1)}k
+                              </span>
+                            </div>
                           </td>
                           <td className="py-4 text-right">
                             <span
@@ -1016,9 +1024,21 @@ const Admin: React.FC = () => {
                     <span className="font-mono text-indigo-400 font-bold">{activeModelsCount} loaded</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold">Platform Token Weight</span>
-                    <span className="font-mono text-indigo-400 font-bold">
-                      {((stats.totalTokens || 0) / 1000).toFixed(1)}k tokens
+                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input Tokens</span>
+                    <span className="font-mono text-sky-400 font-bold">
+                      {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output Tokens</span>
+                    <span className="font-mono text-emerald-400 font-bold">
+                      {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
+                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total Tokens</span>
+                    <span className="font-mono text-purple-400 font-bold">
+                      {((stats.totalTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                 </div>

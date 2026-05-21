@@ -14,6 +14,11 @@ export type Message = {
         mimeType?: string;
         size?: number;
     }[];
+    tokens?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
     sources?: WebSource[];
     metadata?: {
         selection?: {

@@ -424,6 +424,9 @@ export class OpenAIAdapter implements IAIService {
           console.error("OpenAI Adapter Stream Error:", error);
           throw new AIServiceError(error.message, error.status || 500);
         } finally {
+          if (!latestUsage) {
+            console.warn(`[OpenAIAdapter] No usage data received from model ${adapter.model} during streaming — token counts will use estimation fallback`);
+          }
           settleUsage(latestUsage);
         }
       },

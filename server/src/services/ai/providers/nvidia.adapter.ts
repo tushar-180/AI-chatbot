@@ -244,6 +244,8 @@ export class NvidiaAdapter implements IAIService {
             loopCount++;
             hasToolCalls = false;
 
+            let streamOptions: { include_usage: boolean } | undefined = { include_usage: true };
+
             const stream = await adapter.openai.chat.completions.create(
               {
                 model: adapter.model,
@@ -253,10 +255,29 @@ export class NvidiaAdapter implements IAIService {
                 top_p: 0.7,
                 max_tokens: 4096,
                 stream: true,
-                stream_options: { include_usage: true },
+                ...(streamOptions ? { stream_options: streamOptions } : {}),
               },
               { signal },
-            );
+            ).catch(async (err: any) => {
+              // Some NIM models don't support stream_options — retry without it
+              if (err?.status === 400 || err?.message?.includes("stream_options")) {
+                console.warn(`[NvidiaAdapter] Model ${adapter.model} doesn't support stream_options, retrying without it`);
+                streamOptions = undefined;
+                return adapter.openai.chat.completions.create(
+                  {
+                    model: adapter.model,
+                    messages: finalMessages as any,
+                    ...(nvidiaTools ? { tools: nvidiaTools } : {}),
+                    temperature: 0.6,
+                    top_p: 0.7,
+                    max_tokens: 4096,
+                    stream: true,
+                  },
+                  { signal },
+                );
+              }
+              throw err;
+            });
 
             let accumulatedText = "";
             let activeToolCalls: any[] = [];
@@ -367,6 +388,9 @@ export class NvidiaAdapter implements IAIService {
 
           throw new AIServiceError(message, error.status);
         } finally {
+          if (!latestUsage) {
+            console.warn(`[NvidiaAdapter] No usage data received from model ${adapter.model} during streaming — token counts will use estimation fallback`);
+          }
           settleUsage(latestUsage);
         }
       },
