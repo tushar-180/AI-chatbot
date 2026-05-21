@@ -47,6 +47,8 @@ const messageSchema = new mongoose.Schema(
         name: String,
         mimeType: String,
         size: Number,
+        storagePath: String,
+        fileHash: String,
       },
     ],
     model: {
@@ -76,6 +78,12 @@ const chatSchema = new mongoose.Schema(
     userId: {
       type: String,
       required: true,
+      index: true,
+    },
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      default: null,
       index: true,
     },
     title: {
@@ -118,6 +126,8 @@ export type ChatMessage = {
     name?: string;
     mimeType?: string;
     size?: number;
+    storagePath: string;
+    fileHash: string;
   }[];
   model?: string;
   requestId?: string;

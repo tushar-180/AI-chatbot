@@ -1,8 +1,9 @@
 import { memo } from "react";
 import { UserButton } from "@clerk/react";
-import { Menu, Share, LogOut, ShieldAlert, Ghost } from "lucide-react";
+import { Menu, Share, Ghost, ChevronLeft } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
+import { useProjectStore } from "@/features/chat/store/useProjectStore";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ShareModal from "./ShareModal";
@@ -13,7 +14,7 @@ interface ChatHeaderProps {
   chatTitle?: string;
 }
 
-const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) => {
+const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) => {
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const chats = useChatStore((state) => state.chats);
   const isStreaming = useChatStore((state) => state.isStreaming);
@@ -21,6 +22,7 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
   const isNewChat = useChatStore((state) => state.isNewChat);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const navigate = useNavigate();
+  const { activeProjectId, projectChats } = useProjectStore();
 
   const handleToggleTempChat = () => {
     const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
@@ -41,13 +43,13 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
     navigate("/chat");
   };
 
-  const currentChat = chats.find((chat) => chat._id === currentChatId);
+  const currentChat = chats.find((chat) => chat._id === currentChatId) || projectChats.find((chat) => chat._id === currentChatId);
   chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712]">
+    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712] not-selectable">
       <div className="mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Left Section */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -58,7 +60,28 @@ const ChatHeader = ({ currentChatId, onMenuClick ,chatTitle}: ChatHeaderProps) =
             <Menu size={16} />
           </button>
 
+          {/* Back button — navigates to project dashboard or global new chat */}
+          {currentChatId && (
+            <button
+              onClick={() => {
+                if (activeProjectId) {
+                  navigate(`/projects/${activeProjectId}`);
+                } else {
+                  useChatStore.getState().setCurrentChat(null);
+                  useChatStore.getState().setMessages([]);
+                  useChatStore.getState().setIsNewChat(true);
+                  navigate("/chat");
+                }
+              }}
+              className="hidden md:flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+              title={activeProjectId ? "Back to project" : "Back to new chat"}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
+
           <div className="flex items-center gap-3 min-w-0">
+
             <h1 className="font-sans text-[14px] font-medium tracking-tight text-white/90 truncate">
               {chatTitle}
             </h1>

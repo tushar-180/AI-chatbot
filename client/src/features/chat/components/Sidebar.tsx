@@ -15,6 +15,7 @@ import {
   MoreVertical,
   ChevronDown,
   ChevronUp,
+  Folder,
   Image as ImageIcon,
   Sparkles,
   Share,
@@ -57,6 +58,7 @@ const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
 const SearchModal = lazy(() => import("./SearchModal"));
+const MoveToProjectModal = lazy(() => import("./MoveToProjectModal"));
 
 /**
  * Sidebar Component
@@ -83,6 +85,7 @@ interface ItemProps {
   onPin: (id: string) => void;
   onUnpin: (id: string) => void;
   onToggleSelect: (id: string) => void;
+  onMoveToProject?: (id: string) => void;
   isPinned: boolean;
   isArchived: boolean;
 }
@@ -101,6 +104,7 @@ const SidebarItem = memo(
     onPin,
     onUnpin,
     onToggleSelect,
+    onMoveToProject,
     isPinned,
     isArchived,
   }: ItemProps) => {
@@ -118,6 +122,8 @@ const SidebarItem = memo(
     const itemRef = useRef<HTMLDivElement>(null);
     const [openUpwards, setOpenUpwards] = useState(false);
     const menuButtonRef = useRef<HTMLDivElement>(null);
+
+  
 
     const handleStartEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -170,7 +176,8 @@ const SidebarItem = memo(
         let spaceBelow = window.innerHeight - rect.bottom;
 
         // Check if there's a scroll container clipping the menu
-        const scrollContainer = menuButtonRef.current.closest(".overflow-y-auto");
+        const scrollContainer =
+          menuButtonRef.current.closest(".overflow-y-auto");
         if (scrollContainer) {
           const containerRect = scrollContainer.getBoundingClientRect();
           const containerSpaceBelow = containerRect.bottom - rect.bottom;
@@ -192,7 +199,7 @@ const SidebarItem = memo(
             onSelect(item);
           }
         }}
-        className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
+        className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border not-selectable ${
           isActive
             ? "bg-white text-black border-white shadow-[0_15px_35px_-5px_rgba(255,255,255,0.15)] scale-[1.02] z-10"
             : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
@@ -256,8 +263,7 @@ const SidebarItem = memo(
                   isActive ? "text-emerald-600" : "text-emerald-500/50"
                 }
               />
-            )
-          )}
+            ))}
 
           {isEditing ? (
             <input
@@ -368,6 +374,18 @@ const SidebarItem = memo(
                         >
                           <Edit2 size={12} />
                           <span>Rename</span>
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onMoveToProject) onMoveToProject(item._id);
+                            setShowMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                        >
+                          <Folder size={12} />
+                          <span>Move to Project</span>
                         </button>
 
                         {isArchived ? (
@@ -535,14 +553,27 @@ const SidebarItem = memo(
 );
 
 const Sidebar = () => {
-  const { chatId: urlChatId, groupId: urlGroupId } = useParams<{ chatId?: string; groupId?: string }>();
+  const { chatId: urlChatId, groupId: urlGroupId } = useParams<{
+    chatId?: string;
+    groupId?: string;
+  }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId, isNewChat } =
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
     useChatStore();
-  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
-  const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
-  const { groups, setGroups, currentGroupId, setCurrentGroup, removeGroup, updateGroup } =
-    useGroupStore();
+  const isTemporaryChatActive = useTemporaryChatStore(
+    (state) => state.isTemporaryChatActive,
+  );
+  const clearTemporaryChatStore = useTemporaryChatStore(
+    (state) => state.clearStore,
+  );
+  const {
+    groups,
+    setGroups,
+    currentGroupId,
+    setCurrentGroup,
+    removeGroup,
+    updateGroup,
+  } = useGroupStore();
   const { user } = useUser();
   const navigate = useNavigate();
   const {
@@ -563,6 +594,10 @@ const Sidebar = () => {
     viewingArchived,
   } = useChatList({ shouldFetch: true });
 
+  const [moveProjectChatId, setMoveProjectChatId] = useState<string | null>(
+    null,
+  );
+
   const chatListScrollRef = useRef<HTMLDivElement>(null);
   const fetchMoreChatsRef = useRef(fetchMoreChats);
   const observer = useRef<IntersectionObserver | null>(null);
@@ -571,28 +606,31 @@ const Sidebar = () => {
     fetchMoreChatsRef.current = fetchMoreChats;
   }, [fetchMoreChats]);
 
-  const observerTargetRef = useCallback((node: HTMLDivElement | null) => {
-    if (observer.current) {
-      observer.current.disconnect();
-    }
+  const observerTargetRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observer.current) {
+        observer.current.disconnect();
+      }
 
-    if (!node || !hasMore) return;
+      if (!node || !hasMore) return;
 
-    observer.current = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          fetchMoreChatsRef.current();
-        }
-      },
-      {
-        root: chatListScrollRef.current,
-        threshold: 0,
-        rootMargin: "100px",
-      },
-    );
+      observer.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasMore) {
+            fetchMoreChatsRef.current();
+          }
+        },
+        {
+          root: chatListScrollRef.current,
+          threshold: 0,
+          rootMargin: "100px",
+        },
+      );
 
-    observer.current.observe(node);
-  }, [hasMore]);
+      observer.current.observe(node);
+    },
+    [hasMore],
+  );
 
   const [showRecent, setShowRecent] = useState(true);
   const [deleteConfig, setDeleteConfig] = useState<{
@@ -688,7 +726,9 @@ const Sidebar = () => {
   };
 
   const activeChatId = urlChatId || currentChatId;
-  const isSearchNavigation = new URLSearchParams(location.search).has("highlight");
+  const isSearchNavigation = new URLSearchParams(location.search).has(
+    "highlight",
+  );
   const isStreamingActiveChat = Boolean(
     activeChatId && isStreaming && streamingChatId === activeChatId,
   );
@@ -715,7 +755,6 @@ const Sidebar = () => {
       });
   }, [activeChatId, chats, shouldPromoteActiveChat, viewingArchived]);
 
-
   // Merge and sort chats and groups
   const unifiedList = useMemo(() => {
     const combined: UnifiedItem[] = [
@@ -726,15 +765,17 @@ const Sidebar = () => {
         itemType: "chat" as const,
         isPinned: c.isPinned,
       })),
-      ...(!viewingArchived ? groups.map((g) => ({
-        _id: g._id,
-        title: g.title,
-        updatedAt: g.updatedAt || DEFAULT_EPOCH,
-        itemType: "group" as const,
-        isPinned: g.isPinned || false,
-      })) : []),
+      ...(!viewingArchived
+        ? groups.map((g) => ({
+            _id: g._id,
+            title: g.title,
+            updatedAt: g.updatedAt || DEFAULT_EPOCH,
+            itemType: "group" as const,
+            isPinned: g.isPinned || false,
+          }))
+        : []),
     ];
-    
+
     return combined.sort((a, b) => {
       // 1. Pinned items stay first.
       if (a.isPinned && !b.isPinned) return -1;
@@ -751,7 +792,13 @@ const Sidebar = () => {
       const dateB = new Date(b.updatedAt).getTime();
       return dateB - dateA;
     });
-  }, [activeChatId, filteredChats, groups, shouldPromoteActiveChat, viewingArchived]);
+  }, [
+    activeChatId,
+    filteredChats,
+    groups,
+    shouldPromoteActiveChat,
+    viewingArchived,
+  ]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -826,7 +873,7 @@ const Sidebar = () => {
 
     const timer = setTimeout(() => {
       const activeElement = chatListScrollRef.current?.querySelector(
-        `[data-chat-id="${activeId}"]`
+        `[data-chat-id="${activeId}"]`,
       );
       if (activeElement) {
         activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -835,8 +882,6 @@ const Sidebar = () => {
 
     return () => clearTimeout(timer);
   }, [urlChatId, urlGroupId, chats.length, groups.length]);
-
-
 
   return (
     <>
@@ -850,229 +895,261 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
+        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-3 group text-white">
-            <img
-              src="/logo.png"
-              alt="Velora Logo"
-              className="h-6 w-6 object-contain"
-            />
-            <h2 className="font-display text-base font-bold tracking-tight text-white leading-none">
-              Velora
-            </h2>
+        <>
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-3 group text-white">
+              <img
+                src="/logo.png"
+                alt="Velora Logo"
+                className="h-6 w-6 object-contain"
+              />
+              <h2 className="font-display text-base font-bold tracking-tight text-white leading-none">
+                Velora
+              </h2>
+            </div>
+
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white md:hidden"
+            >
+              <X size={16} />
+            </button>
           </div>
 
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white md:hidden"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => {
-              if (isTemporaryChatActive) {
-                useTemporaryChatStore.getState().setTemporaryChatActive(false);
-                clearTemporaryChatStore();
-              }
-              createChat();
-            }}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
-          >
-            <Plus size={16} strokeWidth={3} />
-            <span>New Chat</span>
-          </button>
-
-          <button
-            onClick={() => setGalleryOpen(true)}
-            className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 px-4 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10"
-          >
-            <ImageIcon size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" />
-            <span>Gallery</span>
-          </button>
-        </div>
-
-        <div className="px-2">
-          <button
-            onClick={() => setSearchModalOpen(true)}
-            className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
-          >
-            <Search size={14} className="mr-3" />
-            <span>Search conversations...</span>
-            <div className="ml-auto flex items-center gap-1 opacity-40">
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
-                ⌘
-              </kbd>
-              <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
-                K
-              </kbd>
-            </div>
-          </button>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-1">
-          <div className="flex items-center justify-between px-2 pb-2">
-            <div
-              onClick={() => setShowRecent((prev) => !prev)}
-              className="flex items-center gap-2 cursor-pointer group"
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => {
+                if (isTemporaryChatActive) {
+                  useTemporaryChatStore
+                    .getState()
+                    .setTemporaryChatActive(false);
+                  clearTemporaryChatStore();
+                }
+                createChat();
+              }}
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
             >
-              <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
-                {viewingArchived ? "Archived Chats" : "Session History"}
-              </span>
-              <span className="text-slate-700 text-xs group-hover:text-white transition">
-                {showRecent ? (
-                  <ChevronUp size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-              </span>
-            </div>
+              <Plus size={16} strokeWidth={3} />
+              <span>New Chat</span>
+            </button>
 
-            {filteredChats.length > 0 && showRecent && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setGalleryOpen(true)}
+                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
+              >
+                <ImageIcon
+                  size={14}
+                  className="text-emerald-400 group-hover:scale-110 transition-transform"
+                />
+                <span>Gallery</span>
+              </button>
+
               <button
                 onClick={() => {
-                  if (isSelectionMode) {
-                    setIsSelectionMode(false);
-                    setSelectedIds(new Set());
-                  } else {
-                    setIsSelectionMode(true);
-                  }
+                  setSidebarOpen(false);
+                  navigate("/projects");
                 }}
-                className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
-                  isSelectionMode
-                    ? "bg-emerald-500/10 text-emerald-400"
-                    : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
-                }`}
-                title={isSelectionMode ? "Exit Selection" : "Bulk Actions"}
+                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
               >
-                {isSelectionMode ? <X size={14} /> : <ListChecks size={14} />}
+                <Folder
+                  size={14}
+                  className="text-emerald-400 group-hover:scale-110 transition-transform"
+                />
+                <span>Projects</span>
               </button>
-            )}
+            </div>
           </div>
 
-          {isSelectionMode && showRecent && (
-            <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
+          <div className="px-2">
+            <button
+              onClick={() => setSearchModalOpen(true)}
+              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
+            >
+              <Search size={14} className="mr-3" />
+              <span>Search conversations...</span>
+              <div className="ml-auto flex items-center gap-1 opacity-40">
+                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                  ⌘
+                </kbd>
+                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                  K
+                </kbd>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-1">
+            <div className="flex items-center justify-between px-2 pb-2">
+              <div
+                onClick={() => setShowRecent((prev) => !prev)}
+                className="flex items-center gap-2 cursor-pointer group"
               >
-                <div
-                  className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
-                    selectedIds.size === filteredChats.length &&
-                    filteredChats.length > 0
-                      ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                      : "border-emerald-500/30 bg-transparent"
-                  }`}
-                >
-                  {selectedIds.size === filteredChats.length &&
-                    filteredChats.length > 0 && (
-                      <Check size={10} strokeWidth={4} />
-                    )}
-                </div>
-                <span>All</span>
-              </button>
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
+                  {viewingArchived ? "Archived Chats" : "Session History"}
+                </span>
+                <span className="text-slate-700 text-xs group-hover:text-white transition">
+                  {showRecent ? (
+                    <ChevronUp size={14} />
+                  ) : (
+                    <ChevronDown size={14} />
+                  )}
+                </span>
+              </div>
 
-              <div className="flex items-center gap-3">
-                {selectedIds.size > 0 && (
-                  <button
-                    onClick={handleBulkDelete}
-                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
-                  >
-                    <Trash2 size={12} />
-                    <span>Delete ({selectedIds.size})</span>
-                  </button>
-                )}
-
+              {filteredChats.length > 0 && showRecent && (
                 <button
                   onClick={() => {
-                    setIsSelectionMode(false);
-                    setSelectedIds(new Set());
+                    if (isSelectionMode) {
+                      setIsSelectionMode(false);
+                      setSelectedIds(new Set());
+                    } else {
+                      setIsSelectionMode(true);
+                    }
                   }}
-                  className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
+                  className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
+                    isSelectionMode
+                      ? "bg-emerald-500/10 text-emerald-400"
+                      : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
+                  }`}
+                  title={isSelectionMode ? "Exit Selection" : "Bulk Actions"}
                 >
-                  Cancel
+                  {isSelectionMode ? <X size={14} /> : <ListChecks size={14} />}
                 </button>
-              </div>
+              )}
             </div>
-          )}
 
-          {showRecent && (
-            <div
-              ref={chatListScrollRef}
-              className="min-h-0 flex-1 overflow-y-auto pr-2"
-            >
-              <div className="flex flex-col gap-3">
-                {unifiedList.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
-                      Empty
-                    </p>
+            {isSelectionMode && showRecent && (
+              <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                <button
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
+                >
+                  <div
+                    className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
+                      selectedIds.size === filteredChats.length &&
+                      filteredChats.length > 0
+                        ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                        : "border-emerald-500/30 bg-transparent"
+                    }`}
+                  >
+                    {selectedIds.size === filteredChats.length &&
+                      filteredChats.length > 0 && (
+                        <Check size={10} strokeWidth={4} />
+                      )}
                   </div>
-                ) : (
-                  unifiedList.map((item) => {
-                    const chat = chats.find((c) => c._id === item._id);
-                    const group = groups.find((g) => g._id === item._id);
-                    const isPinned = item.itemType === "chat"
-                      ? (chat?.isPinned || false)
-                      : (group?.isPinned || false);
-                    const isArchived = item.itemType === "chat"
-                      ? (chat?.isArchived || false)
-                      : false;
+                  <span>All</span>
+                </button>
 
-                    return (
-                      <SidebarItem
-                        key={item._id}
-                        item={item}
-                        isActive={
-                          item.itemType === "chat"
-                            ? currentChatId === item._id
-                            : urlGroupId === item._id
-                        }
-                        isSelectionMode={isSelectionMode}
-                        isSelected={selectedIds.has(item._id)}
-                        onSelect={(target) => {
-                          if (target.itemType === "chat") {
-                            selectChat(target._id);
-                          } else {
-                            setCurrentGroup(target._id);
-                            setSidebarOpen(false);
-                            navigate(`/group/${target._id}`);
+                <div className="flex items-center gap-3">
+                  {selectedIds.size > 0 && (
+                    <button
+                      onClick={handleBulkDelete}
+                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
+                    >
+                      <Trash2 size={12} />
+                      <span>Delete ({selectedIds.size})</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setIsSelectionMode(false);
+                      setSelectedIds(new Set());
+                    }}
+                    className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {showRecent && (
+              <div
+                ref={chatListScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto pr-2"
+              >
+                <div className="flex flex-col gap-3">
+                  {unifiedList.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
+                        Empty
+                      </p>
+                    </div>
+                  ) : (
+                    unifiedList.map((item) => {
+                      const chat = chats.find((c) => c._id === item._id);
+                      const group = groups.find((g) => g._id === item._id);
+                      const isPinned =
+                        item.itemType === "chat"
+                          ? chat?.isPinned || false
+                          : group?.isPinned || false;
+                      const isArchived =
+                        item.itemType === "chat"
+                          ? chat?.isArchived || false
+                          : false;
+
+                      return (
+                        <SidebarItem
+                          key={item._id}
+                          item={item}
+                          isActive={
+                            item.itemType === "chat"
+                              ? currentChatId === item._id
+                              : urlGroupId === item._id
                           }
-                        }}
-                        onDelete={(id, type) => setDeleteConfig({ id, type })}
-                        onRename={(id, title) => handleRenameItem(id, title, item.itemType)}
-                        onArchive={archiveChat}
-                        onUnarchive={unarchiveChat}
-                        onPin={(id) => handlePinItem(id, item.itemType)}
-                        onUnpin={(id) => handleUnpinItem(id, item.itemType)}
-                        onToggleSelect={toggleSelect}
-                        isPinned={isPinned}
-                        isArchived={isArchived}
-                      />
-                    );
-                  })
-                )}
+                          isSelectionMode={isSelectionMode}
+                          isSelected={selectedIds.has(item._id)}
+                          onSelect={(target) => {
+                            if (target.itemType === "chat") {
+                              selectChat(target._id);
+                            } else {
+                              setCurrentGroup(target._id);
+                              setSidebarOpen(false);
+                              navigate(`/group/${target._id}`);
+                            }
+                          }}
+                          onDelete={(id, type) => setDeleteConfig({ id, type })}
+                          onRename={(id, title) =>
+                            handleRenameItem(id, title, item.itemType)
+                          }
+                          onMoveToProject={
+                            item.itemType === "chat"
+                              ? setMoveProjectChatId
+                              : undefined
+                          }
+                          onArchive={archiveChat}
+                          onUnarchive={unarchiveChat}
+                          onPin={(id) => handlePinItem(id, item.itemType)}
+                          onUnpin={(id) => handleUnpinItem(id, item.itemType)}
+                          onToggleSelect={toggleSelect}
+                          isPinned={isPinned}
+                          isArchived={isArchived}
+                        />
+                      );
+                    })
+                  )}
 
-                {/* Intersection Observer Sentinel */}
-                {hasMore && (
-                  <div ref={observerTargetRef} className="h-4 w-full mt-2" />
-                )}
+                  {/* Intersection Observer Sentinel */}
+                  {hasMore && (
+                    <div ref={observerTargetRef} className="h-4 w-full mt-2" />
+                  )}
 
-                {hasMore && loading && (
-                  <div className="flex justify-center p-4">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                  </div>
-                )}
+                  {hasMore && loading && (
+                    <div className="flex justify-center p-4">
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
 
         {/* Profile Section */}
         <div className="mt-auto pt-3 border-t border-white/5 relative">
@@ -1146,7 +1223,6 @@ const Sidebar = () => {
                 <User size={16} className="text-slate-400" />
                 <span>Profile</span>
               </DropdownMenuItem>
-
 
               <DropdownMenuItem
                 onClick={() => {
@@ -1239,6 +1315,41 @@ const Sidebar = () => {
         <SearchModal
           isOpen={searchModalOpen}
           onClose={() => setSearchModalOpen(false)}
+        />
+
+        <MoveToProjectModal
+          isOpen={!!moveProjectChatId}
+          onClose={() => setMoveProjectChatId(null)}
+          onMove={async (projectId) => {
+            if (!moveProjectChatId) return;
+
+            try {
+              const chatId = moveProjectChatId;
+              await api.patch(`/chat/${chatId}/move`, {
+                projectId,
+              });
+
+              // Instantly remove it from the sidebar
+              useChatStore.getState().removeChat(chatId);
+              
+              if (currentChatId === chatId) {
+                useChatStore.getState().setCurrentChat(null);
+                useChatStore.getState().setMessages([]);
+              }
+
+              toast.success("Chat moved to project");
+
+              // remove modal
+              setMoveProjectChatId(null);
+
+              // navigate to project chat route
+              navigate(`/projects/${projectId}/chat/${chatId}`);
+
+            } catch (error) {
+              console.error(error);
+              toast.error("Failed to move chat");
+            }
+          }}
         />
       </Suspense>
     </>

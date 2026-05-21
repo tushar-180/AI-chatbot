@@ -13,6 +13,7 @@ import { groupChatRoutes } from "./routes/groupChat.routes";
 import { GroupChatController } from "./controllers/groupChat.controller";
 import mcpRoutes from "./routes/mcp.routes";
 import temporaryChatRoutes from "./routes/temporaryChat.routes";
+import projectRoutes from "./routes/project.routes";
 import morgan from "morgan";
 import { errorHandler } from "./middleware/error.middleware";
 import { requireAuth } from "./middleware/auth.middleware";
@@ -58,6 +59,8 @@ app.get("/api/ping", (req, res) => {
 // Routes
 app.use("/api/group", groupChatRoutes);
 app.use("/api/chat", requireAuth, chatRoutes);
+app.use("/api/chats", requireAuth, chatRoutes);
+app.use("/api/projects", requireAuth, projectRoutes);
 app.use("/api/temporary-chat", requireAuth, temporaryChatRoutes);
 app.use("/api/ai", requireAuth, aiRoutes);
 app.use("/api/user", requireAuth, userRoutes);

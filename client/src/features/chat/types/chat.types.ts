@@ -27,6 +27,7 @@ export type Chat = {
     isPublic?: boolean;
     isArchived?: boolean;
     isPinned?: boolean;
+    projectId?: string | null;
     updatedAt?: string;
 };
 export type StreamEventPayload = {
@@ -51,9 +52,9 @@ export type WebSource = {
 }
 
 export interface Attachment {
-  url?: string;
-  name?: string;
-  mimeType?: string;
-  size?: number;
-  isDocument?: boolean;   // ← add this line
+    url?: string;
+    name?: string;
+    mimeType?: string;
+    size?: number;
+    isDocument?: boolean;
 }

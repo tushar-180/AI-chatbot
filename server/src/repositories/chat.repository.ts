@@ -3,12 +3,18 @@ import type { ChatMessage } from "../types/chat.types";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
-    return await Chat.findByIdAndUpdate(chatId, {
+    const chat = await Chat.findByIdAndUpdate(chatId, {
       $set: { updatedAt: new Date() },
-    });
+    }, { new: true });
+
+    if (chat && chat.projectId) {
+      const { projectRepository } = require("./project.repository");
+      await projectRepository.touchProject(chat.projectId.toString());
+    }
+    return chat;
   },
 
-  create(data: { userId: string; title: string }) {
+  create(data: { userId: string; title: string; projectId?: string }) {
     return new Chat(data);
   },
 
@@ -48,8 +54,8 @@ export const chatRepository = {
   ) {
     const skip = (page - 1) * limit;
     const query = isArchived
-      ? { userId, isArchived: true }
-      : { userId, isArchived: { $ne: true } };
+      ? { userId, isArchived: true, $or: [{ projectId: null }, { projectId: { $exists: false } }] }
+      : { userId, isArchived: { $ne: true }, $or: [{ projectId: null }, { projectId: { $exists: false } }] };
 
     return Chat.find(query)
       .select("-messages -legacyMessages")
@@ -65,17 +71,17 @@ export const chatRepository = {
         userId,
         title: { $regex: query, $options: "i" }
       })
-      .select("-messages -legacyMessages")
-      .limit(10)
-      .lean();
+        .select("-messages -legacyMessages")
+        .limit(10)
+        .lean();
 
       // Second, search in messages content
       const messageResults = await Message.find({
         userId,
         content: { $regex: query, $options: "i" }
       })
-      .limit(20)
-      .lean();
+        .limit(20)
+        .lean();
 
       const resultsMap = new Map<string, any>();
 
@@ -92,7 +98,7 @@ export const chatRepository = {
       for (const msg of messageResults) {
         const chatId = String(msg.chatId);
         const existing = resultsMap.get(chatId);
-        
+
         const content = msg.content || "";
         const index = content.toLowerCase().indexOf(query.toLowerCase());
         const start = Math.max(0, index - 40);
@@ -114,13 +120,13 @@ export const chatRepository = {
         }
       }
 
-      const finalResults = Array.from(resultsMap.values()).sort((a, b) => 
+      const finalResults = Array.from(resultsMap.values()).sort((a, b) =>
         new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf()
       );
 
       return finalResults;
 
-     
+
     } catch (err) {
       console.error("Search failed:", err);
       return [];
@@ -141,20 +147,25 @@ export const chatRepository = {
       userId: messageData.userId,
       ...messageData,
     });
-    
+
     if (messageData.tokens) {
-      await Chat.findByIdAndUpdate(chatId, {
+      const chat = await Chat.findByIdAndUpdate(chatId, {
         $inc: {
           "tokens.promptTokens": messageData.tokens.promptTokens || 0,
           "tokens.completionTokens": messageData.tokens.completionTokens || 0,
           "tokens.totalTokens": messageData.tokens.totalTokens || 0,
         },
         $set: { updatedAt: new Date() },
-      });
+      }, { new: true });
+
+      if (chat && chat.projectId) {
+        const { projectRepository } = require("./project.repository");
+        await projectRepository.touchProject(chat.projectId.toString());
+      }
     } else {
       await this.touchChat(chatId);
     }
-    
+
     return message;
   },
 
@@ -174,14 +185,19 @@ export const chatRepository = {
 
     if (message?.chatId) {
       if (updateData.tokens) {
-        await Chat.findByIdAndUpdate(String(message.chatId), {
+        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
             "tokens.promptTokens": updateData.tokens.promptTokens || 0,
             "tokens.completionTokens": updateData.tokens.completionTokens || 0,
             "tokens.totalTokens": updateData.tokens.totalTokens || 0,
           },
           $set: { updatedAt: new Date() },
-        });
+        }, { new: true });
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
       } else {
         await this.touchChat(String(message.chatId));
       }
@@ -207,19 +223,24 @@ export const chatRepository = {
       { chatId, requestId },
       updateData,
       {
-      returnDocument: "after",
+        returnDocument: "after",
       },
     );
     if (message?.chatId) {
       if (updateData.tokens) {
-        await Chat.findByIdAndUpdate(String(message.chatId), {
+        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
             "tokens.promptTokens": updateData.tokens.promptTokens || 0,
             "tokens.completionTokens": updateData.tokens.completionTokens || 0,
             "tokens.totalTokens": updateData.tokens.totalTokens || 0,
           },
           $set: { updatedAt: new Date() },
-        });
+        }, { new: true });
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
       } else {
         await this.touchChat(String(message.chatId));
       }
@@ -255,7 +276,7 @@ export const chatRepository = {
     if (!chat) return null;
 
     const messages = await Message.find({ chatId: chat._id }).sort({ createdAt: 1 });
-    
+
     const formattedMessages = messages.map((msg) => ({
       ...msg.toObject(),
       id: msg._id.toString(),
@@ -297,4 +318,56 @@ export const chatRepository = {
       { new: true }
     );
   },
+
+  async findAttachmentByHash(
+    userId: string,
+    fileHash: string
+  ): Promise<string | null> {   // return the storagePath directly or null
+    const message = await Message.findOne(
+      {
+        userId,
+        'attachments.fileHash': fileHash,
+        'attachments.storagePath': { $exists: true, $ne: '' },
+      },
+      { 'attachments.$': 1 }
+    )
+      .lean()
+      .exec();
+
+    if (!message) return null;
+
+    // message.attachments is an array with exactly one matching element
+    const matchedAtt = (message as any).attachments?.[0];
+    if (!matchedAtt || !matchedAtt.storagePath) return null;
+
+    return matchedAtt.storagePath as string;
+  },
+
+  /**
+ * Return an array of unique storage paths for all attachments in messages of a chat.
+ */
+  async getStoragePathsForChat(chatId: string): Promise<string[]> {
+    const messages = await Message.find({
+      chatId,
+      'attachments.storagePath': { $exists: true, $ne: '' },
+    }, { 'attachments.storagePath': 1 })
+      .lean()
+      .exec();
+
+    const paths = new Set<string>();
+    for (const msg of messages) {
+      for (const att of (msg as any).attachments || []) {
+        if (att.storagePath) paths.add(att.storagePath);
+      }
+    }
+    return Array.from(paths);
+  },
+
+  /**
+   * Delete all messages belonging to a chat.
+   */
+  async deleteMessagesByChatId(chatId: string): Promise<void> {
+    await Message.deleteMany({ chatId });
+  },
 };
+

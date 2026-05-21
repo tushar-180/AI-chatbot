@@ -59,4 +59,12 @@ export const supabaseStorageService = {
             throw new Error(`File deletion failed: ${error.message}`);
         }
     },
+
+    async createSignedUrl(filePath: string, expiresIn = 60 * 60 * 24): Promise<string> {
+        const { data, error } = await supabaseAdmin.storage
+            .from(BUCKET_NAME)
+            .createSignedUrl(filePath, expiresIn);
+        if (error) throw new Error(`Failed to create signed URL: ${error.message}`);
+        return data.signedUrl;
+    },
 };

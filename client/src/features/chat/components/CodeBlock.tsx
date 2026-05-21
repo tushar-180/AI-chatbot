@@ -102,12 +102,21 @@ const PreviewOverlay = ({
   }, [onClose]);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(localCode);
-    setCopied(true);
-    toast.success("Code copied to clipboard!");
-    setTimeout(() => setCopied(false), 2000);
+    // Give the browser a microsecond to handle the click event properly
+    setTimeout(() => {
+      navigator.clipboard
+        .writeText(code)
+        .then(() => {
+          setCopied(true);
+          toast.success("Code copied to clipboard!");
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => {
+          console.error("Clipboard API failed:", err);
+          toast.error("Failed to copy. Check browser permissions.");
+        });
+    }, 0);
   };
-
   const lang = language?.toLowerCase();
 
   const renderPreview = () => {
@@ -248,11 +257,11 @@ const PreviewOverlay = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex flex-col bg-[#0a0e17]"
+      className=" select-text fixed inset-0 z-[9999] flex flex-col bg-[#0a0e17]"
       style={{ animation: "fadeIn 0.15s ease-out" }}
     >
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-white/[0.08] bg-[#0c1018] px-5 py-3">
+      <div className="code-header noselect flex items-center justify-between border-b border-white/[0.08] bg-[#0c1018] px-5 py-3">
         <div className="flex items-center gap-3">
           <span
             className="h-2.5 w-2.5 rounded-full"
@@ -356,31 +365,30 @@ const PreviewOverlay = ({
                 autoFocus
               />
             ) : (
-              <SyntaxHighlighter
-                showLineNumbers
-                wrapLongLines
-                customStyle={{
-                  borderRadius: "0",
-                  padding: "16px 12px",
-                  margin: 0,
-                  background: "transparent",
-                  fontSize: "13px",
-                  lineHeight: "1.7",
-                  height: "100%",
-                }}
-                lineNumberStyle={{
-                  minWidth: "2.5em",
-                  paddingRight: "1em",
-                  color: "rgba(148, 163, 184, 0.2)",
-                  fontSize: "10px",
-                  userSelect: "none",
-                }}
-                style={atomDark}
-                language={language}
-                PreTag="div"
-              >
-                {localCode}
-              </SyntaxHighlighter>
+              <div className="code-block code-content select-text">
+            <SyntaxHighlighter
+  language={language}
+  style={atomDark}
+  PreTag="div"
+  showLineNumbers={false}
+  wrapLines={true}
+  wrapLongLines={false}
+  lineProps={(lineNumber) => ({
+    className: "code-line",
+    "data-line-number": lineNumber,
+  })}
+  customStyle={{
+    borderRadius: "0",
+    padding: "16px 12px",
+    margin: 0,
+    background: "transparent",
+    fontSize: "12.5px",
+    lineHeight: "1.65",
+  }}
+>
+  {localCode}
+</SyntaxHighlighter>
+              </div>
             )}
           </div>
         </div>
@@ -444,10 +452,20 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    toast.success("Code copied to clipboard!");
-    setTimeout(() => setCopied(false), 2000);
+    // Give the browser a microsecond to handle the click event properly
+    setTimeout(() => {
+      navigator.clipboard
+        .writeText(code)
+        .then(() => {
+          setCopied(true);
+          toast.success("Code copied to clipboard!");
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((err) => {
+          console.error("Clipboard API failed:", err);
+          toast.error("Failed to copy. Check browser permissions.");
+        });
+    }, 0);
   };
 
   return (
@@ -462,7 +480,7 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
         />
 
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
+        <div className="code-header  flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
           <div className="flex items-center gap-2">
             <span
               className="h-2 w-2 rounded-full"
@@ -515,31 +533,34 @@ const CodeBlock = ({ code, language }: CodeBlockProps) => {
         </div>
 
         {/* Code content */}
-        <div className="w-full max-w-full overflow-x-auto overflow-y-auto" style={{ maxHeight: "480px" }}>
-          <SyntaxHighlighter
-            showLineNumbers
-            wrapLongLines
-            customStyle={{
-              borderRadius: "0",
-              padding: "16px 12px",
-              margin: 0,
-              background: "transparent",
-              fontSize: "12.5px",
-              lineHeight: "1.65",
-            }}
-            lineNumberStyle={{
-              minWidth: "2.2em",
-              paddingRight: "1em",
-              color: "rgba(148, 163, 184, 0.2)",
-              fontSize: "10px",
-              userSelect: "none",
-            }}
-            style={atomDark}
-            language={language}
-            PreTag="div"
-          >
-            {code}
-          </SyntaxHighlighter>
+        <div
+          className="code-content w-full max-w-full overflow-x-auto overflow-y-auto"
+          style={{ maxHeight: "480px" }}
+        >
+          <div className="code-block">
+           <SyntaxHighlighter
+  language={language}
+  style={atomDark}
+  PreTag="div"
+  showLineNumbers={false}
+  wrapLines={true}
+  wrapLongLines={false}
+  lineProps={(lineNumber) => ({
+    className: "code-line",
+    "data-line-number": lineNumber,
+  })}
+  customStyle={{
+    borderRadius: "0",
+    padding: "16px 12px",
+    margin: 0,
+    background: "transparent",
+    fontSize: "12.5px",
+    lineHeight: "1.65",
+  }}
+>
+  {code}
+</SyntaxHighlighter>
+          </div>
         </div>
       </div>
 

@@ -180,23 +180,3 @@ export const assistantMarkdownComponents = {
   any: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
 };
 
-export const userMarkdownComponents = {
-  p: (props: React.ComponentPropsWithoutRef<"p">) => (
-    <p
-      className="text-base leading-[1.8] tracking-[0.01em] text-white"
-      {...props}
-    />
-  ),
-  code: (props: React.ComponentPropsWithoutRef<"code">) => (
-    <code className="rounded-md border border-indigo-400/10 bg-indigo-950/30 px-[0.4em] py-[0.2em] text-[0.9em] font-medium text-indigo-100">
-      {props.children}
-    </code>
-  ),
-  strong: (props: React.ComponentPropsWithoutRef<"strong">) => (
-    <strong className="font-semibold text-white" {...props} />
-  ),
-  string: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
-  number: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
-  boolean: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
-  any: (props: any) => <span className="font-mono text-indigo-200" {...props} />,
-};

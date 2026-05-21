@@ -6,6 +6,7 @@ export interface SelectionData {
   sourceMessageId: string;
   actionType: string;
   position: { top: number; left: number };
+  isExceeded?: boolean;
 }
 
 interface SelectionStore {

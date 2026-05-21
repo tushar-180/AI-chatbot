@@ -271,16 +271,31 @@ export const deleteChat = asyncHandler(async (req: Request, res: Response) => {
   }
 });
 
-export const updateChatTitle = asyncHandler(
+export const updateChat = asyncHandler(
   async (req: Request, res: Response) => {
     try {
-      const chat = await chatService.updateChatTitle(
+      const chat = await chatService.updateChat(
         String(req.params.id),
-        req.body.title,
+        req.body
       );
       return res.json(chat);
     } catch (error) {
-      return sendControllerError(res, error, "Failed to update chat title");
+      return sendControllerError(res, error, "Failed to update chat");
+    }
+  },
+);
+
+export const moveChat = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const { projectId } = req.body;
+      const chat = await chatService.updateChat(
+        String(req.params.id),
+        { projectId }
+      );
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to move chat");
     }
   },
 );
@@ -463,3 +478,18 @@ export const streamRetryMessage = async (req: Request, res: Response) => {
     }
   }
 };
+
+export const updateMessageFeedback = asyncHandler(
+  async (req: Request, res: Response) => {
+    try {
+      const chat = await chatService.updateMessageFeedback(
+        String(req.params.messageId),
+        req.body.feedback,
+      );
+      return res.json(chat);
+    } catch (error) {
+      return sendControllerError(res, error, "Failed to update message feedback");
+    }
+  },
+);
+

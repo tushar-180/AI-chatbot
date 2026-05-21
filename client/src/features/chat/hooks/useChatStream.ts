@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser, useAuth } from "@clerk/react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useProjectStore } from "../store/useProjectStore";
 import {
   chatService,
   type Message,
@@ -17,6 +18,16 @@ const getActiveChatKey = (chatId: string | null) =>
 
 const createOptimisticTitle = (input: string) =>
   input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
+
+const activeAbortControllerRef: { current: AbortController | null } = { current: null };
+const connectionTimeoutRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+const activeRequestIdRef: { current: string | null } = { current: null };
+const activeResolvedChatIdRef: { current: string | null } = { current: null };
+const stopRequestedRef: { current: boolean } = { current: false };
+const pendingOptimisticUpdateRef: {
+  current: Record<string, { messageId: string; partialMessage: Partial<Message> }>;
+} = { current: {} };
+const pendingOptimisticFrameRef: { current: number | null } = { current: null };
 
 export const useChatStream = (hookOptions?: {
   onWebSearchComplete?: () => void;
@@ -39,23 +50,11 @@ export const useChatStream = (hookOptions?: {
   const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] = useState<
     Record<string, Message[] | null>
   >({});
-  const activeAbortControllerRef = useRef<AbortController | null>(null);
-  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
-  const activeRequestIdRef = useRef<string | null>(null);
-  const activeResolvedChatIdRef = useRef<string | null>(null);
   const resumeAttemptedChatIdRef = useRef<string | null>(null);
   const previousChatIdRef = useRef<string | null>(currentChatId);
   const resumeStreamRef = useRef<(chatId: string) => Promise<boolean>>(
     async () => false,
   );
-  const stopRequestedRef = useRef(false);
-
-  const pendingOptimisticUpdateRef = useRef<
-    Record<string, { messageId: string; partialMessage: Partial<Message> }>
-  >({});
-  const pendingOptimisticFrameRef = useRef<number | null>(null);
 
   const flushOptimisticUpdates = () => {
     pendingOptimisticFrameRef.current = null;
@@ -289,18 +288,31 @@ export const useChatStream = (hookOptions?: {
         resolvedChatId = nextChatId;
         activeResolvedChatIdRef.current = nextChatId;
         if (isCreatingChat) {
-          upsertChat({
+          const chatPayload = {
             _id: nextChatId,
             title: optimisticTitle || "New Chat",
             isArchived: false,
             isPinned: false,
             updatedAt: new Date().toISOString(),
-          });
+          };
+
+          const activeProjectId = useProjectStore.getState().activeProjectId;
+          if (activeProjectId) {
+            // Project chats go only to the project store, not global history
+            useProjectStore.getState().addChatToProjectStore(chatPayload);
+          } else {
+            upsertChat(chatPayload);
+          }
+
           const shouldSelectResolvedChat =
             useChatStore.getState().currentChatId === initialChatId;
           if (shouldSelectResolvedChat) {
             setCurrentChat(nextChatId);
-            navigate(`/chat/${nextChatId}`, { replace: true });
+            if (activeProjectId) {
+              navigate(`/projects/${activeProjectId}/chat/${nextChatId}`, { replace: true });
+            } else {
+              navigate(`/chat/${nextChatId}`, { replace: true });
+            }
           }
           setIsNewChat(false);
         }
@@ -746,10 +758,17 @@ export const useChatStream = (hookOptions?: {
       storeState.chats.find((chat) => chat._id === effectiveCurrentChatId);
 
     if (effectiveCurrentChatId && activeChat) {
-      upsertChat({
+      const updatedChat = {
         ...activeChat,
         updatedAt: new Date().toISOString(),
-      });
+      };
+      const activeProjectId = useProjectStore.getState().activeProjectId;
+      if (activeProjectId) {
+        // Project chats only update in the project store
+        useProjectStore.getState().addChatToProjectStore(updatedChat);
+      } else {
+        upsertChat(updatedChat);
+      }
     }
     setLoading(true);
     setIsStreaming(true, activeKey);
@@ -797,6 +816,7 @@ export const useChatStream = (hookOptions?: {
           attachments,
           webSearchEnabled,
           selection: options?.selection,
+          projectId: useProjectStore.getState().activeProjectId || undefined,
         });
       }
 
