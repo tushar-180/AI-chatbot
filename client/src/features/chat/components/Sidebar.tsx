@@ -45,6 +45,7 @@ import {
 import ShareModal from "./ShareModal";
 import CreateGroupModal from "./CreateGroupModal";
 import GroupLinkModal from "./GroupLinkModal";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 const DEFAULT_EPOCH = "1970-01-01T00:00:00.000Z";
 import {
@@ -54,8 +55,6 @@ import {
   AvatarGroupCount,
   AvatarImage,
 } from "@/components/ui/avatar";
-
-const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
 const SearchModal = lazy(() => import("./SearchModal"));

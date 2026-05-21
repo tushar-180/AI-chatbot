@@ -20,7 +20,10 @@ import {
     Archive,
 } from "lucide-react";
 
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -82,10 +85,10 @@ export interface InputAreaProps {
 const getProviderIcon = (providerId: string, size = 14) => {
     const p = providerId.split(":")[0].toLowerCase();
     const mapping: Record<string, ComponentType<{ size?: number }>> = {
-        gemini: Gemini.Color,
-        claude: Anthropic,
-        openai: OpenAI,
-        nvidia: Nvidia.Color,
+        gemini: GeminiColor,
+        claude: AnthropicMono,
+        openai: OpenAIMono,
+        nvidia: NvidiaColor,
     };
     const Icon = mapping[p];
     return Icon ? <Icon size={size} /> : null;
