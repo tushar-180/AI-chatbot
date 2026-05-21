@@ -11,6 +11,10 @@ out/
 .vite/
 *.tsbuildinfo
 
+.antigravitycli
+.antigravitycli/
+antigravitycli/
+
 # Environment variables
 .env
 .env.*
