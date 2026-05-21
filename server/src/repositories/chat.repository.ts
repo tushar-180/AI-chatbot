@@ -170,7 +170,13 @@ export const chatRepository = {
   },
 
   async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    // Try to update by _id first, if that fails (e.g. it's a UUID), try by requestId
+    // Read the existing message first to get old token values for proper delta calculation
+    let existingMessage = await Message.findById(messageId);
+    if (!existingMessage) {
+      existingMessage = await Message.findOne({ requestId: messageId });
+    }
+
+    // Perform the update
     let message = await Message.findByIdAndUpdate(messageId, updateData, {
       returnDocument: "after",
     });
@@ -183,13 +189,19 @@ export const chatRepository = {
       );
     }
 
-    if (message?.chatId) {
-      if (updateData.tokens) {
+    if (message?.chatId && updateData.tokens) {
+      // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
+      const oldTokens = existingMessage?.tokens;
+      const deltaPrompt = (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion = (updateData.tokens.completionTokens || 0) - (oldTokens?.completionTokens || 0);
+      const deltaTotal = (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+
+      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
         const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
-            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
-            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
-            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+            "tokens.promptTokens": deltaPrompt,
+            "tokens.completionTokens": deltaCompletion,
+            "tokens.totalTokens": deltaTotal,
           },
           $set: { updatedAt: new Date() },
         }, { new: true });
@@ -201,6 +213,8 @@ export const chatRepository = {
       } else {
         await this.touchChat(String(message.chatId));
       }
+    } else if (message?.chatId) {
+      await this.touchChat(String(message.chatId));
     }
     return message;
   },
@@ -219,6 +233,9 @@ export const chatRepository = {
     requestId: string,
     updateData: Partial<ChatMessage>,
   ) {
+    // Read existing message to get old token values for delta calculation
+    const existingMessage = await Message.findOne({ chatId, requestId });
+
     const message = await Message.findOneAndUpdate(
       { chatId, requestId },
       updateData,
@@ -226,13 +243,19 @@ export const chatRepository = {
       returnDocument: "after",
       },
     );
-    if (message?.chatId) {
-      if (updateData.tokens) {
+    if (message?.chatId && updateData.tokens) {
+      // Calculate delta: new tokens minus old tokens
+      const oldTokens = existingMessage?.tokens;
+      const deltaPrompt = (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion = (updateData.tokens.completionTokens || 0) - (oldTokens?.completionTokens || 0);
+      const deltaTotal = (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+
+      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
         const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
-            "tokens.promptTokens": updateData.tokens.promptTokens || 0,
-            "tokens.completionTokens": updateData.tokens.completionTokens || 0,
-            "tokens.totalTokens": updateData.tokens.totalTokens || 0,
+            "tokens.promptTokens": deltaPrompt,
+            "tokens.completionTokens": deltaCompletion,
+            "tokens.totalTokens": deltaTotal,
           },
           $set: { updatedAt: new Date() },
         }, { new: true });
@@ -244,6 +267,8 @@ export const chatRepository = {
       } else {
         await this.touchChat(String(message.chatId));
       }
+    } else if (message?.chatId) {
+      await this.touchChat(String(message.chatId));
     }
     return message;
   },

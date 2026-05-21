@@ -24,10 +24,14 @@ export function createTokenUsage(
 export function normalizeOpenAIUsage(usage: any): TokenUsage | undefined {
   if (!usage) return undefined;
 
-  const promptTokens = usage.input_tokens ?? usage.prompt_tokens;
-  const completionTokens = usage.output_tokens ?? usage.completion_tokens;
+  // OpenAI Chat Completions API: prompt_tokens / completion_tokens
+  // OpenAI Responses API: input_tokens / output_tokens
+  // Nvidia NIM: may use either format, or only provide total_tokens
+  const promptTokens = usage.prompt_tokens ?? usage.input_tokens;
+  const completionTokens = usage.completion_tokens ?? usage.output_tokens;
   const totalTokens = usage.total_tokens;
 
+  // Guard: at least one field must be a number
   if (
     typeof promptTokens !== "number" &&
     typeof completionTokens !== "number" &&

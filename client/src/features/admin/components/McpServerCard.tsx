@@ -4,6 +4,7 @@ import {
   Globe,
   Loader2,
   Power,
+  RefreshCw,
   Server as ServerIcon,
   Sliders,
   Terminal,
@@ -20,6 +21,7 @@ interface McpServerCardProps {
   isActionLoading: boolean;
   onDelete: (name: string) => void;
   onEdit: (server: McpServerConfig) => void;
+  onReconnect: (name: string) => void;
   onToggleEnv: (name: string) => void;
   onToggleExpand: (name: string) => void;
   onToggleServer: (name: string, enabled: boolean) => void;
@@ -135,6 +137,7 @@ const McpServerCard = ({
   isActionLoading,
   onDelete,
   onEdit,
+  onReconnect,
   onToggleEnv,
   onToggleExpand,
   onToggleServer
@@ -195,6 +198,19 @@ const McpServerCard = ({
               {isActionLoading ? <Loader2 size={11} className="animate-spin" /> : <Power size={11} />}
             </span>
           </button>
+
+          {server.enabled && (
+            <button
+              type="button"
+              onClick={() => onReconnect(server.name)}
+              disabled={isActionLoading}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 transition hover:border-amber-400/20 hover:bg-amber-400/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+              aria-label={`Reconnect ${server.name}`}
+              title="Force reconnect / restart server"
+            >
+              {isActionLoading ? <Loader2 size={15} className="animate-spin text-amber-400" /> : <RefreshCw size={15} />}
+            </button>
+          )}
 
           <button
             type="button"

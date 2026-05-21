@@ -63,9 +63,13 @@ const messageSchema = new mongoose.Schema(
       default: "completed",
       required: true,
     },
+    feedback: {
+      type: String,
+      enum: ["like", "dislike", null],
+      default: null,
+    },
     tokens: {
       type: tokenUsageSchema,
-      default: () => ({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),
     },
   },
   { timestamps: true },

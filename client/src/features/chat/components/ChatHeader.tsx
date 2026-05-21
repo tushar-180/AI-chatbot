@@ -48,6 +48,8 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
   const isStreamingCurrentChat =
     isStreaming && !!currentChatId && streamingChatId === currentChatId;
 
+ 
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712] not-selectable">
       <div className="mx-auto flex h-14 items-center justify-between px-6 md:px-8">
