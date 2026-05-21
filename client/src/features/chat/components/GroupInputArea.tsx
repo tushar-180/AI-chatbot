@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
@@ -23,10 +26,10 @@ interface Provider {
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
   const mapping: Record<string, React.ComponentType<{ size?: number }>> = {
-    gemini: Gemini.Color,
-    claude: Anthropic,
-    openai: OpenAI,
-    nvidia: Nvidia.Color,
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
   };
   const Icon = mapping[p];
   return Icon ? <Icon size={size} /> : null;
