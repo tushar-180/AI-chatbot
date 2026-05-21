@@ -534,7 +534,7 @@ const MessageItem = ({
           {/* Assistant Action Buttons (ChatGPT Style) */}
             {!isUser && !isStreaming && (msg.content || isFailed) && (
               <div
-                className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                className="mt-3 flex items-center gap-1 transition-all duration-200 opacity-100"
               >
                 <button
                   onClick={handleCopy}
@@ -601,7 +601,7 @@ const MessageItem = ({
           {/* User Action Buttons (Copy & Edit) */}
           {isUser && !isEditing && (
             <div
-              className="mt-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200"
+              className="mt-1 flex items-center gap-1 opacity-100 transition-all duration-200"
             >
               <button
                 onClick={handleCopy}

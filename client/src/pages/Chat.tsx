@@ -14,11 +14,11 @@ import { Spotlight } from "@/components/ui/spotlight";
 import type { WebSource } from "@/features/chat/types/chat.types";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useTemporaryChat } from "@/features/chat/hooks/useTemporaryChat";
-import { TempChatBanner } from "@/features/chat/components/TempChatBanner";
 import { chatService } from "@/features/chat/services/chat.service";
 import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
+import { useProjectStore } from "@/features/chat/store/useProjectStore";
 
 /**
  * Chat Page Component
@@ -26,10 +26,33 @@ import { useComposerStore } from "@/features/chat/store/useComposerStore";
  */
 const Chat = () => {
   useTextSelection();
-  const { chatId } = useParams<{ chatId?: string }>();
+  const { chatId, projectId } = useParams<{ chatId?: string; projectId?: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const hasAutoStartedRef = useRef(false);
+
+  const { setActiveProjectId } = useProjectStore();
+
+  // On page load/refresh: if we're at /projects/:projectId/new (new project chat without
+  // a specific chatId), redirect to a normal global new chat instead. This prevents
+  // stale project context from persisting across refreshes.
+  useEffect(() => {
+    if (projectId && !chatId) {
+      setActiveProjectId(null);
+      navigate("/chat", { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync active project state based on URL route parameter
+  useEffect(() => {
+    if (projectId) {
+      setActiveProjectId(projectId);
+    } else {
+      setActiveProjectId(null);
+    }
+  }, [projectId, setActiveProjectId]);
+
   const {
     currentChatId,
     currentChat,
@@ -65,18 +88,30 @@ const Chat = () => {
     setActiveSourceId(null);
   }, [currentChatId]);
 
-  // Sync URL parameter with store when chatId changes from URL
+  // Sync URL parameter with store when chatId changes from URL.
+  // CRITICAL: Immediately clear messages to prevent leaking between chats.
   useEffect(() => {
+    const store = useChatStore.getState();
+    const isNavigatingToActiveStream = chatId && store.streamingChatId === chatId && store.isStreaming;
+
+    // Only reset streaming state if we are NOT navigating into a chat that is currently streaming
+    if (!isNavigatingToActiveStream) {
+      store.setIsStreaming(false);
+      store.setLoading(false);
+    }
+
     if (chatId && chatId !== currentChatId) {
       setCurrentChat(chatId);
-      setMessages([]);
+      if (!isNavigatingToActiveStream) {
+        setMessages([]);
+      }
       setIsNewChat(false);
-    } else if (!chatId && currentChatId) {
+    } else if (!chatId) {
       setCurrentChat(null);
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [chatId]);
+  }, [chatId, projectId]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -156,12 +191,12 @@ const Chat = () => {
     },
   });
 
-  // 5. Handle auto-start message from SharedChatPage
+  // 5. Handle auto-start message from SharedChatPage or Project Dashboard
   useEffect(() => {
+    const isReady = loadedChatId === currentChatId || canAutoStartFromSeededMessages || currentChatId === null;
     if (
       pendingState?.pendingInput &&
-      (loadedChatId === currentChatId || canAutoStartFromSeededMessages) &&
-      currentChatId &&
+      isReady &&
       !isStreaming &&
       !hasAutoStartedRef.current
     ) {

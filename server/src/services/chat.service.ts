@@ -31,6 +31,7 @@ import {
   estimateTokenCount,
   serializePromptMessages,
 } from "../utils/tokenCounter";
+import { buildProjectContext } from "./buildProjectContext";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -196,7 +197,18 @@ const buildPromptMessages = async (
   latestUserMessage?: string,
   webSearchEnabled = false,
   provider?: string,
+  projectId?: string,
 ) => {
+  if (projectId) {
+    return await buildProjectContext(
+      userId,
+      projectId,
+      chatMessages,
+      latestUserMessage,
+      webSearchEnabled,
+      provider,
+    );
+  }
   const rawPromptMessages = getLimitedMessages(chatMessages);
   const promptMessages = rawPromptMessages.map((m) => {
     const raw = typeof (m as any).toObject === "function" ? (m as any).toObject() : { ...m };
@@ -315,6 +327,7 @@ async function* streamAssistantResponse(
     lastUserMessage?.content,
     Boolean(lastUserMessage?.metadata?.webSearchEnabled),
     provider,
+    chat.projectId ? String(chat.projectId) : undefined,
   );
 
   let assistantMessageDoc;
@@ -546,6 +559,7 @@ async function* streamAssistantResponse(
 export const chatService = {
   async createChat({
     userId,
+    projectId,
     message,
     provider,
     attachments,
@@ -558,6 +572,7 @@ export const chatService = {
     const chat = chatRepository.create({
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
+      projectId,
     });
 
     await chat.save();
@@ -595,6 +610,7 @@ export const chatService = {
         trimmedMessage,
         webSearchEnabled,
         provider,
+        chat.projectId ? String(chat.projectId) : undefined,
       );
 
       let reply = "";
@@ -663,6 +679,7 @@ export const chatService = {
     const chat = chatRepository.create({
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
+      projectId: input.projectId,
     });
 
     await chat.save();
@@ -747,6 +764,7 @@ export const chatService = {
       trimmedMessage,
       webSearchEnabled,
       provider,
+      chat.projectId ? String(chat.projectId) : undefined,
     );
 
     let reply = "";
@@ -952,9 +970,16 @@ export const chatService = {
     return chat;
   },
 
-  async updateChatTitle(chatId: string, title: string) {
-    const validatedTitle = requireMessage(title, "Title is required");
-    const chat = await chatRepository.updateTitle(chatId, validatedTitle);
+  async updateChat(chatId: string, data: { title?: string; projectId?: string | null }) {
+    const updateData: any = {};
+    if (data.title !== undefined) {
+      updateData.title = requireMessage(data.title, "Title is required");
+    }
+    if (data.projectId !== undefined) {
+      updateData.projectId = data.projectId;
+    }
+
+    const chat = await chatRepository.update(chatId, { $set: updateData });
 
     if (!chat) {
       const error = new Error("Chat not found");
@@ -1069,6 +1094,7 @@ export const chatService = {
       trimmedMessage,
       webSearchEnabled,
       provider,
+      chat.projectId ? String(chat.projectId) : undefined,
     );
 
     let reply = "";
@@ -1202,6 +1228,7 @@ export const chatService = {
       lastUserMessage?.content,
       Boolean(lastUserMessage?.metadata?.webSearchEnabled),
       provider,
+      chat.projectId ? String(chat.projectId) : undefined,
     );
 
     let reply = "";

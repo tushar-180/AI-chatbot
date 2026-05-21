@@ -15,6 +15,7 @@ import Admin from "./pages/Admin";
 import GroupChat from "./pages/GroupChat";
 import JoinGroupPage from "./pages/JoinGroupPage";
 import ChatLayout from "./features/chat/components/ChatLayout";
+import ProjectsDashboardPage from "./pages/ProjectsDashboardPage";
 
 function App() {
   const { isSignedIn, isLoaded } = useUser();
@@ -58,6 +59,40 @@ function App() {
                 />
                 <Route
                   path="/chat/:chatId"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/projects"
+                  element={
+                    <ProtectedRoute>
+                      <ProjectsDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+
+                <Route
+                  path="/projects/:projectId"
+                  element={
+                    <ProtectedRoute>
+                      <ProjectsDashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/projects/:projectId/new"
+                  element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/projects/:projectId/chat/:chatId"
                   element={
                     <ProtectedRoute>
                       <Chat />

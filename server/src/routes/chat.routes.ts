@@ -28,8 +28,11 @@ router.get("/:id", ChatController.getChatById);
 // Delete chat
 router.delete("/:id", ChatController.deleteChat);
 
-// Update chat title
-router.patch("/:id", ChatController.updateChatTitle);
+// Update chat title / project
+router.patch("/:id", ChatController.updateChat);
+
+// Move chat to project
+router.patch("/:id/move", ChatController.moveChat);
 
 // Archive chat
 router.post("/:id/archive", ChatController.archiveChat);
@@ -50,4 +53,8 @@ router.patch("/:id/messages/:messageId/stream", ChatController.streamEditMessage
 // Retry message
 router.post("/:id/messages/:messageId/retry", ChatController.retryMessage);
 router.post("/:id/messages/:messageId/retry/stream", ChatController.streamRetryMessage);
+
+// Message Feedback
+router.patch("/:id/messages/:messageId/feedback", ChatController.updateMessageFeedback);
+
 export default router;

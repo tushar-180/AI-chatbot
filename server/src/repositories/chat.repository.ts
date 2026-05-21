@@ -3,12 +3,18 @@ import type { ChatMessage } from "../types/chat.types";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
-    return await Chat.findByIdAndUpdate(chatId, {
+    const chat = await Chat.findByIdAndUpdate(chatId, {
       $set: { updatedAt: new Date() },
-    });
+    }, { new: true });
+    
+    if (chat && chat.projectId) {
+      const { projectRepository } = require("./project.repository");
+      await projectRepository.touchProject(chat.projectId.toString());
+    }
+    return chat;
   },
 
-  create(data: { userId: string; title: string }) {
+  create(data: { userId: string; title: string; projectId?: string }) {
     return new Chat(data);
   },
 
@@ -48,8 +54,8 @@ export const chatRepository = {
   ) {
     const skip = (page - 1) * limit;
     const query = isArchived
-      ? { userId, isArchived: true }
-      : { userId, isArchived: { $ne: true } };
+      ? { userId, isArchived: true, $or: [{ projectId: null }, { projectId: { $exists: false } }] }
+      : { userId, isArchived: { $ne: true }, $or: [{ projectId: null }, { projectId: { $exists: false } }] };
 
     return Chat.find(query)
       .select("-messages -legacyMessages")
@@ -143,14 +149,19 @@ export const chatRepository = {
     });
     
     if (messageData.tokens) {
-      await Chat.findByIdAndUpdate(chatId, {
+      const chat = await Chat.findByIdAndUpdate(chatId, {
         $inc: {
           "tokens.promptTokens": messageData.tokens.promptTokens || 0,
           "tokens.completionTokens": messageData.tokens.completionTokens || 0,
           "tokens.totalTokens": messageData.tokens.totalTokens || 0,
         },
         $set: { updatedAt: new Date() },
-      });
+      }, { new: true });
+
+      if (chat && chat.projectId) {
+        const { projectRepository } = require("./project.repository");
+        await projectRepository.touchProject(chat.projectId.toString());
+      }
     } else {
       await this.touchChat(chatId);
     }
@@ -174,14 +185,19 @@ export const chatRepository = {
 
     if (message?.chatId) {
       if (updateData.tokens) {
-        await Chat.findByIdAndUpdate(String(message.chatId), {
+        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
             "tokens.promptTokens": updateData.tokens.promptTokens || 0,
             "tokens.completionTokens": updateData.tokens.completionTokens || 0,
             "tokens.totalTokens": updateData.tokens.totalTokens || 0,
           },
           $set: { updatedAt: new Date() },
-        });
+        }, { new: true });
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
       } else {
         await this.touchChat(String(message.chatId));
       }
@@ -212,14 +228,19 @@ export const chatRepository = {
     );
     if (message?.chatId) {
       if (updateData.tokens) {
-        await Chat.findByIdAndUpdate(String(message.chatId), {
+        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
           $inc: {
             "tokens.promptTokens": updateData.tokens.promptTokens || 0,
             "tokens.completionTokens": updateData.tokens.completionTokens || 0,
             "tokens.totalTokens": updateData.tokens.totalTokens || 0,
           },
           $set: { updatedAt: new Date() },
-        });
+        }, { new: true });
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
       } else {
         await this.touchChat(String(message.chatId));
       }

@@ -53,6 +53,7 @@ export type ChatMessage = {
 
 export type CreateChatInput = {
   userId?: string;
+  projectId?: string;
   message?: string;
   provider?: string;
   requestId?: string;
@@ -68,6 +69,7 @@ export type CreateChatInput = {
 
 export type SendMessageInput = {
   chatId: string;
+  projectId?: string;
   message?: string;
   provider?: string;
   requestId?: string;
