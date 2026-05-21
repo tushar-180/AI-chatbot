@@ -22,39 +22,43 @@ export const useTextSelection = () => {
         return;
       }
 
+      // Check if selection exceeds the maximum character limit
+      const isExceeded = selectedText.length > 2000;
+
       // Limit selection text to a maximum of 2000 characters
-      if (selectedText.length > 2000) {
+      if (isExceeded) {
         selectedText = selectedText.slice(0, 2000) + "...";
       }
 
-      // Check if selection is within an assistant message bubble
-      let anchorNode = selection.anchorNode;
-      if (!anchorNode) {
-        clearSelection();
-        return;
-      }
+      // Check if selection is within an assistant or user message bubble
+      const getMessageBubble = (node: Node | null): HTMLElement | null => {
+        if (!node) return null;
+        let element: HTMLElement | null =
+          node.nodeType === Node.TEXT_NODE
+            ? (node.parentElement as HTMLElement)
+            : (node as HTMLElement);
 
-      let currentElement: HTMLElement | null =
-        anchorNode.nodeType === Node.TEXT_NODE
-          ? (anchorNode.parentElement as HTMLElement)
-          : (anchorNode as HTMLElement);
-
-      let assistantBubble: HTMLElement | null = null;
-      while (currentElement) {
-        if (currentElement.getAttribute?.("data-message-role") === "assistant") {
-          assistantBubble = currentElement;
-          break;
+        while (element) {
+          const role = element.getAttribute?.("data-message-role");
+          if (role === "assistant" || role === "user") {
+            return element;
+          }
+          element = element.parentElement;
         }
-        currentElement = currentElement.parentElement;
-      }
+        return null;
+      };
 
-      if (!assistantBubble) {
+      const messageBubble =
+        getMessageBubble(selection.anchorNode) ||
+        getMessageBubble(selection.focusNode);
+
+      if (!messageBubble) {
         clearSelection();
         return;
       }
 
-      const messageId = assistantBubble.getAttribute("data-message-id") || "";
-      const originalContent = assistantBubble.getAttribute("data-message-content") || "";
+      const messageId = messageBubble.getAttribute("data-message-id") || "";
+      const originalContent = messageBubble.getAttribute("data-message-content") || "";
 
       try {
         const range = selection.getRangeAt(0);
@@ -76,6 +80,7 @@ export const useTextSelection = () => {
           sourceMessageId: messageId,
           actionType: "ask_to_velora",
           position: { top, left },
+          isExceeded,
         });
       } catch (err) {
         console.error("Error computing selection bounds:", err);

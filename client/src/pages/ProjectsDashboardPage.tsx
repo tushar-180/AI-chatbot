@@ -256,7 +256,7 @@ export default function ProjectsPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("gemini:gemini-2.5-pro");
-  const { availableProviders } = useAvailableProviders(selectedProvider, setSelectedProvider);
+  useAvailableProviders(selectedProvider, setSelectedProvider);
 
   useEffect(() => {
     fetchProjects();

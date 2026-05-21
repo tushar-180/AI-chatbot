@@ -199,7 +199,7 @@ const SidebarItem = memo(
             onSelect(item);
           }
         }}
-        className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border ${
+        className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border not-selectable ${
           isActive
             ? "bg-white text-black border-white shadow-[0_15px_35px_-5px_rgba(255,255,255,0.15)] scale-[1.02] z-10"
             : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
@@ -895,7 +895,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
+        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
       `}
       >

@@ -48,6 +48,7 @@ export class GroupChatService {
       metadata: message.metadata,
       sources: message.metadata?.sources || undefined,
       attachments: message.attachments || [],
+      feedback: message.feedback || null,
     };
   }
 
@@ -652,6 +653,135 @@ export class GroupChatService {
     );
     if (!group) throw new Error("Group not found");
     return group;
+  }
+
+  static async editGroupMessage(
+    groupId: string,
+    messageId: string,
+    content: string,
+    targetProvider?: string,
+    webSearchEnabled = false,
+  ) {
+    const message = await GroupMessage.findById(messageId);
+    if (!message) throw new Error("Message not found");
+
+    // Delete all messages after this one
+    await GroupMessage.deleteMany({
+      groupId,
+      createdAt: { $gt: message.createdAt },
+    });
+
+    // Update the message itself
+    message.content = content;
+    message.metadata = {
+      ...message.metadata,
+      webSearchEnabled: Boolean(webSearchEnabled),
+    };
+    await message.save();
+
+    // Broadcast the updated/edited user message
+    groupSocketManager.broadcast(groupId, {
+      type: "message_updated",
+      message: this.serializeGroupMessage(message),
+    });
+
+    // Delete subsequent messages locally on all clients
+    groupSocketManager.broadcast(groupId, {
+      type: "messages_deleted_after",
+      messageId,
+      createdAt: message.createdAt.toISOString(),
+    });
+
+    // Trigger AI response regeneration
+    groupSocketManager.broadcast(groupId, {
+      type: "ai_thinking",
+      isThinking: true,
+      webSearchEnabled,
+    });
+
+    this.handleAiResponse(groupId, content, webSearchEnabled, message.userId).catch(
+      console.error,
+    );
+
+    return message;
+  }
+
+  static async retryGroupMessage(
+    groupId: string,
+    messageId: string,
+    targetProvider?: string,
+  ) {
+    const assistantMessage = await GroupMessage.findOne({
+      _id: messageId,
+      role: "assistant",
+    });
+
+    if (!assistantMessage) {
+      throw new Error("Assistant message not found for retry");
+    }
+
+    // Delete the assistant message itself and all messages after it
+    await GroupMessage.deleteMany({
+      groupId,
+      createdAt: { $gte: assistantMessage.createdAt },
+    });
+
+    // Broadcast deletions to other clients so they clear them locally
+    groupSocketManager.broadcast(groupId, {
+      type: "messages_deleted_after",
+      messageId,
+      createdAt: assistantMessage.createdAt.toISOString(),
+      inclusive: true,
+    });
+
+    // Find the last user message preceding the assistant message
+    const lastUserMessage = await GroupMessage.findOne({
+      groupId,
+      role: "user",
+      createdAt: { $lt: assistantMessage.createdAt },
+    }).sort({ createdAt: -1 });
+
+    if (!lastUserMessage) {
+      throw new Error("No user message found to retry");
+    }
+
+    const webSearchEnabled = Boolean(lastUserMessage.metadata?.webSearchEnabled);
+
+    // Trigger AI response regeneration
+    groupSocketManager.broadcast(groupId, {
+      type: "ai_thinking",
+      isThinking: true,
+      webSearchEnabled,
+    });
+
+    this.handleAiResponse(
+      groupId,
+      lastUserMessage.content,
+      webSearchEnabled,
+      lastUserMessage.userId,
+    ).catch(console.error);
+
+    return { success: true };
+  }
+
+  static async updateGroupMessageFeedback(
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) {
+    const message = await GroupMessage.findByIdAndUpdate(
+      messageId,
+      { feedback },
+      { new: true },
+    );
+    if (!message) throw new Error("Message not found");
+
+    // Broadcast the updated message state to everyone in the group
+    groupSocketManager.broadcast(message.groupId.toString(), {
+      type: "message_updated",
+      message: this.serializeGroupMessage(message),
+    });
+
+    return message;
   }
 
   static async deleteGroup(groupId: string, clerkId: string) {
