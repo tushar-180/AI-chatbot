@@ -568,6 +568,7 @@ const Sidebar = () => {
   const chatListScrollRef = useRef<HTMLDivElement>(null);
   const fetchMoreChatsRef = useRef(fetchMoreChats);
   const observer = useRef<IntersectionObserver | null>(null);
+  const lastScrolledIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchMoreChatsRef.current = fetchMoreChats;
@@ -937,19 +938,38 @@ const Sidebar = () => {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
+  }, [activeChatId, shouldPromoteActiveChat, showRecent]);
 
   // Scroll active chat into view on initial mount/reload
   useEffect(() => {
     const activeId = urlChatId || urlGroupId;
-    if (!activeId || !chatListScrollRef.current) return;
+    if (!activeId) {
+      lastScrolledIdRef.current = null;
+      return;
+    }
 
+    if (!chatListScrollRef.current) return;
+    if (lastScrolledIdRef.current === activeId) return;
+
+    // Check if element is already in the DOM to scroll synchronously
+    const activeElement = chatListScrollRef.current.querySelector(
+      `[data-chat-id="${activeId}"]`
+    );
+
+    if (activeElement) {
+      activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
+      lastScrolledIdRef.current = activeId;
+      return;
+    }
+
+    // Fallback: schedule a check if the element isn't in the DOM yet
     const timer = setTimeout(() => {
-      const activeElement = chatListScrollRef.current?.querySelector(
+      const el = chatListScrollRef.current?.querySelector(
         `[data-chat-id="${activeId}"]`
       );
-      if (activeElement) {
-        activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
+      if (el) {
+        el.scrollIntoView({ block: "nearest", behavior: "auto" });
+        lastScrolledIdRef.current = activeId;
       }
     }, 200);
 
