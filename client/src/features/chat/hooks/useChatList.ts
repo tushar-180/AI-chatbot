@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
 import { useServerStatus } from "@/contexts/ServerStatusContext";
+import { useProjectStore } from "@/features/chat/store/useProjectStore";
 
 export const useChatList = ({ shouldFetch = false } = {}) => {
   const { user } = useUser();
@@ -75,6 +76,34 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
       console.error("Error renaming chat", err);
       toast.error("Could not rename chat.");
       throw err; // Propagate error to handle UI state in component
+    }
+  };
+
+  const moveChatToProject = async (chatId: string, projectId: string) => {
+    try {
+      const chatToMove = chats.find(c => c._id === chatId) || (chatId === currentChatId ? currentChat : null);
+      
+      await api.patch(`/chat/${chatId}/move`, { projectId });
+      removeChat(chatId);
+      
+      if (chatToMove) {
+        const activeProjectId = useProjectStore.getState().activeProjectId;
+        if (activeProjectId === projectId) {
+          useProjectStore.getState().addChatToProjectStore({ ...chatToMove, projectId });
+        }
+      }
+      
+      if (chatId === currentChatId) {
+        setCurrentChat(null);
+        setMessages([]);
+        setIsNewChat(true);
+        navigate("/chat");
+      }
+      
+      toast.success("Chat moved to project successfully.");
+    } catch (err) {
+      console.error("Error moving chat to project", err);
+      toast.error("Could not move chat to project.");
     }
   };
 
@@ -354,6 +383,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     deleteChat,
     deleteChats,
     renameChat,
+    moveChatToProject,
     archiveChat,
     unarchiveChat,
     pinChat,

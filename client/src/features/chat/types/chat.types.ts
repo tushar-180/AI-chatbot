@@ -32,6 +32,7 @@ export type Chat = {
     isPublic?: boolean;
     isArchived?: boolean;
     isPinned?: boolean;
+    projectId?: string | null;
     updatedAt?: string;
 };
 export type StreamEventPayload = {

@@ -78,6 +78,12 @@ const chatSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      default: null,
+      index: true,
+    },
     title: {
       type: String,
       default: "New Chat",
