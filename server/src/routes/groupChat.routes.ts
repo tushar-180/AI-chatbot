@@ -21,4 +21,8 @@ router.patch("/:groupId", GroupChatController.updateGroupTitle);
 router.post("/:groupId/pin", GroupChatController.pinGroup);
 router.post("/:groupId/unpin", GroupChatController.unpinGroup);
 
+router.patch("/:groupId/messages/:messageId", GroupChatController.editGroupMessage);
+router.post("/:groupId/messages/:messageId/retry", GroupChatController.retryGroupMessage);
+router.patch("/:groupId/messages/:messageId/feedback", GroupChatController.updateGroupMessageFeedback);
+
 export { router as groupChatRoutes };

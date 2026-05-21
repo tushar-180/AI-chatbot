@@ -59,7 +59,11 @@ export const SelectionToolbar = () => {
         transform: "translateX(-50%)",
         zIndex: 9999,
       }}
-      className={`flex items-center gap-1.5 rounded-xl border border-white/10 bg-slate-900/90 px-3.5 py-2 shadow-2xl backdrop-blur-xl transition-all duration-200 ease-out pointer-events-auto ${
+      className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 shadow-2xl backdrop-blur-xl transition-all duration-200 ease-out pointer-events-auto ${
+        selection.isExceeded
+          ? "border-rose-500/20 bg-slate-900/95"
+          : "border-white/10 bg-slate-900/90"
+      } ${
         isVisible
           ? "opacity-100 scale-100 translate-y-0"
           : "opacity-0 scale-95 translate-y-1"
@@ -67,11 +71,25 @@ export const SelectionToolbar = () => {
       onMouseDown={(e) => e.preventDefault()} // Keep focus inside the composer
     >
       <button
-        onClick={handleAskToVelora}
-        className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white hover:bg-white/10 transition-all uppercase tracking-wider cursor-pointer"
+        onClick={selection.isExceeded ? undefined : handleAskToVelora}
+        disabled={selection.isExceeded}
+        className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all uppercase tracking-wider ${
+          selection.isExceeded
+            ? "text-slate-500 cursor-not-allowed opacity-75"
+            : "text-white hover:bg-white/10 cursor-pointer"
+        }`}
       >
-        <Sparkles size={13} className="text-indigo-400 fill-indigo-400/20 animate-pulse" />
-        <span>Ask to Velora</span>
+        <Sparkles
+          size={13}
+          className={
+            selection.isExceeded
+              ? "text-slate-600"
+              : "text-indigo-400 fill-indigo-400/20 animate-pulse"
+          }
+        />
+        <span>
+          {selection.isExceeded ? "2000 char exceed" : "Ask to Velora"}
+        </span>
       </button>
     </div>
   );

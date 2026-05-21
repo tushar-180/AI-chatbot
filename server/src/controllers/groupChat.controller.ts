@@ -233,4 +233,58 @@ export class GroupChatController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  static async editGroupMessage(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const messageId = req.params.messageId as string;
+      const { content, provider, webSearchEnabled } = req.body;
+
+      const message = await GroupChatService.editGroupMessage(
+        groupId,
+        messageId,
+        content,
+        provider,
+        Boolean(webSearchEnabled),
+      );
+      res.json(message);
+    } catch (error: any) {
+      console.error("Error in editGroupMessage:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async retryGroupMessage(req: Request, res: Response) {
+    try {
+      const groupId = req.params.groupId as string;
+      const messageId = req.params.messageId as string;
+      const { provider } = req.body;
+
+      const result = await GroupChatService.retryGroupMessage(
+        groupId,
+        messageId,
+        provider,
+      );
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error in retryGroupMessage:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async updateGroupMessageFeedback(req: Request, res: Response) {
+    try {
+      const messageId = req.params.messageId as string;
+      const { feedback } = req.body;
+
+      const message = await GroupChatService.updateGroupMessageFeedback(
+        messageId,
+        feedback,
+      );
+      res.json(message);
+    } catch (error: any) {
+      console.error("Error in updateGroupMessageFeedback:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 }

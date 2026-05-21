@@ -5,7 +5,7 @@ import Loading from "./Loading";
 
 export default function ChatLayout() {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased">
+    <div className="flex h-screen overflow-hidden bg-slate-950 font-sans text-slate-100 antialiased ">
       <Sidebar />
       <Suspense fallback={<Loading />}>
         <Outlet />

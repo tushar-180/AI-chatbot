@@ -349,3 +349,89 @@
 .animate-draw-line-horiz {
   animation: draw-grid-line-horiz 2.5s cubic-bezier(0.85, 0, 0.15, 1) forwards;
 }
+.code-block {
+  position: relative;
+}
+
+/* HEADER NON SELECTABLE */
+.code-header , 
+.code-header * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.not-selectable {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+/* CODE AREA */
+.code-content {
+  overflow: auto;
+  cursor: text;
+}
+
+/* RESET COUNTER */
+.code-content pre {
+  counter-reset: line;
+}
+
+/* EACH LINE */
+.code-line {
+  display: block;
+  position: relative;
+
+  padding-left: 3.5rem;
+
+  counter-increment: line;
+}
+
+/* FAKE LINE NUMBER */
+.code-line::before {
+  content: counter(line);
+
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  width: 2.2rem;
+
+  text-align: right;
+
+  color: rgba(148, 163, 184, 0.5);
+
+  font-size: 10px;
+
+  user-select: none !important;
+  -webkit-user-select: none !important;
+
+  pointer-events: none;
+}
+
+/* ONLY REAL CODE SELECTABLE */
+.code-content pre,
+.code-content code,
+.code-content span {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+.code-content pre {
+  margin: 0 !important;
+  overflow: auto !important;
+  max-width: 100% !important;
+}
+
+.code-line {
+  min-height: 1.65em;
+}
+
+textarea,
+input {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+textarea {
+  -webkit-touch-callout: default !important;
+}
