@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ArrowUp, Edit2, Folder, Plus, Search, Sparkles, Trash2, X, MoreVertical, ChevronDown, LogOut } from "lucide-react";
+import { ArrowLeft, Edit2, Folder, Plus, Search, Sparkles, Trash2, X, MoreVertical, LogOut } from "lucide-react";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useAvailableProviders } from "@/features/chat/hooks/useAvailableProviders";
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
