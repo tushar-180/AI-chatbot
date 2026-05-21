@@ -106,14 +106,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
     return "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.4)]";
   };
 
-  const getModelProgressColor = (model: string) => {
-    const m = model.toLowerCase();
-    if (m.includes("gemini")) return "from-purple-500 to-indigo-500";
-    if (m.includes("nvidia") || m.includes("nemotron")) return "from-emerald-500 to-teal-500";
-    if (m.includes("openai") || m.includes("gpt")) return "from-sky-500 to-blue-500";
-    if (m.includes("deepseek")) return "from-cyan-500 to-sky-500";
-    return "from-slate-500 to-slate-400";
-  };
+  
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
