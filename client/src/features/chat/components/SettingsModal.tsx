@@ -31,6 +31,7 @@ import {
   WifiOff,
   GitBranch,
   Database,
+  RefreshCw,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 
@@ -157,6 +158,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setMcpServers(prev =>
         prev.map(s => (s.name === name ? { ...s, enabled: currentEnabled } : s))
       );
+    } finally {
+      setIsMcpActionLoading(null);
+    }
+  };
+
+  const reconnectMcpServer = async (name: string) => {
+    setIsMcpActionLoading(name);
+    try {
+      const { data } = await api.post(`/mcp/${name}/reconnect`);
+      setMcpServers(prev => 
+        prev.map(s => s.name === name ? { ...s, ...data.server, connected: data.connected } : s)
+      );
+      toast.success(data.message || `Server reconnected successfully`);
+    } catch (err: any) {
+      console.error("Failed to reconnect MCP server:", err);
+      toast.error(err.response?.data?.error || "Failed to reconnect server");
     } finally {
       setIsMcpActionLoading(null);
     }
@@ -1512,7 +1529,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              {/* Reconnect button */}
+                              {server.enabled && (
+                                <button
+                                  onClick={() => reconnectMcpServer(server.name)}
+                                  disabled={isMcpActionLoading === server.name}
+                                  className="p-1.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/20 transition-all flex items-center justify-center cursor-pointer"
+                                  title="Force Reconnect / Restart Server"
+                                >
+                                  <RefreshCw size={14} className={isMcpActionLoading === server.name ? "animate-spin text-amber-400" : ""} />
+                                </button>
+                              )}
+
                               {/* Toggle switch */}
                               {isMcpActionLoading === server.name ? (
                                 <Loader2 size={16} className="animate-spin text-slate-500 mr-2" />

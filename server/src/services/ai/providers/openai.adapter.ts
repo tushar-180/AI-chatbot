@@ -135,8 +135,12 @@ export class OpenAIAdapter implements IAIService {
     );
   }
 
-  private getSystemInstruction(combinedSystemPrompt?: string): string {
-    const coreInstructions = CORE_VELORA_INSTRUCTIONS;
+  private getSystemInstruction(combinedSystemPrompt?: string, hasTools = false): string {
+    let coreInstructions = CORE_VELORA_INSTRUCTIONS;
+
+    if (!hasTools) {
+      coreInstructions = coreInstructions.replace(/TOOL-USE & ANTI-HALLUCINATION RULES[\s\S]*?(?=OUTPUT RULES)/, "");
+    }
 
     return combinedSystemPrompt
       ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
@@ -170,7 +174,7 @@ export class OpenAIAdapter implements IAIService {
     const finalMessages = [
       {
         role: "system" as const,
-        content: this.getSystemInstruction(combinedSystemPrompt),
+        content: this.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
       },
       ...formattedInput,
     ] as any[];
@@ -213,9 +217,14 @@ export class OpenAIAdapter implements IAIService {
           const responseMessages = await Promise.all(
             toolCalls.map(async (tc) => {
               try {
+                const toolName = (tc as any).function.name;
+                const isAllowed = tools && tools.some((t) => t.name === toolName);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${toolName}" is disabled or not allowed.`);
+                }
                 const args = JSON.parse((tc as any).function.arguments);
                 const result = await mcpClientService.executeTool(
-                  (tc as any).function.name,
+                  toolName,
                   args,
                 );
                 return {
@@ -224,11 +233,12 @@ export class OpenAIAdapter implements IAIService {
                   content: JSON.stringify(result),
                 };
               } catch (err: any) {
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
                   content: JSON.stringify({
-                    error: err.message || String(err),
+                    error: errMsg,
                   }),
                 };
               }
@@ -266,7 +276,7 @@ export class OpenAIAdapter implements IAIService {
     const finalMessages = [
       {
         role: "system" as const,
-        content: this.getSystemInstruction(combinedSystemPrompt),
+        content: this.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
       },
       ...formattedInput,
     ] as any[];
@@ -372,9 +382,14 @@ export class OpenAIAdapter implements IAIService {
               yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
 
               try {
+                const toolName = toolCall.function.name;
+                const isAllowed = tools && tools.some((t) => t.name === toolName);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${toolName}" is disabled or not allowed.`);
+                }
                 const args = JSON.parse(toolCall.function.arguments);
                 const result = await mcpClientService.executeTool(
-                  toolCall.function.name,
+                  toolName,
                   args,
                 );
                 yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
@@ -389,11 +404,12 @@ export class OpenAIAdapter implements IAIService {
                   err.message || err
                 }*\n\n`;
 
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
                   content: JSON.stringify({
-                    error: err.message || String(err),
+                    error: errMsg,
                   }),
                 });
               }

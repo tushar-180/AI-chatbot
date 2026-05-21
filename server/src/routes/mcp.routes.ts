@@ -28,6 +28,12 @@ router.get("/tools", mcpController.getActiveTools);
 router.patch("/:name/toggle", mcpController.toggleServer);
 
 /**
+ * POST /api/mcp/:name/reconnect
+ * Force reconnect/restart of an MCP server.
+ */
+router.post("/:name/reconnect", mcpController.reconnectServer);
+
+/**
  * DELETE /api/mcp/:name
  * Delete an MCP server configuration and stop its connection/process.
  */
