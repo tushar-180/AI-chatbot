@@ -32,6 +32,7 @@ export type Attachment = {
   name?: string;
   mimeType?: string;
   size?: number;
+  storagePath?: string;
 };
 
 export type ChatMessage = {

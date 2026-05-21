@@ -678,7 +678,7 @@ export const useChatStream = (hookOptions?: {
       ? null
       : storeState.currentChatId;
 
-          // Build final attachments: include document file as a virtual attachment
+    // Build final attachments: include document file as a virtual attachment
     let finalAttachments = attachments;
     if (options?.documentFile) {
       finalAttachments = [
@@ -699,7 +699,7 @@ export const useChatStream = (hookOptions?: {
       content: input.trim() || (options?.selection ? "Explain this" : ""),
       model: provider,
       status: "completed",
-            attachments: finalAttachments,
+      attachments: finalAttachments,
       metadata: options?.selection
         ? { selection: options.selection }
         : undefined,

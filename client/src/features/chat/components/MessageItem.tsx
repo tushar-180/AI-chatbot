@@ -75,7 +75,7 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-          attachment.url.startsWith("data:image") ? (
+            attachment.url.startsWith("data:image") ? (
             <img
               src={attachment.url}
               alt={attachment.name || "Attachment"}
@@ -169,14 +169,12 @@ const MessageMetadata = ({
 
   return (
     <div
-      className={`flex items-center gap-2.5 ${
-        isUser ? "flex-row-reverse" : "flex-row"
-      }`}
+      className={`flex items-center gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"
+        }`}
     >
       <span
-        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
-          isUser ? "text-slate-400" : "text-slate-500"
-        } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${isUser ? "text-slate-400" : "text-slate-500"
+          } ${isUser ? "mr-0.5" : "ml-0.5"}`}
       >
         {isUser ? "You" : "Velora"}
       </span>
@@ -378,28 +376,28 @@ const MessageItem = ({
 
   const citationComponents = !isUser
     ? {
-        ...assistantMarkdownComponents,
-        cite: ({ node }: any) => {
-          const id = Number(node?.properties?.dataId);
-          if (isNaN(id)) return null;
-          return (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                if (msg.sources?.length) {
-                  onSourcesClick?.(msg.sources, id);
-                } else {
-                  onCitationClick?.(id);
-                }
-              }}
-              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
-              title={`Source ${id}`}
-            >
-              {id}
-            </button>
-          );
-        },
-      }
+      ...assistantMarkdownComponents,
+      cite: ({ node }: any) => {
+        const id = Number(node?.properties?.dataId);
+        if (isNaN(id)) return null;
+        return (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              if (msg.sources?.length) {
+                onSourcesClick?.(msg.sources, id);
+              } else {
+                onCitationClick?.(id);
+              }
+            }}
+            className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+            title={`Source ${id}`}
+          >
+            {id}
+          </button>
+        );
+      },
+    }
     : undefined;
 
   return (
@@ -407,11 +405,10 @@ const MessageItem = ({
       className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
     >
       <div
-        className={`flex w-full gap-4 md:gap-6 ${
-          isUser
+        className={`flex w-full gap-4 md:gap-6 ${isUser
             ? "max-w-full md:max-w-4xl flex-row-reverse"
             : "max-w-full md:max-w-5xl flex-row items-start"
-        }`}
+          }`}
       >
         <div className="hidden xs:block">
           <MessageAvatar
@@ -422,9 +419,8 @@ const MessageItem = ({
         </div>
 
         <div
-          className={`flex flex-col gap-2 ${
-            isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
-          }`}
+          className={`flex flex-col gap-2 ${isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
+            }`}
         >
           {!isFailed && (
             <div
@@ -441,13 +437,12 @@ const MessageItem = ({
           )}
 
           <div
-            className={`transition-all duration-200 ease-out ${
-              isUser
+            className={`transition-all duration-200 ease-out ${isUser
                 ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
                 : isFailed
                   ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
                   : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
-            }`}
+              }`}
             ref={contentRef}
             key={highlight || "no-highlight"}
             data-message-role={msg.role}
@@ -513,120 +508,120 @@ const MessageItem = ({
                     "The AI model failed to respond. Please try again."}
                 </ReactMarkdown>
               </div>
-            ) : (              <>
-                {/* Document preview for user messages (Gemini‑style file card) */}
-                {isUser &&
-                  msg.attachments?.some((a: any) => a.isDocument) && (
-                    <div className="flex items-center gap-3 mb-3 p-3 rounded-lg border border-white/10 bg-white/5">
-                      <FileText
-                        size={18}
-                        className="text-slate-400 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                          {
-                            msg.attachments.find(
-                              (a: any) => a.isDocument,
-                            )?.name
-                          }
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {(() => {
-                            const doc = msg.attachments.find(
-                              (a: any) => a.isDocument,
-                            );
-                            return doc?.size
-                              ? `${(doc.size / 1024).toFixed(1)} KB`
-                              : '';
-                          })()}
-                        </p>
-                      </div>
+            ) : (<>
+              {/* Document preview for user messages (Gemini‑style file card) */}
+              {isUser &&
+                msg.attachments?.some((a: any) => a.isDocument) && (
+                  <div className="flex items-center gap-3 mb-3 p-3 rounded-lg border border-white/10 bg-white/5">
+                    <FileText
+                      size={18}
+                      className="text-slate-400 shrink-0"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white truncate">
+                        {
+                          msg.attachments.find(
+                            (a: any) => a.isDocument,
+                          )?.name
+                        }
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {(() => {
+                          const doc = msg.attachments.find(
+                            (a: any) => a.isDocument,
+                          );
+                          return doc?.size
+                            ? `${(doc.size / 1024).toFixed(1)} KB`
+                            : '';
+                        })()}
+                      </p>
                     </div>
-                  )}
-
-                {msg.content && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={
-                      isUser ? userMarkdownComponents : citationComponents
-                    }
-                  >
-                    {processedContent}
-                  </ReactMarkdown>
+                  </div>
                 )}
-                <AttachmentList attachments={msg.attachments || []} />
-              </>
+
+              {msg.content && (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeRaw]}
+                  components={
+                    isUser ? userMarkdownComponents : citationComponents
+                  }
+                >
+                  {processedContent}
+                </ReactMarkdown>
+              )}
+              <AttachmentList attachments={msg.attachments || []} />
+            </>
             )}
 
-            
+
           </div>
           {/* Assistant Action Buttons (ChatGPT Style) */}
-            {!isUser && !isStreaming && (msg.content || isFailed) && (
-              <div
-                className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          {!isUser && !isStreaming && (msg.content || isFailed) && (
+            <div
+              className={`mt-3 flex items-center gap-1 transition-all duration-200 ${msg.sources?.length ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+            >
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Copy to clipboard"
               >
-                <button
-                  onClick={handleCopy}
-                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                  title="Copy to clipboard"
-                >
-                  {copied ? (
-                    <Check size={17} className="text-emerald-500" />
-                  ) : (
-                    <Copy size={17} />
-                  )}
-                </button>
-
-                <button
-                  onClick={() =>
-                    onFeedback?.(msg.feedback === "like" ? null : "like")
-                  }
-                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                  title="Like"
-                >
-                  <ThumbsUp
-                    size={17}
-                    fill={msg.feedback === "like" ? "currentColor" : "none"}
-                  />
-                </button>
-
-                <button
-                  onClick={() =>
-                    onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
-                  }
-                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                  title="Dislike"
-                >
-                  <ThumbsDown
-                    size={17}
-                    fill={msg.feedback === "dislike" ? "currentColor" : "none"}
-                  />
-                </button>
-
-                <button
-                  onClick={onRetry}
-                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                  title="Regenerate response"
-                >
-                  <RotateCcw size={17} />
-                </button>
-
-                {!!msg.sources?.length && (
-                  <button
-                    onClick={() => {
-                      if (msg.sources?.length) {
-                        onSourcesClick?.(msg.sources, msg.sources[0]?.id);
-                      }
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                    title="View sources"
-                  >
-                    Sources
-                  </button>
+                {copied ? (
+                  <Check size={17} className="text-emerald-500" />
+                ) : (
+                  <Copy size={17} />
                 )}
-              </div>
-            )}
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "like" ? null : "like")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                title="Like"
+              >
+                <ThumbsUp
+                  size={17}
+                  fill={msg.feedback === "like" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                title="Dislike"
+              >
+                <ThumbsDown
+                  size={17}
+                  fill={msg.feedback === "dislike" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={onRetry}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Regenerate response"
+              >
+                <RotateCcw size={17} />
+              </button>
+
+              {!!msg.sources?.length && (
+                <button
+                  onClick={() => {
+                    if (msg.sources?.length) {
+                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                  title="View sources"
+                >
+                  Sources
+                </button>
+              )}
+            </div>
+          )}
 
           {/* User Action Buttons (Copy & Edit) */}
           {isUser && !isEditing && (
@@ -672,7 +667,7 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===
-      next.message.tokens?.completionTokens &&
+    next.message.tokens?.completionTokens &&
     prev.message.sources === next.message.sources
   );
 };

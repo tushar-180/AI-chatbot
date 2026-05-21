@@ -20,6 +20,13 @@ const getHttpStatus = (error: unknown) => {
 const getErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
+const parseBoolean = (value: unknown): boolean => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+  return false;
+};
 
 const sendControllerError = (
   res: Response,
@@ -77,13 +84,12 @@ export const createChat = asyncHandler(
     try {
 
       const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection
-      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
-          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
-
+        ? JSON.parse(req.body.attachments)
+        : (req.body.attachments || []);
+      const selection = req.body.selection
+        ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
+        : undefined;
+      const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
 
       const chat = await chatService.createChat({
         ...req.body,
@@ -111,8 +117,7 @@ export const createChatStream = async (
     const selection = req.body.selection
       ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
       : undefined;
-          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
-
+    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
 
     await pipeStreamResponse(
       req,
@@ -144,8 +149,7 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
     const selection = req.body.selection
       ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
       : undefined;
-        const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
-
+    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
     const chat = await chatService.sendMessage({
       chatId: String(req.params.id),
       ...req.body,
@@ -226,9 +230,7 @@ export const streamMessage = async (req: Request, res: Response) => {
     const selection = req.body.selection
       ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
       : undefined;
-          const webSearchEnabled = req.body.webSearchEnabled === 'true';   // parse
-
-
+    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
     await pipeStreamResponse(
       req,
       res,

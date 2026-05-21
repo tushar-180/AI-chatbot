@@ -66,10 +66,10 @@ export interface InputAreaProps {
     allowed: boolean;
     scope: "ok" | "global" | "user" | "cooldown" | "monthly";
     reason?:
-      | "global_quota_exceeded"
-      | "user_quota_exceeded"
-      | "cooldown_active"
-      | "monthly_credits_exhausted";
+    | "global_quota_exceeded"
+    | "user_quota_exceeded"
+    | "cooldown_active"
+    | "monthly_credits_exhausted";
     message?: string;
     retryAfterMs?: number;
   } | null;
@@ -123,11 +123,10 @@ const WebSearchToggle = ({
       aria-pressed={enabled}
       className={`
                 flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all
-                ${
-                  enabled
-                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
-                    : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-                }
+                ${enabled
+          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
+          : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+        }
                 ${disabled ? "opacity-40 cursor-not-allowed" : ""}
             `}
     >
@@ -202,11 +201,10 @@ const ModelSelector = ({
             <DropdownMenuItem
               key={p.id}
               onClick={() => onProviderChange(p.id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
-                selectedProvider === p.id
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${selectedProvider === p.id
                   ? "bg-white text-black"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
-              }`}
+                }`}
             >
               {getProviderIcon(p.id, 12)}
               <span className="capitalize">{getModelOnlyName(p.name)}</span>
@@ -227,7 +225,7 @@ const ModelSelector = ({
                 : quotaStatus.scope === "user"
                   ? "Daily user limit reached"
                   : quotaStatus.scope === "monthly" ||
-                      quotaStatus.reason === "monthly_credits_exhausted"
+                    quotaStatus.reason === "monthly_credits_exhausted"
                     ? "Monthly credits exhausted"
                     : "Cooldown active"
               : undefined
@@ -324,7 +322,7 @@ const InputArea = ({
         !loading &&
         !isUploading
       ) {
-          handleFormSubmit(e as any);
+        handleFormSubmit(e as any);
 
       }
     }
@@ -446,18 +444,18 @@ const InputArea = ({
   };
 
   const handleFormSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  if (loading || isUploading) return;
+    e.preventDefault();
+    if (loading || isUploading) return;
 
-  if (documentFile && onSubmitDocument) {
-    onSubmitDocument(documentFile);
-    setDocumentFile(null);
-    return;
-  }
+    if (documentFile && onSubmitDocument) {
+      onSubmitDocument(documentFile);
+      setDocumentFile(null);
+      return;
+    }
 
-  // Normal submission (no document)
-  onSubmit(e);
-};
+    // Normal submission (no document)
+    onSubmit(e);
+  };
 
   return (
     <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
@@ -489,7 +487,7 @@ const InputArea = ({
       ) : (
         <>
           <form
-            onSubmit={onSubmit}
+            onSubmit={handleFormSubmit}
             className="mx-auto max-w-4xl relative pointer-events-auto"
           >
             <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
@@ -615,11 +613,10 @@ const InputArea = ({
                       start();
                     }
                   }}
-                  className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                    isListening
+                  className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${isListening
                       ? "bg-rose-500/20 text-rose-400"
                       : "text-slate-500 hover:bg-white/5 hover:text-white"
-                  }`}
+                    }`}
                   aria-label="Voice input"
                 >
                   {isListening && !isSpeaking && (
@@ -664,15 +661,14 @@ const InputArea = ({
                         attachments.length === 0 &&
                         !selectionContext && !documentFile)
                     }
-                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                      loading ||
-                      isUploading ||
-                      (!input.trim() &&
-                        attachments.length === 0 &&
-                        !selectionContext)
+                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${loading ||
+                        isUploading ||
+                        (!input.trim() &&
+                          attachments.length === 0 &&
+                          !selectionContext)
                         ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                         : "bg-white text-slate-900 hover:bg-slate-200"
-                    }`}
+                      }`}
                   >
                     {loading ? (
                       <Loader2 size={18} className="animate-spin" />

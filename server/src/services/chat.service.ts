@@ -33,8 +33,12 @@ import {
 } from "../utils/tokenCounter";
 
 import { parseDocument } from "../modules/tools/document-parser";
+import { processDocumentFile } from "../utils/documentHandler";
 
 import { extractTranscript } from "../modules/tools/youtube";
+
+import { textCache } from "../utils/textCache";
+import { supabaseAdmin } from "../config/supabase";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -69,20 +73,6 @@ const createAssistantMessage = (
   status,
   metadata,
 });
-
-const extractDocumentText = async (
-  file: Express.Multer.File,
-): Promise<string> => {
-  const result = await parseDocument(
-    file.buffer,
-    file.originalname,
-    file.mimetype,
-  );
-  if (!result.success) {
-    throw new Error(`Failed to parse document: ${result.error?.message}`);
-  }
-  return result.text;
-};
 
 const createTitle = (message?: string) => {
   return message ? message.slice(0, CHAT_TITLE_MAX_LENGTH) : DEFAULT_CHAT_TITLE;
@@ -147,29 +137,27 @@ const getAssistantMessageByRequestId = (
 const buildGroundingMetadata = (
   webGrounding: WebGroundingContext | SearchRejection | null,
 ) => {
-  if (!webGrounding || "rejected" in webGrounding) return undefined;
-  const buildGroundingMetadata = (
-    webGrounding: WebGroundingContext | SearchRejection | null,
-  ) => {
-    if (!webGrounding || "rejected" in webGrounding) return undefined;
-    return {
-      grounded: true,
-      query: webGrounding.query,
-      resolvedQuery: webGrounding.resolvedQuery,
-      normalizedQuery: webGrounding.normalizedQuery,
-      liveDataQuery: webGrounding.liveDataQuery,
-      confidence: webGrounding.confidence,
-      debug: webGrounding.debug,
-      sources: webGrounding.sources.map(
-        ({ id, title, url, hostname, snippet }) => ({
-          id,
-          title,
-          url,
-          hostname,
-          snippet,
-        }),
-      ),
-    };
+  if (!webGrounding || "rejected" in webGrounding) {
+    return undefined;
+  }
+
+  return {
+    grounded: true,
+    query: webGrounding.query,
+    resolvedQuery: webGrounding.resolvedQuery,
+    normalizedQuery: webGrounding.normalizedQuery,
+    liveDataQuery: webGrounding.liveDataQuery,
+    confidence: webGrounding.confidence,
+    debug: webGrounding.debug,
+    sources: webGrounding.sources.map(
+      ({ id, title, url, hostname, snippet }) => ({
+        id,
+        title,
+        url,
+        hostname,
+        snippet,
+      }),
+    ),
   };
 };
 
@@ -178,14 +166,6 @@ const finalizeGroundedResponse = (
   webGrounding: WebGroundingContext | null,
 ) => {
   if (!webGrounding?.citationsMarkdown) {
-    return { content: response, appendedCitations: "" };
-  }
-
-  const alreadyHasSources = webGrounding.sources.some((source) =>
-    response.includes(source.url),
-  );
-
-  if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
     return { content: response, appendedCitations: "" };
   }
 
@@ -247,7 +227,41 @@ const buildPromptMessages = async (
   const lastUserMsg = [...rawPromptMessages]
     .reverse()
     .find((m) => m.role === "user");
-  const documentContext = lastUserMsg?.metadata?.documentText || null;
+  // --- Document context injection (new) ---
+  let documentContext: string | null = null;
+  const userMessagesWithDocs = rawPromptMessages
+    .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
+    .slice(-1); // take the most recent one
+
+  if (userMessagesWithDocs.length > 0) {
+    const lastDocMsg = userMessagesWithDocs[0];
+    const storagePath = lastDocMsg.attachments?.find((a) => a.storagePath)?.storagePath;
+    if (storagePath) {
+      // 1. Try cache
+      let text = textCache.get(storagePath);
+      if (!text) {
+        // 2. Download from Supabase and extract
+        try {
+          const { data } = await supabaseAdmin.storage
+            .from("documents")
+            .download(storagePath);
+          if (data) {
+            const buffer = Buffer.from(await data.arrayBuffer());
+            const parsed = await parseDocument(buffer, "", lastDocMsg.attachments?.[0]?.mimeType || "");
+            if (parsed.success) {
+              text = parsed.text;
+              textCache.set(storagePath, text);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to fetch document from storage:", err);
+        }
+      }
+      if (text) {
+        documentContext = `The user provided a document. Use its content to answer any questions. The document text:\n\n${text}`;
+      }
+    }
+  }
 
   // Apply selection logic from staging (if present)
   if (lastUserMsg?.metadata?.selection) {
@@ -297,7 +311,10 @@ ${userRequest}`;
       return result?.success ? result.text : null;
     })(),
     (async () => {
-      if (!webSearchEnabled || !effectiveLatestUserMessage) return null;
+      if (!webSearchEnabled) {
+        return null;
+      }
+      const started = Date.now();
       const result = await withTimeout(
         webSearchService.buildGroundingContext(
           effectiveLatestUserMessage,
@@ -305,10 +322,10 @@ ${userRequest}`;
           userId,
           isGemini,
         ),
-        EXTERNAL_CALL_TIMEOUT_MS,
+        30000,
       );
       return result && !("rejected" in result) ? result : null;
-    })(),
+    })()
   ]);
 
   // Extract values (null on failure)
@@ -338,7 +355,7 @@ ${userRequest}`;
       content: documentContext
         ? `The user provided a document. Use its content to answer any questions. The document text:\n\n${documentContext}`
         : null,
-      priority: 25,
+      priority: 30,
     },
     { content: webGrounding?.systemPrompt ?? null, priority: 40 },
   ];
@@ -363,112 +380,6 @@ ${userRequest}`;
   };
 };
 
-// const buildPromptMessages = async (
-//   userId: string,
-//   chatMessages: ChatMessage[],
-//   latestUserMessage?: string,
-//   webSearchEnabled = false,
-//   provider?: string,
-// ) => {
-//   const promptMessages = getLimitedMessages(chatMessages);
-//   const systemMessages: ChatMessage[] = [
-//     {
-//       role: "system",
-//       content: BASE_SYSTEM_PROMPT,
-//       userId,
-//       status: "completed",
-//     },
-//   ];
-
-//   const personalizationContext =
-//     await userService.getPersonalizationContext(userId);
-//   if (personalizationContext) {
-//     systemMessages.push({
-//       role: "system",
-//       content: personalizationContext,
-//       userId,
-//       status: "completed",
-//     });
-//   }
-
-//   const memoryContext = await memoryService.getMemoryContext(
-//     userId,
-//     latestUserMessage,
-//   );
-//   if (memoryContext) {
-//     systemMessages.push({
-//       role: "system",
-//       content: memoryContext,
-//       userId,
-//       status: "completed",
-//     });
-//   }
-
-//   let youtubeTranscriptContent: string | null = null;
-//   if (latestUserMessage) {
-//     const youtubeRegex =
-//       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
-//     const match = latestUserMessage.match(youtubeRegex);
-//     if (match) {
-//       const videoId = match[1];
-//       const result = await extractTranscript({
-//         videoIdOrUrl: videoId,
-//       });
-//       if (result.success) {
-//         youtubeTranscriptContent = result.text;
-//         console.log(
-//           `[YouTube] Extracted transcript (${result.length} chars) for video ${result.videoId}`,
-//         );
-//       } else {
-//         console.warn(
-//           `[YouTube] Failed: ${result.error.code} - ${result.error.message}`,
-//         );
-//       }
-//     }
-//   }
-
-//   let webGrounding: WebGroundingContext | null = null;
-//   const supportsImages = provider?.startsWith("gemini");
-//   if (webSearchEnabled && latestUserMessage) {
-//     const result = await webSearchService.buildGroundingContext(
-//       latestUserMessage,
-//       chatMessages,
-//       userId,
-//       supportsImages,
-//     );
-
-//     // Handle quota/cooldown rejections gracefully
-//     if (result && "rejected" in result) {
-//       console.warn(
-//         `[chat] Web search rejected: ${result.reason} — ${result.message}`,
-//       );
-//     } else {
-//       webGrounding = result;
-//     }
-//   }
-//   if (youtubeTranscriptContent) {
-//     systemMessages.push({
-//       role: "system",
-//       content: `The user provided a YouTube video. Here is its transcript (use it to answer questions about the video):\n\n${youtubeTranscriptContent}`,
-//       userId,
-//       status: "completed",
-//     });
-//   }
-//   if (webGrounding) {
-//     systemMessages.push({
-//       role: "system",
-//       content: webGrounding.systemPrompt,
-//       userId,
-//       status: "completed",
-//     });
-//   }
-
-//   return {
-//     promptMessages: [...systemMessages, ...promptMessages],
-//     webGrounding,
-//   };
-// };
-
 async function* streamAssistantResponse(
   chat: Awaited<ReturnType<typeof requireChat>>,
   requestId: string,
@@ -483,8 +394,8 @@ async function* streamAssistantResponse(
   // If retrying, we filter out the message being retried from the prompt context
   const messagesForPrompt = existingAssistantMessageId
     ? (chat.messages as ChatMessage[]).filter(
-        (m) => (m as any).id !== existingAssistantMessageId,
-      )
+      (m) => (m as any).id !== existingAssistantMessageId,
+    )
     : (chat.messages as ChatMessage[]);
 
   const lastUserMessage = messagesForPrompt
@@ -535,12 +446,12 @@ async function* streamAssistantResponse(
   yield (
     includeChatId
       ? {
-          chatId,
-          messageId,
-          requestId,
-          model: providerName,
-          status: "streaming",
-        }
+        chatId,
+        messageId,
+        requestId,
+        model: providerName,
+        status: "streaming",
+      }
       : { messageId, requestId, model: providerName, status: "streaming" }
   ) as StreamPayload;
 
@@ -568,6 +479,14 @@ async function* streamAssistantResponse(
 
   try {
     const tools = await getEnabledMcpTools(String(chat.userId));
+
+    const promptSizes = promptMessages.map(m => ({
+      role: m.role,
+      length: m.content?.length || 0,
+    }));
+    console.log(`[stream] Prompt messages (${promptMessages.length}):`, promptSizes);
+    const totalPromptChars = promptMessages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
+    console.log(`[stream] Total prompt characters: ${totalPromptChars}`);
     const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
@@ -581,7 +500,7 @@ async function* streamAssistantResponse(
         firstTokenTimedOut = true;
         activeStream.abortController.abort();
       }
-    }, 30000);
+    }, 50000);
 
     try {
       for await (const chunk of stream) {
@@ -755,13 +674,16 @@ export const chatService = {
         attachments,
       );
       let documentText: string | null = null;
+      let allAttachments = attachments || [];
+
       if (documentFile) {
-        documentText = await extractDocumentText(documentFile);
+        const result = await processDocumentFile(documentFile, resolvedUserId, allAttachments);
+        documentText = result.documentText;
+        allAttachments = result.attachments;
       }
       userMessage.metadata = {
         webSearchEnabled: Boolean(webSearchEnabled),
         selection,
-        documentText,
       };
       const userPromptText = userMessage.content || "";
       const attachmentCount = attachments?.length || 0;
@@ -863,15 +785,18 @@ export const chatService = {
       String(resolvedUserId),
       input.provider,
       input.attachments,
-    );
-    let documentText: string | null = null;
+    ); let documentText: string | null = null;
+    let allAttachments = input.attachments || [];
     if (input.documentFile) {
-      documentText = await extractDocumentText(input.documentFile);
+      const result = await processDocumentFile(input.documentFile, resolvedUserId, allAttachments);
+      documentText = result.documentText;
+      allAttachments = result.attachments;
     }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT documentText
     userMsg.metadata = {
       webSearchEnabled: Boolean(input.webSearchEnabled),
       selection: input.selection,
-      documentText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = input.attachments?.length || 0;
@@ -913,9 +838,14 @@ export const chatService = {
       attachments,
     );
     let documentText: string | null = null;
+    let allAttachments = attachments || [];
     if (documentFile) {
-      documentText = await extractDocumentText(documentFile);
+      const result = await processDocumentFile(documentFile, String(chat.userId), allAttachments);
+      documentText = result.documentText;
+      allAttachments = result.attachments;
     }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT documentText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
@@ -1023,13 +953,17 @@ export const chatService = {
       attachments,
     );
     let documentText: string | null = null;
+    let allAttachments = attachments || [];
     if (documentFile) {
-      documentText = await extractDocumentText(documentFile);
+      const result = await processDocumentFile(documentFile, String(chat.userId), allAttachments);
+      documentText = result.documentText;
+      allAttachments = result.attachments;
     }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT documentText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
-      documentText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
