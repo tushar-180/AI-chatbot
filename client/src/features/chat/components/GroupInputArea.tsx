@@ -481,7 +481,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none ">
       <form
         onSubmit={handleSubmit}
         className="mx-auto max-w-4xl relative pointer-events-auto"

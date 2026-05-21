@@ -11,15 +11,14 @@ import {
   ThumbsDown,
   Copy,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import type { WebSource } from "../types/chat.types";
-import {
-  assistantMarkdownComponents,
-  userMarkdownComponents,
-} from "./MarkdownConfig";
+import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
 
 interface Attachment {
@@ -168,7 +167,7 @@ const MessageMetadata = ({
 
   return (
     <div
-      className={`flex items-center gap-2.5 ${
+      className={`flex items-center gap-2.5 not-selectable ${
         isUser ? "flex-row-reverse" : "flex-row"
       }`}
     >
@@ -235,6 +234,9 @@ const MessageItem = ({
   const highlightedRef = useRef(false);
   const lastHighlightedTerm = useRef<string | null>(null);
 
+  const [isExpanded, setIsExpanded] = useState(false);
+  const CHAR_LIMIT = 500;
+  const needsToggle = msg.content.length > CHAR_LIMIT;
   useEffect(() => {
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
@@ -353,6 +355,25 @@ const MessageItem = ({
       onEdit?.(editContent);
     }
     setIsEditing(false);
+  };
+
+
+
+  const handleExpantion = () => {
+    if (isExpanded) {
+      setIsExpanded(false);
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          contentRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }, 30);
+      });
+    } else {
+      setIsExpanded(true);
+    }
   };
 
   const handleCopy = () => {
@@ -515,93 +536,130 @@ const MessageItem = ({
             ) : (
               <>
                 {msg.content && (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw]}
-                    components={
-                      isUser ? userMarkdownComponents : citationComponents
+                  <div
+                    className={
+                      isUser ? "wrap-break-word whitespace-pre-wrap" : ""
                     }
                   >
-                    {processedContent}
-                  </ReactMarkdown>
+                    <div
+                      className={
+                        isUser
+                          ? `relative ${!isExpanded && needsToggle ? "line-clamp-10" : ""}`
+                          : ""
+                      }
+                    >
+                      {isUser ? (
+                        <div className="whitespace-pre-wrap break-words text-white">
+                          {msg.content}
+                        </div>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
+                          components={citationComponents}
+                        >
+                          {processedContent}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+
+                    {/* The Show More/Less Button */}
+                    {needsToggle && isUser && (
+                      <button
+                        onClick={handleExpantion}
+                        className="mt-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        <div className="flex gap-2 justify-center items-center not-selectable">
+                          {isExpanded ? (
+                            <>
+                              Show less <ChevronUp size={14} />
+                            </>
+                          ) : (
+                            <>
+                              Show more <ChevronDown size={14} />
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    )}
+                  </div>
                 )}
                 <AttachmentList attachments={msg.attachments || []} />
               </>
             )}
-
-            
           </div>
           {/* Assistant Action Buttons (ChatGPT Style) */}
-            {!isUser && !isStreaming && (msg.content || isFailed) && (
-              <div
-                className="mt-3 flex items-center gap-1 transition-all duration-200 opacity-100"
+          
+          {!isUser && !isStreaming && (msg.content || isFailed) && (
+            <div
+              className={` flex items-center gap-1 transition-all duration-200 opacity-100`}
+            >
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Copy to clipboard"
               >
-                <button
-                  onClick={handleCopy}
-                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                  title="Copy to clipboard"
-                >
-                  {copied ? (
-                    <Check size={17} className="text-emerald-500" />
-                  ) : (
-                    <Copy size={17} />
-                  )}
-                </button>
-
-                <button
-                  onClick={() =>
-                    onFeedback?.(msg.feedback === "like" ? null : "like")
-                  }
-                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                  title="Like"
-                >
-                  <ThumbsUp
-                    size={17}
-                    fill={msg.feedback === "like" ? "currentColor" : "none"}
-                  />
-                </button>
-
-                <button
-                  onClick={() =>
-                    onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
-                  }
-                  className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
-                  title="Dislike"
-                >
-                  <ThumbsDown
-                    size={17}
-                    fill={msg.feedback === "dislike" ? "currentColor" : "none"}
-                  />
-                </button>
-
-                <button
-                  onClick={onRetry}
-                  className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                  title="Regenerate response"
-                >
-                  <RotateCcw size={17} />
-                </button>
-
-                {!!msg.sources?.length && (
-                  <button
-                    onClick={() => {
-                      if (msg.sources?.length) {
-                        onSourcesClick?.(msg.sources, msg.sources[0]?.id);
-                      }
-                    }}
-                    className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                    title="View sources"
-                  >
-                    Sources
-                  </button>
+                {copied ? (
+                  <Check size={17} className="text-emerald-500" />
+                ) : (
+                  <Copy size={17} />
                 )}
-              </div>
-            )}
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "like" ? null : "like")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                title="Like"
+              >
+                <ThumbsUp
+                  size={17}
+                  fill={msg.feedback === "like" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                title="Dislike"
+              >
+                <ThumbsDown
+                  size={17}
+                  fill={msg.feedback === "dislike" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={onRetry}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Regenerate response"
+              >
+                <RotateCcw size={17} />
+              </button>
+
+              {!!msg.sources?.length && (
+                <button
+                  onClick={() => {
+                    if (msg.sources?.length) {
+                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                  title="View sources"
+                >
+                  Sources
+                </button>
+              )}
+            </div>
+          )}
 
           {/* User Action Buttons (Copy & Edit) */}
           {isUser && !isEditing && (
             <div
-              className="mt-1 flex items-center gap-1 opacity-100 transition-all duration-200"
+              className=" flex items-center gap-1 opacity-100 transition-all duration-200"
             >
               <button
                 onClick={handleCopy}
