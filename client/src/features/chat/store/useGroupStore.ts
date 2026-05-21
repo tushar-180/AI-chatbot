@@ -15,6 +15,7 @@ export type GroupMessage = {
   username: string;
   userImage?: string;
   role: "user" | "assistant" | "system";
+  feedback?: "like" | "dislike" | null;
   content: string;
   status?: "streaming" | "stopped" | "completed" | "failed";
   type: "text" | "image" | "file" | "action" | "event";
@@ -55,21 +56,37 @@ type GroupState = {
   setGroups: (groups: GroupChat[]) => void;
   addGroup: (group: GroupChat) => void;
   setCurrentGroup: (id: string | null) => void;
+
   setGroupMessages: (
     messages: GroupMessage[] | ((prev: GroupMessage[]) => GroupMessage[]),
   ) => void;
+
   addGroupMessage: (message: GroupMessage) => void;
+
+  // 🆕 NEW
+  updateGroupMessage: (
+    messageId: string,
+    content: string,
+  ) => void;
+
+  setGroupMessageFeedback: (
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) => void;
+
+  retryAiMessage: (messageId: string) => GroupMessage | null;
+
   setLoading: (loading: boolean) => void;
   setIsAiThinking: (isAiThinking: boolean) => void;
   setIsWebSearching: (isWebSearching: boolean) => void;
+
   removeGroup: (id: string) => void;
   updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
   updateGroup: (groupId: string, updates: Partial<GroupChat>) => void;
 };
-
 export const useGroupStore = create<GroupState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       groups: [],
       currentGroupId: null,
       groupMessages: [],
@@ -78,11 +95,14 @@ export const useGroupStore = create<GroupState>()(
       isWebSearching: false,
 
       setGroups: (groups) => set({ groups }),
+
       addGroup: (group) =>
         set((state) => ({
           groups: [group, ...state.groups.filter((g) => g._id !== group._id)],
         })),
+
       setCurrentGroup: (id) => set({ currentGroupId: id }),
+
       setGroupMessages: (messages) =>
         set((state) => ({
           groupMessages:
@@ -90,29 +110,90 @@ export const useGroupStore = create<GroupState>()(
               ? messages(state.groupMessages)
               : messages,
         })),
+
       addGroupMessage: (message) =>
         set((state) => ({
           groupMessages: [...state.groupMessages, message],
         })),
+
+      // 🆕 EDIT MESSAGE
+      updateGroupMessage: (messageId, content) =>
+        set((state) => ({
+          groupMessages: state.groupMessages.map((m) =>
+            m._id === messageId
+              ? {
+                  ...m,
+                  content,
+                }
+              : m,
+          ),
+        })),
+
+      // 🆕 FEEDBACK
+      setGroupMessageFeedback: (messageId, feedback) =>
+        set((state) => ({
+          groupMessages: state.groupMessages.map((m) =>
+            m._id === messageId
+              ? {
+                  ...m,
+                  feedback,
+                }
+              : m,
+          ),
+        })),
+
+      // 🆕 RETRY
+      retryAiMessage: (messageId) => {
+        const state = get();
+
+        const index = state.groupMessages.findIndex(
+          (m) => m._id === messageId,
+        );
+
+        if (index === -1) return null;
+
+        for (let i = index - 1; i >= 0; i--) {
+          const msg = state.groupMessages[i];
+
+          if (msg.role === "user") {
+            return msg;
+          }
+        }
+
+        return null;
+      },
+
       setLoading: (loading) => set({ loading }),
+
       setIsAiThinking: (isAiThinking) => set({ isAiThinking }),
-      setIsWebSearching: (isWebSearching) => set({ isWebSearching }),
+
+      setIsWebSearching: (isWebSearching) =>
+        set({ isWebSearching }),
+
       removeGroup: (id) =>
         set((state) => ({
           groups: state.groups.filter((g) => g._id !== id),
           currentGroupId:
-            state.currentGroupId === id ? null : state.currentGroupId,
+            state.currentGroupId === id
+              ? null
+              : state.currentGroupId,
         })),
+
       updateGroupMembers: (groupId, members) =>
         set((state) => ({
           groups: state.groups.map((g) =>
-            g._id === groupId ? { ...g, members } : g,
+            g._id === groupId
+              ? { ...g, members }
+              : g,
           ),
         })),
+
       updateGroup: (groupId, updates) =>
         set((state) => ({
           groups: state.groups.map((g) =>
-            g._id === groupId ? { ...g, ...updates } : g,
+            g._id === groupId
+              ? { ...g, ...updates }
+              : g,
           ),
         })),
     }),

@@ -19,6 +19,9 @@ const GroupChat = () => {
     isStreaming,
     typingUsers,
     sendTypingStatus,
+    editMessage,
+    retryMessage,
+    updateMessageFeedback,
   } = useGroupChat();
   const { setCurrentGroup } = useGroupStore();
 
@@ -71,6 +74,9 @@ const GroupChat = () => {
             <GroupMessageList
               onCitationClick={handleCitationClick}
               onSourcesClick={handleSourcesOpen}
+              onEditMessage={editMessage}
+              onRetryMessage={retryMessage}
+              onFeedback={updateMessageFeedback}
             />
           </div>
         </div>

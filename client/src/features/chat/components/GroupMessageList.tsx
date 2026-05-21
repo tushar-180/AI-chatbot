@@ -13,11 +13,19 @@ import { useParams } from "react-router-dom";
 interface GroupMessageListProps {
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: any[], activeId?: number) => void;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onEditStart?: () => void;
+  onRetryMessage?: (messageId: string) => void;
+  onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
 }
 
 const GroupMessageList = ({
   onCitationClick,
   onSourcesClick,
+  onEditMessage,
+  onEditStart,
+  onRetryMessage,
+  onFeedback,
 }: GroupMessageListProps) => {
   const { groupMessages, loading, isAiThinking, isWebSearching } =
     useGroupStore();
@@ -148,6 +156,10 @@ const GroupMessageList = ({
                 message={msg}
                 onCitationClick={onCitationClick}
                 onSourcesClick={onSourcesClick}
+                onEdit={(content) => onEditMessage?.(msg._id, content)}
+                onEditStart={onEditStart}
+                onRetry={() => onRetryMessage?.(msg._id)}
+                onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}
               />
             ))}
             {isAiThinking && (

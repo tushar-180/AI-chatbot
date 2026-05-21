@@ -1,19 +1,38 @@
-import { memo } from "react";
+import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
-import { AlertCircle } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  Pencil,
+  X,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
+} from "lucide-react";
+
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import {
-  assistantMarkdownComponents,
-  userMarkdownComponents,
-} from "./MarkdownConfig";
+
+import { assistantMarkdownComponents } from "./MarkdownConfig";
+
 import type { GroupMessage } from "../store/useGroupStore";
 
 interface GroupMessageItemProps {
   message: GroupMessage;
+
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: any[], activeId?: number) => void;
+
+  onEdit?: (content: string) => void;
+  onEditStart?: () => void;
+
+  onRetry?: () => void;
+
+  onFeedback?: (feedback: "like" | "dislike" | null) => void;
 }
 
 const MessageAvatar = ({
@@ -30,7 +49,7 @@ const MessageAvatar = ({
   size?: number;
 }) => (
   <div
-    className={`flex shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 ${
+    className={`flex shrink-0 items-center justify-center rounded-lg overflow-hidden transition-all duration-300 not-selectable  ${
       failed ? "border border-red-500/20 bg-red-500/10" : ""
     }`}
     style={{ width: size, height: size }}
@@ -49,15 +68,12 @@ const MessageAvatar = ({
       <img
         src="/logo.png"
         alt="Velora Logo"
-        className="h-full w-full object-contain"
+        className="h-full w-full object-contain "
       />
     )}
   </div>
 );
 
-/**
- * Renders a list of attachments (e.g. images)
- */
 const AttachmentList = ({ attachments }: { attachments: any[] }) => {
   if (!attachments || attachments.length === 0) return null;
 
@@ -82,10 +98,12 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
                   File
                 </span>
               </div>
+
               <div className="flex flex-col">
                 <span className="text-sm font-medium text-white truncate max-w-50">
                   {attachment.name || "File"}
                 </span>
+
                 {attachment.size && (
                   <span className="text-[10px] text-slate-400">
                     {(attachment.size / 1024).toFixed(1)} KB
@@ -104,14 +122,95 @@ const GroupMessageItem = ({
   message: msg,
   onCitationClick,
   onSourcesClick,
+  onEdit,
+  onEditStart,
+  onRetry,
+  onFeedback,
 }: GroupMessageItemProps) => {
   const { user } = useUser();
 
-  // Robust check for AI vs User
   const isAssistant = msg.role === "assistant" || msg.userId === "velora";
   const isMe = msg.userId === user?.id && !isAssistant;
   const isSystem = msg.role === "system";
+  const isUser = msg.role === "user";
+
   const isFailed = msg.status === "failed";
+
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(msg.content);
+
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const CHAR_LIMIT = 500;
+  const needsToggle = msg.content.length > CHAR_LIMIT;
+
+  useEffect(() => {
+    if (isEditing && textareaRef.current) {
+      textareaRef.current.focus();
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [isEditing]);
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content);
+
+    setCopied(true);
+
+    setTimeout(() => {
+      setCopied(false);
+    }, 2000);
+  };
+
+  const handleEditStart = () => {
+    setIsEditing(true);
+    setEditContent(msg.content);
+
+    onEditStart?.();
+  };
+
+  const handleExpantion = () => {
+    if (isExpanded) {
+      setIsExpanded(false);
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          messageRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }, 30);
+      });
+    } else {
+      setIsExpanded(true);
+    }
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+    setEditContent(msg.content);
+  };
+
+  const handleEditSave = () => {
+    if (editContent.trim() && editContent !== msg.content) {
+      onEdit?.(editContent);
+    }
+
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSave();
+    } else if (e.key === "Escape") {
+      handleEditCancel();
+    }
+  };
 
   if (isSystem) {
     return (
@@ -123,38 +222,49 @@ const GroupMessageItem = ({
     );
   }
 
-  // Use either the image from Clerk (if it's me) or from the message (if it's someone else)
   const displayImageUrl = isMe ? user?.imageUrl : msg.userImage;
 
   const formatBadgeText = (model: string) => {
     if (model.toLowerCase().startsWith("gemini-")) {
       const subName = model.substring("gemini-".length);
+
       return `Gemini : ${subName}`;
     }
+
     const firstDash = model.indexOf("-");
+
     if (firstDash !== -1) {
       const provider = model.substring(0, firstDash);
       const subName = model.substring(firstDash + 1);
+
       return `${provider.charAt(0).toUpperCase() + provider.slice(1)} : ${subName}`;
     }
+
     return model;
   };
 
   const renderUsername = () => {
-    if (isMe) return <span className="text-emerald-400">You</span>;
+    if (isMe) {
+      return <span className="text-emerald-400 ">You</span>;
+    }
+
     const name = msg.username || "Velora";
 
     const match = name.match(/^Velora \(([^)]+)\)$/i);
+
     if (match) {
       const model = match[1];
+
       return (
-        <span className="flex items-center gap-2">
+        <span className="flex items-center gap-2 not-selectable">
           <span className="text-slate-300 font-bold tracking-[0.18em]">
             Velora
           </span>
+
           <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
             {formatBadgeText(model)}
           </span>
+
           {msg.metadata?.webSearchEnabled && (
             <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
               web search
@@ -180,6 +290,7 @@ const GroupMessageItem = ({
   };
 
   let processedContent = msg.content || "";
+
   if (isAssistant) {
     processedContent = processedContent.replace(
       /\[(\d+)\]/g,
@@ -193,7 +304,9 @@ const GroupMessageItem = ({
           match.startsWith(" ") ||
           match.startsWith("\n") ||
           match.startsWith("\r");
+
         const mentionText = match.trim();
+
         return (
           (hasLeadingSpace ? " " : "") +
           `<span class="text-emerald-400 font-medium">${mentionText}</span>`
@@ -205,14 +318,22 @@ const GroupMessageItem = ({
   const citationComponents = isAssistant
     ? {
         ...assistantMarkdownComponents,
+
         cite: ({ node }: any) => {
           const id = Number(node?.properties?.dataId);
+
           if (isNaN(id)) return null;
+
           return (
             <button
               onClick={(e) => {
                 e.preventDefault();
-                onCitationClick?.(id);
+
+                if (msg.sources?.length) {
+                  onSourcesClick?.(msg.sources, id);
+                } else {
+                  onCitationClick?.(id);
+                }
               }}
               className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
               title={`Source ${id}`}
@@ -225,9 +346,11 @@ const GroupMessageItem = ({
     : undefined;
 
   return (
-    <div className={`flex w-full ${isMe ? "justify-end" : "justify-start"}`}>
+    <div
+      className={`group flex w-full ${isMe ? "justify-end" : "justify-start"}`}
+    >
       <div
-        className={`flex w-full gap-4 ${
+        className={`flex w-full gap-4  ${
           isMe
             ? "max-w-full md:max-w-4xl flex-row-reverse"
             : "max-w-full md:max-w-5xl flex-row items-start"
@@ -238,9 +361,10 @@ const GroupMessageItem = ({
             isMe ? "items-end" : "items-start"
           }`}
         >
-          {/* Header with Icon and Name */}
           <div
-            className={`flex items-center gap-2 ${isMe ? "flex-row-reverse" : "flex-row"}`}
+            className={`flex items-center gap-2 ${
+              isMe ? "flex-row-reverse" : "flex-row"
+            }`}
           >
             <MessageAvatar
               isUser={!isAssistant}
@@ -249,13 +373,14 @@ const GroupMessageItem = ({
               failed={isFailed}
               size={16}
             />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+
+            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] not-selectable">
               {renderUsername()}
             </span>
           </div>
 
-          {/* Message Bubble */}
           <div
+            ref={messageRef}
             className={`transition-opacity duration-150 ease-out ${
               isMe
                 ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
@@ -266,11 +391,46 @@ const GroupMessageItem = ({
                     : "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
             }`}
           >
-            {isFailed ? (
+            {isEditing ? (
+              <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                <textarea
+                  ref={textareaRef}
+                  value={editContent}
+                  onChange={(e) => {
+                    setEditContent(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${e.target.scrollHeight}px`;
+                  }}
+                  onKeyDown={handleKeyDown}
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                  rows={1}
+                />
+
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={handleEditCancel}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                  >
+                    <X size={14} />
+                    Cancel
+                  </button>
+
+                  <button
+                    onClick={handleEditSave}
+                    disabled={!editContent.trim()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                  >
+                    <Check size={14} />
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : isFailed ? (
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-red-300">
                   AI Response Failed
                 </span>
+
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -282,24 +442,56 @@ const GroupMessageItem = ({
               </div>
             ) : (
               <>
-                {!isAssistant && msg.metadata?.webSearchEnabled && (
-                  <div className="mb-2 flex items-center justify-start">
-                    <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
-                      web search
-                    </span>
+                {msg.content && (
+                  <div
+                    className={
+                      isUser ? "wrap-break-word whitespace-pre-wrap" : ""
+                    }
+                  >
+                    <div
+                      className={
+                        isUser
+                          ? `relative ${
+                              !isExpanded && needsToggle ? "line-clamp-10" : ""
+                            }`
+                          : ""
+                      }
+                    >
+                      {isUser ? (
+                        <div className="whitespace-pre-wrap break-words text-white">
+                          {msg.content}
+                        </div>
+                      ) : (
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          rehypePlugins={[rehypeRaw]}
+                          components={citationComponents}
+                        >
+                          {processedContent}
+                        </ReactMarkdown>
+                      )}
+                    </div>
+
+                    {needsToggle && isUser && (
+                      <button
+                        onClick={handleExpantion}
+                        className="mt-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                      >
+                        <div className="flex gap-2 justify-center items-center not-selectable">
+                          {isExpanded ? (
+                            <>
+                              Show less <ChevronUp size={14} />
+                            </>
+                          ) : (
+                            <>
+                              Show more <ChevronDown size={14} />
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    )}
                   </div>
                 )}
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
-                  components={
-                    isAssistant
-                      ? citationComponents || assistantMarkdownComponents
-                      : userMarkdownComponents
-                  }
-                >
-                  {processedContent}
-                </ReactMarkdown>
 
                 <AttachmentList attachments={msg.attachments || []} />
 
@@ -312,7 +504,6 @@ const GroupMessageItem = ({
                         }
                       }}
                       className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                      title="View sources"
                     >
                       Sources
                     </button>
@@ -321,6 +512,90 @@ const GroupMessageItem = ({
               </>
             )}
           </div>
+
+          {/* Assistant Actions */}
+          {isAssistant && !isEditing && (
+            <div className=" flex items-center gap-1 opacity-100 transition-all duration-200">
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Copy"
+              >
+                {copied ? (
+                  <Check size={17} className="text-emerald-500" />
+                ) : (
+                  <Copy size={17} />
+                )}
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "like" ? null : "like")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
+                  msg.feedback === "like"
+                    ? "text-indigo-400 bg-indigo-500/10"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                title="Like"
+              >
+                <ThumbsUp
+                  size={17}
+                  fill={msg.feedback === "like" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={() =>
+                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
+                }
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
+                  msg.feedback === "dislike"
+                    ? "text-red-400 bg-red-500/10"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
+                title="Dislike"
+              >
+                <ThumbsDown
+                  size={17}
+                  fill={msg.feedback === "dislike" ? "currentColor" : "none"}
+                />
+              </button>
+
+              <button
+                onClick={onRetry}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Retry"
+              >
+                <RotateCcw size={17} />
+              </button>
+            </div>
+          )}
+
+          {/* User Actions */}
+          {isMe && !isEditing && (
+            <div className="flex items-center gap-1 opacity-100 transition-all duration-200">
+              <button
+                onClick={handleCopy}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Copy"
+              >
+                {copied ? (
+                  <Check size={17} className="text-emerald-500" />
+                ) : (
+                  <Copy size={17} />
+                )}
+              </button>
+
+              <button
+                onClick={handleEditStart}
+                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                title="Edit"
+              >
+                <Pencil size={17} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

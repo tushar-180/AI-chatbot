@@ -5,6 +5,7 @@ import {
     useEffect,
     memo,
     useState,
+    useLayoutEffect,
 } from "react";
 import {
     ArrowUp,
@@ -172,7 +173,7 @@ const ModelSelector = ({
         selectedProvider;
 
     return (
-        <div className="flex items-center gap-2 px-4 pt-3">
+        <div className="flex items-center gap-2 px-4 pt-3 ">
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <button
@@ -266,7 +267,7 @@ const InputArea = ({
     const { isListening, isSpeaking, start, stop } = useVoiceInput({
         onResult: (text) => {
             console.log("✍️ Injecting voice text into input:", text);
-            onInputChange(text);
+           onInputChange(input + " " + text);
         },
     });
 
@@ -278,15 +279,13 @@ const InputArea = ({
     const canUpload = supportsVision(selectedProvider);
 
     // Auto-resize logic
-    useEffect(() => {
-        if (textareaRef.current) {
-            textareaRef.current.style.height = "auto";
-            textareaRef.current.style.height = `${Math.min(
-                textareaRef.current.scrollHeight,
-                200,
-            )}px`;
-        }
-    }, [input]);
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+}, [input]);
 
     // Quote insertion listener with focus and cursor placement
     useEffect(() => {
@@ -375,9 +374,9 @@ const InputArea = ({
     };
 
     return (
-        <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
+        <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10  ">
             {isArchived ? (
-                <div className="mx-auto max-w-4xl pointer-events-auto px-4 md:px-0">
+                <div className="mx-auto max-w-4xl  px-4 md:px-0">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
                         <div className="flex items-center gap-4">
                             <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
@@ -405,7 +404,7 @@ const InputArea = ({
                 <>
                     <form
                         onSubmit={onSubmit}
-                        className="mx-auto max-w-4xl relative pointer-events-auto"
+                        className="mx-auto max-w-4xl relative "
                     >
                     <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
                         <ComposerQuotePreview />

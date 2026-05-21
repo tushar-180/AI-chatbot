@@ -283,6 +283,21 @@ export const useGroupChat = () => {
         } else {
           setIsWebSearching(false);
         }
+      } else if (data.type === "message_updated") {
+        setGroupMessages((prev) =>
+          prev.map((m) => (m._id === data.message._id ? data.message : m))
+        );
+      } else if (data.type === "messages_deleted_after") {
+        const threshold = new Date(data.createdAt).getTime();
+        setGroupMessages((prev) =>
+          prev.filter((m) => {
+            const t = new Date(m.createdAt).getTime();
+            if (data.inclusive) {
+              return t < threshold && m._id !== data.messageId;
+            }
+            return t <= threshold;
+          })
+        );
       }
     });
 
@@ -396,6 +411,45 @@ export const useGroupChat = () => {
     }
   };
 
+  const editMessage = async (messageId: string, content: string) => {
+    if (!groupId || !content.trim()) return;
+    try {
+      await api.patch(`/group/${groupId}/messages/${messageId}`, {
+        content,
+        webSearchEnabled: false,
+      });
+    } catch (err) {
+      console.error("Error editing group message:", err);
+    }
+  };
+
+  const retryMessage = async (messageId: string) => {
+    if (!groupId) return;
+    try {
+      await api.post(`/group/${groupId}/messages/${messageId}/retry`);
+    } catch (err) {
+      console.error("Error retrying group message:", err);
+    }
+  };
+
+  const updateMessageFeedback = async (
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) => {
+    if (!groupId) return;
+    try {
+      // Optimistically update the message locally so the thumbs up/down change color instantly!
+      setGroupMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, feedback } : m)),
+      );
+      await api.patch(`/group/${groupId}/messages/${messageId}/feedback`, {
+        feedback,
+      });
+    } catch (err) {
+      console.error("Error updating group message feedback:", err);
+    }
+  };
+
   const sendTypingStatus = (isTyping: boolean) => {
     if (socketRef.current && user?.id) {
       const username =
@@ -415,6 +469,9 @@ export const useGroupChat = () => {
     leaveGroup,
     stopStream,
     sendTypingStatus,
+    editMessage,
+    retryMessage,
+    updateMessageFeedback,
     typingUsers,
     isStreaming:
       isAiThinking || groupMessages.some((m) => m.status === "streaming"),

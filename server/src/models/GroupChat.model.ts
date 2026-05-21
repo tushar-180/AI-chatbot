@@ -42,6 +42,11 @@ const groupMessageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    feedback: {
+      type: String,
+      enum: ["like", "dislike", null],
+      default: null,
+    },
     attachments: [
       {
         url: String,
