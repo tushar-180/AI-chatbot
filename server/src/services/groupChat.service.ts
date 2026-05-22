@@ -15,6 +15,8 @@ import type { ChatMessage } from "../types/chat.types";
 import type { AIMessage, AIRole } from "./ai/types";
 import { parseMultimedia } from "../utils/chatHistory";
 import crypto from "crypto";
+import { processAttachedFile } from "../modules/file-rag/fileHandler";
+import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import mongoose from "mongoose";
 
 const getEnabledMcpTools = async (userId: string) => {
@@ -321,6 +323,7 @@ export class GroupChatService {
     role: "user" | "assistant" = "user",
     webSearchEnabled = false,
     attachments: any[] = [],
+    attachedFile: Express.Multer.File | null = null,
   ) {
     const group = await GroupChat.findById(groupId);
     if (!group) throw new Error("Group not found");
@@ -341,6 +344,17 @@ export class GroupChatService {
       }
     }
 
+    let messageAttachments = [...attachments];
+
+    if (attachedFile) {
+      try {
+        const result = await processAttachedFile(attachedFile, clerkId, messageAttachments);
+        messageAttachments = result.attachments;
+      } catch (err: any) {
+        console.error("Failed to process attached file for group:", err);
+      }
+    }
+
     const message = await GroupMessage.create({
       groupId,
       userId: clerkId,
@@ -350,7 +364,7 @@ export class GroupChatService {
       content,
       status: "completed",
       metadata: webSearchEnabled ? { webSearchEnabled: true } : {},
-      attachments,
+      attachments: messageAttachments,
     });
 
     groupSocketManager.broadcast(groupId, {
@@ -427,6 +441,25 @@ export class GroupChatService {
       };
     });
 
+    // --- File context injection ---
+    let fileContext: string | null = null;
+    const userMessagesWithFiles = orderedMessages
+      .filter((m) => m.role === "user" && m.attachments?.some((a: any) => a.storagePath || (a.get && a.get('storagePath'))))
+      .slice(-1); // take the most recent one
+
+    if (userMessagesWithFiles.length > 0) {
+      const lastFileMsg = userMessagesWithFiles[0];
+      const attachmentWithFile = lastFileMsg.attachments?.find((a: any) => a.storagePath || (a.get && a.get('storagePath')));
+      const storagePath = (attachmentWithFile as any)?.storagePath || (attachmentWithFile?.get && attachmentWithFile.get('storagePath'));
+      if (storagePath) {
+        // Retrieve file context using the recent messages
+        const context = await retrieveFileContext(promptMessages as any, storagePath);
+        if (context) {
+          fileContext = context;
+        }
+      }
+    }
+
     let webGrounding: WebGroundingContext | null = null;
     if (webSearchEnabled) {
       const maybeGrounding = await webSearchService.buildGroundingContext(
@@ -439,9 +472,15 @@ export class GroupChatService {
     }
 
     // Add system prompt
+    let finalSystemPrompt = BASE_SYSTEM_PROMPT + GROUP_CHAT_SYSTEM_PROMPT;
+
+    if (fileContext) {
+      finalSystemPrompt += `\n\n--- Document Context ---\n${fileContext}\n----------------------\n`;
+    }
+
     promptMessages.unshift({
       role: "system",
-      content: BASE_SYSTEM_PROMPT + GROUP_CHAT_SYSTEM_PROMPT
+      content: finalSystemPrompt
     });
 
     if (webGrounding) {

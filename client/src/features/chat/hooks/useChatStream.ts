@@ -28,7 +28,7 @@ const pendingOptimisticUpdateRef: {
   current: Record<string, { messageId: string; partialMessage: Partial<Message> }>;
 } = { current: {} };
 const pendingOptimisticFrameRef: { current: number | null } = { current: null };
- 
+
 export const useChatStream = (hookOptions?: {
   onWebSearchComplete?: () => void;
 }) => {
@@ -116,16 +116,16 @@ export const useChatStream = (hookOptions?: {
 
     scheduleOptimisticFlush();
   };
-  const setOptimisticMessagesForChat = useCallback((
-    chatId: string | null,
-    next: Message[] | null,
-  ) => {
-    const key = getActiveChatKey(chatId);
-    setOptimisticMessagesByChatId((current) => ({
-      ...current,
-      [key]: next,
-    }));
-  }, []);
+  const setOptimisticMessagesForChat = useCallback(
+    (chatId: string | null, next: Message[] | null) => {
+      const key = getActiveChatKey(chatId);
+      setOptimisticMessagesByChatId((current) => ({
+        ...current,
+        [key]: next,
+      }));
+    },
+    [],
+  );
   const isStreamingCurrentChat =
     isStreaming &&
     streamingChatId === getActiveChatKey(currentChatId) &&
@@ -381,6 +381,14 @@ export const useChatStream = (hookOptions?: {
         });
       }
 
+      if (data.status && !data.chunk && !data.done) {
+        const key = resolvedChatId ?? initialKey;
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          status: data.status,
+          requestId: activeRequestId,
+        });
+      }
+
       if (data.chunk) {
         fullContent += data.chunk;
         const key = resolvedChatId ?? initialKey;
@@ -389,6 +397,7 @@ export const useChatStream = (hookOptions?: {
           requestId: activeRequestId,
           status: data.status ?? "streaming",
           isWebSearching: false,
+          isParsingDocument: false,
         });
       }
 
@@ -404,6 +413,7 @@ export const useChatStream = (hookOptions?: {
             content: errorMessage,
             status: "failed",
             isWebSearching: false,
+            isParsingDocument: false,
             requestId: activeRequestId,
           };
           return { ...current, [key]: next };
@@ -411,36 +421,37 @@ export const useChatStream = (hookOptions?: {
       }
 
       if ("sources" in data && data.sources && Array.isArray(data.sources)) {
-       const sources = data.sources as WebSource[];
-      const key = resolvedChatId ?? initialKey;
+        const sources = data.sources as WebSource[];
+        const key = resolvedChatId ?? initialKey;
 
-      setOptimisticMessagesByChatId((current) => {
-      const messagesForChat = current[key];
-      if (!messagesForChat?.length) return current;
+        setOptimisticMessagesByChatId((current) => {
+          const messagesForChat = current[key];
+          if (!messagesForChat?.length) return current;
 
-      // Find the last assistant message (the streaming one)
-      const lastAssistantIdx = messagesForChat.findLastIndex(
-        (m) => m.role === "assistant" && m.status === "streaming"
-      );
-      if (lastAssistantIdx === -1) return current;
+          // Find the last assistant message (the streaming one)
+          const lastAssistantIdx = messagesForChat.findLastIndex(
+            (m) => m.role === "assistant" && m.status === "streaming",
+          );
+          if (lastAssistantIdx === -1) return current;
 
-      const next = [...messagesForChat];
-      next[lastAssistantIdx] = {
-        ...next[lastAssistantIdx],
-        sources,
-        isWebSearching: false, // sources are ready, stop spinning globe
-      };
-      return { ...current, [key]: next };
-    });
+          const next = [...messagesForChat];
+          next[lastAssistantIdx] = {
+            ...next[lastAssistantIdx],
+            sources,
+            isWebSearching: false, // sources are ready, stop spinning globe
+            isParsingDocument: false,
+          };
+          return { ...current, [key]: next };
+        });
 
-    // Also mark the placeholder as having sources (if needed)
-    // Optionally flush any pending updates
-    if (pendingOptimisticUpdateRef.current[key]) {
-      // force a flush to show sources immediately
-      flushOptimisticUpdates();
-    }
-    return; // no further processing for this event
-  }
+        // Also mark the placeholder as having sources (if needed)
+        // Optionally flush any pending updates
+        if (pendingOptimisticUpdateRef.current[key]) {
+          // force a flush to show sources immediately
+          flushOptimisticUpdates();
+        }
+        return; // no further processing for this event
+      }
 
       if (data.done) {
         if (pendingOptimisticFrameRef.current !== null) {
@@ -458,6 +469,7 @@ export const useChatStream = (hookOptions?: {
             requestId: activeRequestId,
             status: data.status ?? "completed",
             isWebSearching: false,
+            isParsingDocument: false,
           };
 
           if (resolvedChatId) {
@@ -676,9 +688,11 @@ export const useChatStream = (hookOptions?: {
         sourceMessageId: string;
         actionType: string;
       };
+      attachedFile?: File;
     },
   ) => {
-    if (!input.trim() && attachments.length === 0 && !options?.selection) return;
+    if (!input.trim() && attachments.length === 0 && !options?.selection)
+      return;
     if (loading || !user?.id) return;
 
     const forceNewChat = options?.forceNewChat === true;
@@ -688,14 +702,31 @@ export const useChatStream = (hookOptions?: {
       ? null
       : storeState.currentChatId;
 
+    // Build final attachments: include document file as a virtual attachment
+    let finalAttachments = attachments;
+    if (options?.attachedFile) {
+      finalAttachments = [
+        ...attachments,
+        {
+          name: options.attachedFile.name,
+          mimeType: options.attachedFile.type,
+          size: options.attachedFile.size,
+          url: '',
+          isDocument: true,   // custom flag for the UI
+        },
+      ];
+    }
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
       content: input.trim() || (options?.selection ? "Explain this" : ""),
       model: provider,
       status: "completed",
-      attachments: attachments,
-      metadata: options?.selection ? { selection: options.selection } : undefined,
+      attachments: finalAttachments,
+      metadata: options?.selection
+        ? { selection: options.selection }
+        : undefined,
     };
     const requestId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
@@ -706,6 +737,7 @@ export const useChatStream = (hookOptions?: {
       requestId,
       status: "streaming",
       isWebSearching: webSearchEnabled,
+      isParsingDocument: !!options?.attachedFile,
     };
     const isCreatingChat = !effectiveCurrentChatId;
     const activeKey = getActiveChatKey(effectiveCurrentChatId);
@@ -765,16 +797,32 @@ export const useChatStream = (hookOptions?: {
         }
       }, 35000); // 35s to allow server-side 30s timeout to trigger first
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-          Authorization: `Bearer ${await getToken()}`,
-        },
-        signal: abortController.signal,
-        body: JSON.stringify({
+      const hasDocument = !!options?.attachedFile;
+
+      const headers: Record<string, string> = {
+        Accept: "text/event-stream",
+        "Cache-Control": "no-cache",
+        Authorization: `Bearer ${await getToken()}`,
+      };
+
+      let body: FormData | string;
+
+      if (hasDocument) {
+        const fd = new FormData();
+        fd.append("message", input);
+        fd.append("provider", provider);
+        fd.append("requestId", requestId);
+        fd.append("attachments", JSON.stringify(attachments));
+        fd.append("webSearchEnabled", String(webSearchEnabled));
+        if (options?.selection) {
+          fd.append("selection", JSON.stringify(options.selection));
+        }
+        fd.append("file", options.attachedFile!);
+        body = fd;
+        // Let the browser set multipart Content-Type with boundary
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({
           message: input,
           provider,
           requestId,
@@ -782,7 +830,14 @@ export const useChatStream = (hookOptions?: {
           webSearchEnabled,
           selection: options?.selection,
           projectId: useProjectStore.getState().activeProjectId || undefined,
-        }),
+        });
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: abortController.signal,
+        body,
       });
 
       if (connectionTimeoutRef.current) {
@@ -905,7 +960,6 @@ export const useChatStream = (hookOptions?: {
         });
         return { ...current, [key]: next };
       });
-
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;

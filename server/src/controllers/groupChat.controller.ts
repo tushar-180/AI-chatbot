@@ -113,7 +113,11 @@ export class GroupChatController {
   static async sendMessage(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { content, userId, webSearchEnabled, attachments } = req.body;
+      const { content, userId, webSearchEnabled } = req.body;
+      const attachments = typeof req.body.attachments === 'string'
+        ? JSON.parse(req.body.attachments)
+        : (req.body.attachments || []);
+      const attachedFile = req.file || null;
       const clerkId =
         (userId as string) ||
         (req as any).auth?.userId ||
@@ -127,6 +131,7 @@ export class GroupChatController {
         "user",
         Boolean(webSearchEnabled),
         attachments || [],
+        attachedFile,
       );
       res.json(message);
     } catch (error: any) {

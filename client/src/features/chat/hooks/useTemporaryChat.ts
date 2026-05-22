@@ -237,6 +237,7 @@ export const useTemporaryChat = () => {
     attachments: Message["attachments"] = [],
     options?: {
       webSearchEnabled?: boolean;
+      attachedFile?: File | null;
     },
   ) => {
     if (!input.trim() && attachments.length === 0) return;
@@ -292,21 +293,42 @@ export const useTemporaryChat = () => {
         status: m.status,
       }));
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      let body: BodyInit;
+      let headers: Record<string, string>;
+
+      if (options?.attachedFile) {
+        const formData = new FormData();
+        formData.append("file", options.attachedFile);
+        formData.append("messages", JSON.stringify(historyToSend));
+        formData.append("provider", provider);
+        formData.append("requestId", requestId);
+        formData.append("webSearchEnabled", String(webSearchEnabled));
+        body = formData;
+        headers = {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
           Authorization: `Bearer ${await getToken()}`,
-        },
-        signal: abortController.signal,
-        body: JSON.stringify({
+        };
+      } else {
+        body = JSON.stringify({
           messages: historyToSend,
           provider,
           requestId,
           webSearchEnabled,
-        }),
+        });
+        headers = {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
+        };
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: abortController.signal,
+        body,
       });
 
       if (connectionTimeoutRef.current) {

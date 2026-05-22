@@ -18,6 +18,11 @@ import {
   Mic,
   Globe,
   Archive,
+  Image as ImageIcon,
+  FileText,
+  Table,
+  MonitorPlay,
+  File as FileIcon,
 } from "lucide-react";
 
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
@@ -77,21 +82,22 @@ export interface InputAreaProps {
   onWebSearchToggle: (enabled: boolean) => void;
   isArchived?: boolean;
   onUnarchive?: () => void;
+  onSubmitDocument?: (file: File) => void;
 }
 
 /**
  * Helper to get provider icon
  */
 const getProviderIcon = (providerId: string, size = 14) => {
-    const p = providerId.split(":")[0].toLowerCase();
-    const mapping: Record<string, ComponentType<{ size?: number }>> = {
-        gemini: GeminiColor,
-        claude: AnthropicMono,
-        openai: OpenAIMono,
-        nvidia: NvidiaColor,
-    };
-    const Icon = mapping[p];
-    return Icon ? <Icon size={size} /> : null;
+  const p = providerId.split(":")[0].toLowerCase();
+  const mapping: Record<string, ComponentType<{ size?: number }>> = {
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
+  };
+  const Icon = mapping[p];
+  return Icon ? <Icon size={size} /> : null;
 };
 
 /**
@@ -257,10 +263,11 @@ const InputArea = ({
   onUnarchive,
   quotaStatus,
   isQuotaLoading,
+  onSubmitDocument,
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
   );
@@ -321,32 +328,61 @@ const InputArea = ({
         !loading &&
         !isUploading
       ) {
-        const event = {
-          preventDefault: () => {},
-        } as SyntheticEvent<HTMLFormElement>;
-        onSubmit(event);
+        handleFormSubmit(e as any);
       }
     }
   };
 
+  const ALLOWED_FILE_TYPES = [
+    "application/pdf",
+
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ];
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (!file) return;
 
-    // Basic validation
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image uploads are supported currently");
+    const isImage = file.type.startsWith("image/");
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+
+    if (attachments.length > 0 || attachedFile) {
+      toast.error("You can only upload one file per message.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size must be less than 5MB");
+    if (isDocument) {
+      setAttachedFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Basic validation
+    if (!isImage && !isDocument) {
+      toast.error("Unsupported file type!");
+      return;
+    }
+
+    const MAX_SIZE = isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+    const maxMB = MAX_SIZE / (1024 * 1024);
+
+    if (file.size > MAX_SIZE) {
+      toast.error(`Image size must be less than ${maxMB}MB`);
       return;
     }
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append("image", file);
+    formData.append("file", file);
 
     try {
       const res = await api.post("/upload/image", formData, {
@@ -371,14 +407,69 @@ const InputArea = ({
     }
   };
 
+  const getAttachmentIcon = (mimeType?: string) => {
+    if (!mimeType) return FileIcon;
+
+    const WORD = [
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const EXCEL = [
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+
+    const PPT = [
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ];
+
+    if (mimeType.startsWith("image/")) {
+      return ImageIcon;
+    }
+
+    if (WORD.includes(mimeType)) return FileText;
+    if (EXCEL.includes(mimeType)) return Table;
+    if (PPT.includes(mimeType)) return MonitorPlay;
+
+    if (mimeType.includes("pdf")) {
+      return FileText;
+    }
+
+    if (mimeType.includes("sheet")) {
+      return Table;
+    }
+
+    if (mimeType.includes("presentation")) {
+      return MonitorPlay;
+    }
+
+    return FileIcon;
+  };
+
   const removeAttachment = (index: number) => {
     const next = [...attachments];
     next.splice(index, 1);
     onAttachmentsChange?.(next);
   };
 
+  const handleFormSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (loading || isUploading) return;
+
+    if (attachedFile && onSubmitDocument) {
+      onSubmitDocument(attachedFile);
+      setAttachedFile(null);
+      return;
+    }
+
+    // Normal submission (no document)
+    onSubmit(e);
+  };
+
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10  not-selectable  ">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 not-selectable">
       {isArchived ? (
         <div className="mx-auto max-w-4xl  px-4 md:px-0">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
@@ -406,7 +497,10 @@ const InputArea = ({
         </div>
       ) : (
         <>
-          <form onSubmit={onSubmit} className="mx-auto max-w-4xl relative ">
+          <form
+            onSubmit={handleFormSubmit}
+            className="mx-auto max-w-4xl relative "
+          >
             <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
               <ComposerQuotePreview />
 
@@ -423,25 +517,61 @@ const InputArea = ({
               {/* Attachment Previews */}
               {attachments.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-4 py-2">
-                  {attachments.map((att, i) => (
-                    <div
-                      key={att.url}
-                      className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
-                    >
-                      <img
-                        src={att.url}
-                        alt={att.name}
-                        className="h-full w-full object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(i)}
-                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                  {attachments.map((att, i) => {
+                    const isImage = att.mimeType?.startsWith("image/");
+                    const Icon = getAttachmentIcon(att.mimeType);
+
+                    return (
+                      <div
+                        key={`${att.url}-${i}`}
+                        className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
                       >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
+                        {isImage ? (
+                          <img
+                            src={att.url}
+                            alt={att.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
+                            <Icon
+                              size={20}
+                              className="text-slate-300 shrink-0"
+                            />
+
+                            <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
+                              {att.name}
+                            </span>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(i)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {attachedFile && (
+                <div className="flex flex-wrap gap-2 px-4 py-2">
+                  <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                    <FileText size={20} className="text-slate-300 shrink-0" />
+                    <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                      {attachedFile.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachedFile(null)}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -451,7 +581,7 @@ const InputArea = ({
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                 />
 
                 {canUpload && (
@@ -485,7 +615,7 @@ const InputArea = ({
                         ? "Ask anything..."
                         : "Start a conversation..."
                   }
-                   // Prevent copy when NOT focused
+                  // Prevent copy when NOT focused
                   onCopy={(e) => {
                     if (!isFocused) {
                       e.preventDefault();
@@ -495,16 +625,12 @@ const InputArea = ({
                   onSelect={(e) => {
                     if (!isFocused) {
                       const el = e.currentTarget;
-
                       requestAnimationFrame(() => {
                         el.selectionStart = el.selectionEnd;
                       });
                     }
                   }}
-                  className={` ${ isFocused ? "" : "selection:bg-transparent select-none" }
-                  not-selectable max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent
-                   ${canUpload ? "px-1" : "px-4"} 
-                   py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
                 />
                 <button
                   type="button"
@@ -562,7 +688,8 @@ const InputArea = ({
                       isUploading ||
                       (!input.trim() &&
                         attachments.length === 0 &&
-                        !selectionContext)
+                        !selectionContext &&
+                        !attachedFile)
                     }
                     className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
                       loading ||

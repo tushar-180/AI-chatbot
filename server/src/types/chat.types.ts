@@ -32,6 +32,8 @@ export type Attachment = {
   name?: string;
   mimeType?: string;
   size?: number;
+  storagePath?: string;
+  fileHash: string;
 };
 
 export type ChatMessage = {
@@ -65,6 +67,7 @@ export type CreateChatInput = {
     sourceMessageId: string;
     actionType: string;
   };
+  attachedFile?: Express.Multer.File | null;
 };
 
 export type SendMessageInput = {
@@ -81,6 +84,7 @@ export type SendMessageInput = {
     sourceMessageId: string;
     actionType: string;
   };
+  attachedFile?: Express.Multer.File | null;
 };
 
 export type EditMessageInput = {

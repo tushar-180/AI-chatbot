@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { GroupChatController } from "../controllers/groupChat.controller";
+import multer from "multer";
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -12,7 +14,7 @@ router.get("/user-created", GroupChatController.getUserCreatedGroups);
 router.get("/invite/:inviteCode", GroupChatController.getGroupByInviteCode);
 router.post("/join/:inviteCode", GroupChatController.joinGroup);
 router.get("/:groupId/messages", GroupChatController.getGroupDetails);
-router.post("/:groupId/message", GroupChatController.sendMessage);
+router.post("/:groupId/message", upload.single("file"), GroupChatController.sendMessage);
 router.post("/:groupId/stop", GroupChatController.stopStream);
 router.post("/:groupId/leave", GroupChatController.leaveGroup);
 router.post("/:groupId/remove-member", GroupChatController.removeMember);

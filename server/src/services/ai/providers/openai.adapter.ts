@@ -36,25 +36,6 @@ export class OpenAIAdapter implements IAIService {
   }
 
   private getRealModelName(modelName: string): string {
-    const name = modelName.toLowerCase();
-    if (
-      name.includes("gpt-5.4-mini") ||
-      name.includes("gpt-5-mini") ||
-      name.includes("gpt-4.1-mini") ||
-      name.includes("gpt-4.1-nano") ||
-      name.includes("gpt-5-nano")
-    ) {
-      return "gpt-4o-mini";
-    }
-    if (
-      name.includes("gpt-5") ||
-      name.includes("gpt-4.1") ||
-      name.includes("o3") ||
-      name.includes("o4") ||
-      name.includes("o4-mini")
-    ) {
-      return "gpt-4o";
-    }
     return modelName;
   }
 
@@ -195,7 +176,6 @@ export class OpenAIAdapter implements IAIService {
           model: this.getRealModelName(this.model),
           messages: finalMessages as any,
           ...(openAITools ? { tools: openAITools } : {}),
-          temperature: 0.6,
         });
 
         totalUsage = this.mergeUsage(
@@ -309,13 +289,13 @@ export class OpenAIAdapter implements IAIService {
           while (hasToolCalls && loopCount < maxLoops) {
             loopCount++;
             hasToolCalls = false;
+            console.log("OPENAI model: ", adapter.getRealModelName(adapter.model))
 
             const stream = await adapter.openai.chat.completions.create(
               {
                 model: adapter.getRealModelName(adapter.model),
                 messages: finalMessages as any,
                 ...(openAITools ? { tools: openAITools } : {}),
-                temperature: 0.6,
                 stream: true,
                 stream_options: { include_usage: true },
               },
@@ -400,9 +380,8 @@ export class OpenAIAdapter implements IAIService {
                   content: JSON.stringify(result),
                 });
               } catch (err: any) {
-                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${
-                  err.message || err
-                }*\n\n`;
+                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${err.message || err
+                  }*\n\n`;
 
                 const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseMessages.push({

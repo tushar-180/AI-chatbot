@@ -33,6 +33,11 @@ import {
 } from "../utils/tokenCounter";
 import { buildProjectContext } from "./buildProjectContext";
 
+import { parseFile } from "../modules/file-rag/fileParser";
+import { processAttachedFile, cleanupChatFiles } from "../modules/file-rag/fileHandler";
+import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
+import { extractTranscript } from "../modules/tools/youtube";
+
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
 const createUserMessage = (
@@ -130,7 +135,10 @@ const getAssistantMessageByRequestId = (
 const buildGroundingMetadata = (
   webGrounding: WebGroundingContext | SearchRejection | null,
 ) => {
-  if (!webGrounding || "rejected" in webGrounding) return undefined;
+  if (!webGrounding || "rejected" in webGrounding) {
+    return undefined;
+  }
+
   return {
     grounded: true,
     query: webGrounding.query,
@@ -159,14 +167,6 @@ const finalizeGroundedResponse = (
     return { content: response, appendedCitations: "" };
   }
 
-  const alreadyHasSources = webGrounding.sources.some((source) =>
-    response.includes(source.url),
-  );
-
-  if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
-    return { content: response, appendedCitations: "" };
-  }
-
   const appendedCitations = webGrounding.citationsMarkdown;
   return {
     content: `${response.trimEnd()}${appendedCitations}`,
@@ -179,12 +179,29 @@ const resolveAssistantTokens = (
   promptText: string,
   completionText: string,
   promptAttachmentCount = 0,
-) =>
-  usage ?? calculateUsage(promptText, completionText, promptAttachmentCount);
+) => usage ?? calculateUsage(promptText, completionText, promptAttachmentCount);
+
+const CONTEXT_SIZE_LIMITS = {
+  gemini: 500000,
+  default: 100000,
+};
+
+const EXTERNAL_CALL_TIMEOUT_MS = 10000; // 10 seconds per call
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
 
 const getEnabledMcpTools = async (userId: string) => {
   const user = await userService.getUserByClerkId(userId);
-  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
+  const disabledMcpServers = (user?.get("disabledMcpServers") ||
+    []) as string[];
   const allTools = await mcpClientService.getActiveTools();
 
   return allTools.filter(
@@ -209,17 +226,38 @@ const buildPromptMessages = async (
       provider,
     );
   }
-  const rawPromptMessages = getLimitedMessages(chatMessages);
-  const promptMessages = rawPromptMessages.map((m) => {
-    const raw = typeof (m as any).toObject === "function" ? (m as any).toObject() : { ...m };
-    return { ...raw };
-  });
+  const isGemini = provider?.startsWith("gemini") ?? false;
+  const sizeLimit = isGemini
+    ? CONTEXT_SIZE_LIMITS.gemini
+    : CONTEXT_SIZE_LIMITS.default;
 
-  const lastMsg = promptMessages[promptMessages.length - 1];
-  if (lastMsg && lastMsg.role === "user" && lastMsg.metadata?.selection) {
-    const selection = lastMsg.metadata.selection;
-    const userRequest = lastMsg.content?.trim() || "Explain this.";
-    lastMsg.content = `User selected text from a previous assistant message.
+  // 1. Get limited messages and handle selection context
+  const rawPromptMessages = getLimitedMessages(chatMessages);
+  const lastUserMsg = [...rawPromptMessages]
+    .reverse()
+    .find((m) => m.role === "user");
+  // --- File context injection (new) ---
+  let fileContext: string | null = null;
+  const userMessagesWithFiles = rawPromptMessages
+    .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
+    .slice(-1); // take the most recent one
+
+  if (userMessagesWithFiles.length > 0) {
+    const lastFileMsg = userMessagesWithFiles[0];
+    const storagePath = lastFileMsg.attachments?.find((a) => a.storagePath)?.storagePath;
+    if (storagePath) {
+      const context = await retrieveFileContext(rawPromptMessages, storagePath);
+      if (context) {
+        fileContext = context;
+      }
+    }
+  }
+
+  // Apply selection logic from staging (if present)
+  if (lastUserMsg?.metadata?.selection) {
+    const selection = lastUserMsg.metadata.selection as any;
+    const userRequest = lastUserMsg.content?.trim() || "Explain this.";
+    lastUserMsg.content = `User selected text from a previous assistant message.
 
 Selected text:
 "${selection.selectedText}"
@@ -230,68 +268,101 @@ Original message:
 User request:
 ${userRequest}`;
   }
-  const systemMessages: ChatMessage[] = [
+
+  // 2. Determine effective latest user message for external calls
+  const effectiveLatestUserMessage =
+    latestUserMessage ?? lastUserMsg?.content ?? "";
+
+  // 3. Parallel external calls with timeouts
+  const [
+    personalizationResult,
+    memoryResult,
+    youtubeResult,
+    webGroundingResult,
+  ] = await Promise.allSettled([
+    withTimeout(
+      userService.getPersonalizationContext(userId),
+      EXTERNAL_CALL_TIMEOUT_MS,
+    ),
+    withTimeout(
+      memoryService.getMemoryContext(userId, effectiveLatestUserMessage),
+      EXTERNAL_CALL_TIMEOUT_MS,
+    ),
+    (async () => {
+      if (!effectiveLatestUserMessage) return null;
+      const youtubeRegex =
+        /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+      const match = effectiveLatestUserMessage.match(youtubeRegex);
+      if (!match) return null;
+      const result = await withTimeout(
+        extractTranscript({ videoIdOrUrl: match[1], maxLength: sizeLimit }),
+        EXTERNAL_CALL_TIMEOUT_MS,
+      );
+      return result?.success ? result.text : null;
+    })(),
+    (async () => {
+      if (!webSearchEnabled) {
+        return null;
+      }
+      const started = Date.now();
+      const result = await withTimeout(
+        webSearchService.buildGroundingContext(
+          effectiveLatestUserMessage,
+          chatMessages,
+          userId,
+          isGemini,
+        ),
+        30000,
+      );
+      return result && !("rejected" in result) ? result : null;
+    })()
+  ]);
+
+  // Extract values (null on failure)
+  const personalizationContext =
+    personalizationResult.status === "fulfilled"
+      ? personalizationResult.value
+      : null;
+  const memoryContext =
+    memoryResult.status === "fulfilled" ? memoryResult.value : null;
+  const youtubeTranscriptContent =
+    youtubeResult.status === "fulfilled" ? youtubeResult.value : null;
+  const webGrounding =
+    webGroundingResult.status === "fulfilled" ? webGroundingResult.value : null;
+
+  // 4. Build sorted system messages
+  const systemMessageSources = [
+    { content: BASE_SYSTEM_PROMPT, priority: 0 },
+    { content: personalizationContext, priority: 10 },
+    { content: memoryContext, priority: 20 },
     {
-      role: "system",
-      content: BASE_SYSTEM_PROMPT,
-      userId,
-      status: "completed",
+      content: youtubeTranscriptContent
+        ? `The user provided a YouTube video. Here is its transcript (use it to answer questions about the video):\n\n${youtubeTranscriptContent}`
+        : null,
+      priority: 30,
     },
+    {
+      content: fileContext
+        ? `The user provided a file. Use its content to answer any questions. The file text:\n\n${fileContext}`
+        : null,
+      priority: 30,
+    },
+    { content: webGrounding?.systemPrompt ?? null, priority: 40 },
   ];
 
-  const personalizationContext =
-    await userService.getPersonalizationContext(userId);
-  if (personalizationContext) {
-    systemMessages.push({
+  const systemMessages: ChatMessage[] = systemMessageSources
+    .filter((s) => s.content !== null)
+    .sort((a, b) => a.priority - b.priority)
+    .map(({ content }) => ({
       role: "system",
-      content: personalizationContext,
+      content: content!,
       userId,
       status: "completed",
-    });
-  }
+      attachments: [],
+      type: "text",
+    }));
 
-  const memoryContext = await memoryService.getMemoryContext(
-    userId,
-    latestUserMessage,
-  );
-  if (memoryContext) {
-    systemMessages.push({
-      role: "system",
-      content: memoryContext,
-      userId,
-      status: "completed",
-    });
-  }
-
-  let webGrounding: WebGroundingContext | null = null;
-  const supportsImages = provider?.startsWith("gemini");
-  if (webSearchEnabled && latestUserMessage) {
-    const result = await webSearchService.buildGroundingContext(
-      latestUserMessage,
-      chatMessages,
-      userId,
-      supportsImages,
-    );
-
-    // Handle quota/cooldown rejections gracefully
-    if (result && "rejected" in result) {
-      console.warn(
-        `[chat] Web search rejected: ${result.reason} — ${result.message}`,
-      );
-    } else {
-      webGrounding = result;
-    }
-  }
-  if (webGrounding) {
-    systemMessages.push({
-      role: "system",
-      content: webGrounding.systemPrompt,
-      userId,
-      status: "completed",
-    });
-  }
-
-  const finalPromptMessages = [...systemMessages, ...promptMessages];
+  const finalPromptMessages = [...systemMessages, ...rawPromptMessages];
 
   return {
     promptMessages: finalPromptMessages,
@@ -313,8 +384,8 @@ async function* streamAssistantResponse(
   // If retrying, we filter out the message being retried from the prompt context
   const messagesForPrompt = existingAssistantMessageId
     ? (chat.messages as ChatMessage[]).filter(
-        (m) => (m as any).id !== existingAssistantMessageId,
-      )
+      (m) => (m as any).id !== existingAssistantMessageId,
+    )
     : (chat.messages as ChatMessage[]);
 
   const lastUserMessage = messagesForPrompt
@@ -366,12 +437,12 @@ async function* streamAssistantResponse(
   yield (
     includeChatId
       ? {
-          chatId,
-          messageId,
-          requestId,
-          model: providerName,
-          status: "streaming",
-        }
+        chatId,
+        messageId,
+        requestId,
+        model: providerName,
+        status: "streaming",
+      }
       : { messageId, requestId, model: providerName, status: "streaming" }
   ) as StreamPayload;
 
@@ -399,20 +470,23 @@ async function* streamAssistantResponse(
 
   try {
     const tools = await getEnabledMcpTools(String(chat.userId));
+
+    const promptSizes = promptMessages.map(m => ({
+      role: m.role,
+      length: m.content?.length || 0,
+    }));
     const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
       tools,
     );
-
-    // 30s timeout for first token
     const timeout = setTimeout(() => {
       if (!receivedFirstChunk) {
         console.error(`AI generation timed out for requestId: ${requestId}`);
         firstTokenTimedOut = true;
         activeStream.abortController.abort();
       }
-    }, 30000);
+    }, 50000);
 
     try {
       for await (const chunk of stream) {
@@ -565,6 +639,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    attachedFile,
   }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
@@ -586,6 +661,14 @@ export const chatService = {
         provider,
         attachments,
       );
+      let fileText: string | null = null;
+      let allAttachments = attachments || [];
+
+      if (attachedFile) {
+        const result = await processAttachedFile(attachedFile, resolvedUserId, allAttachments);
+        fileText = result.fileText;
+        allAttachments = result.attachments;
+      }
       userMessage.metadata = {
         webSearchEnabled: Boolean(webSearchEnabled),
         selection,
@@ -667,7 +750,8 @@ export const chatService = {
 
   async *createChatStream(input: CreateChatInput) {
     const resolvedUserId = requireUserId(input.userId);
-    const trimmedMessage = (input.message?.trim() || "") || (input.selection ? "Explain this" : "");
+    const trimmedMessage =
+      input.message?.trim() || "" || (input.selection ? "Explain this" : "");
     if (!input.selection) {
       requireMessage(
         input.message,
@@ -691,7 +775,15 @@ export const chatService = {
       String(resolvedUserId),
       input.provider,
       input.attachments,
-    );
+    ); let fileText: string | null = null;
+    let allAttachments = input.attachments || [];
+    if (input.attachedFile) {
+      const result = await processAttachedFile(input.attachedFile, resolvedUserId, allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(input.webSearchEnabled),
       selection: input.selection,
@@ -723,6 +815,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    attachedFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const chat = await requireChat(chatId);
@@ -734,9 +827,19 @@ export const chatService = {
       provider,
       attachments,
     );
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
+      fileText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
@@ -827,6 +930,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
+    attachedFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const resolvedRequestId = requireRequestId(requestId);
@@ -839,6 +943,15 @@ export const chatService = {
       provider,
       attachments,
     );
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+    userMsg.attachments = allAttachments;
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
@@ -959,6 +1072,8 @@ export const chatService = {
   },
 
   async deleteChat(chatId: string) {
+    await cleanupChatFiles(chatId);
+
     const chat = await chatRepository.deleteById(chatId);
 
     if (!chat) {
@@ -1127,7 +1242,10 @@ export const chatService = {
         usage,
         serializePromptMessages(promptMessages),
         reply,
-        promptMessages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
+        promptMessages.reduce(
+          (sum, m) => sum + (m.attachments?.length || 0),
+          0,
+        ),
       ),
     });
 
@@ -1256,7 +1374,10 @@ export const chatService = {
         usage,
         serializePromptMessages(promptMessages),
         reply,
-        promptMessages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
+        promptMessages.reduce(
+          (sum, m) => sum + (m.attachments?.length || 0),
+          0,
+        ),
       ),
     });
 
@@ -1281,14 +1402,12 @@ export const chatService = {
     console.log("Chat messages count:", chat.messages.length);
     console.log(
       "Last 2 messages:",
-      chat.messages
-        .slice(-2)
-        .map((m: any) => ({
-          id: m.id,
-          _id: m._id,
-          requestId: m.requestId,
-          role: m.role,
-        })),
+      chat.messages.slice(-2).map((m: any) => ({
+        id: m.id,
+        _id: m._id,
+        requestId: m.requestId,
+        role: m.role,
+      })),
     );
 
     let assistantMessage = (chat.messages as any[]).find(

@@ -6,6 +6,9 @@ import { webSearchService, type WebGroundingContext } from "../modules/web-searc
 import { ChatMessage, StreamPayload } from "../types/chat.types";
 import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
+import { processAttachedFile } from "../modules/file-rag/fileHandler";
+import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
+import "multer"; // ensures Express.Multer.File namespace is available
 
 const finalizeGroundedResponse = (
   response: string,
@@ -47,6 +50,31 @@ const buildTemporaryPromptMessages = async (
     },
   ];
 
+  let fileContext: string | null = null;
+  const userMessagesWithFiles = promptMessages
+    .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
+    .slice(-1);
+
+  if (userMessagesWithFiles.length > 0) {
+    const lastFileMsg = userMessagesWithFiles[0];
+    const storagePath = lastFileMsg.attachments?.find((a) => a.storagePath)?.storagePath;
+    if (storagePath) {
+      const context = await retrieveFileContext(promptMessages, storagePath);
+      if (context) {
+        fileContext = context;
+      }
+    }
+  }
+
+  if (fileContext) {
+    systemMessages.push({
+      role: "system",
+      content: `The user provided a file. Use its content to answer any questions. The file text:\n\n${fileContext}`,
+      userId,
+      status: "completed",
+    });
+  }
+
   let webGrounding: WebGroundingContext | null = null;
   const supportsImages = provider?.startsWith("gemini");
   if (webSearchEnabled && latestUserMessage) {
@@ -86,12 +114,14 @@ export const temporaryChatService = {
     provider,
     requestId,
     webSearchEnabled,
+    attachedFile,
   }: {
     userId: string;
     messages: ChatMessage[];
     provider?: string;
     requestId: string;
     webSearchEnabled?: boolean;
+    attachedFile?: Express.Multer.File | null;
   }): AsyncGenerator<StreamPayload> {
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
@@ -99,6 +129,11 @@ export const temporaryChatService = {
     const lastUserMessage = messages
       .filter((m) => m.role === "user")
       .pop();
+      
+    if (attachedFile && lastUserMessage) {
+      const result = await processAttachedFile(attachedFile, userId, lastUserMessage.attachments || []);
+      lastUserMessage.attachments = result.attachments;
+    }
 
     const { promptMessages, webGrounding } = await buildTemporaryPromptMessages(
       userId,
