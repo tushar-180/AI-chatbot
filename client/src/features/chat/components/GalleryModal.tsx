@@ -50,7 +50,7 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
 
   const modalContent = (
     <div 
-      className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-10 bg-black/80 backdrop-blur-xl"
+      className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-10 bg-black/80 backdrop-blur-xl not-selectable"
       onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
       onMouseUp={(e) => {
         if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();

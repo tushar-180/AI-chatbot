@@ -80,10 +80,12 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const foundChat =
             chat || state.chats.find((c) => c._id === id) || null;
+          const isSameChat = state.currentChatId === id;
           return {
             currentChatId: id,
             isNewChat: id ? false : state.isNewChat,
             currentChat: foundChat,
+            messages: isSameChat ? state.messages : [],
           };
         }),
 
