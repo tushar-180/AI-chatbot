@@ -1,6 +1,5 @@
 import { memo } from "react";
-import { UserButton } from "@clerk/react";
-import { Menu, Share, Ghost, ChevronLeft } from "lucide-react";
+import { Menu, Ghost, ChevronLeft, Share2 } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
@@ -136,18 +135,11 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white"
               aria-label="Share chat"
             >
-              <Share size={16} />
+              <Share2 size={16} />
             </button>
           )}
 
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonAvatarBox: "h-7 w-7",
-                userButtonTrigger: "h-8 w-8",
-              },
-            }}
-          />
+         
         </div>
       </div>
 

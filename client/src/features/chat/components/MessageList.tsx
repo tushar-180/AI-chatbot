@@ -12,6 +12,7 @@ import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatSto
 import type { WebSource, Message } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
+import { useChatStore } from "../store/useChatStore";
 
 const SUGGESTIONS = [
   {
@@ -85,6 +86,7 @@ const MessageList = ({
   const showSuggestions = !currentChatId && messages.length === 0;
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const dbUser = useChatStore((state) => state.dbUser);
 
   // Track if user manually scrolled up
   const shouldAutoScrollRef = useRef(true);
@@ -288,7 +290,7 @@ const MessageList = ({
               </div>
 
               <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
-                {isTemporaryChatActive ? "Temporary Chat Mode" : "How can I help you today?"}
+                {isTemporaryChatActive ? "Temporary Chat Mode" : `Hello ${dbUser?.firstName || ""}, how can I help you today?`}
               </h2>
 
               <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-400">
