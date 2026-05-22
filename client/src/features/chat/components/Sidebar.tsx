@@ -559,7 +559,7 @@ const Sidebar = () => {
     groupId?: string;
   }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
+  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId, dbUser, setDbUser } =
     useChatStore();
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
@@ -650,11 +650,12 @@ const Sidebar = () => {
       .get("/user/profile")
       .then(({ data }) => {
         setIsAdmin(data.role === "admin");
+        setDbUser(data);
       })
       .catch((err) => {
         console.error("Failed to fetch user role for sidebar:", err);
       });
-  }, [user]);
+  }, [user, setDbUser]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -1302,10 +1303,10 @@ const Sidebar = () => {
                       : "border border-white/5"
                   }`}
                 >
-                  {user?.imageUrl ? (
+                  {(dbUser?.imageUrl || user?.imageUrl) ? (
                     <img
-                      src={user.imageUrl}
-                      alt={user.fullName || "User"}
+                      src={dbUser?.imageUrl || user?.imageUrl}
+                      alt={dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "User")}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -1316,7 +1317,7 @@ const Sidebar = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate leading-tight">
-                    {user?.fullName || "User"}
+                    {dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "User")}
                   </p>
                   {isAdmin && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">

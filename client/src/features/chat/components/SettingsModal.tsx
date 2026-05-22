@@ -32,6 +32,8 @@ import {
   GitBranch,
   Database,
   RefreshCw,
+  Camera,
+  Pencil,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 
@@ -78,6 +80,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setMessages,
     setIsNewChat,
     setSidebarOpen,
+    dbUser,
+    setDbUser,
   } = useChatStore();
   const {
     removeGroup,
@@ -86,10 +90,89 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   } = useGroupStore();
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  // Edit Profile States
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Initialize edit fields when edit mode is toggled or user changes
+  useEffect(() => {
+    if (user) {
+      setEditFirstName(dbUser?.firstName || user.firstName || "");
+      setEditLastName(dbUser?.lastName || user.lastName || "");
+      setPreviewUrl(dbUser?.imageUrl || user.imageUrl || "");
+      setSelectedFile(null);
+    }
+  }, [user, dbUser, isEditingProfile]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setIsSavingProfile(true);
+    try {
+      let imageUrl = dbUser?.imageUrl || user.imageUrl;
+
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("image", selectedFile);
+        
+        const uploadRes = await api.post("/upload/image", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        imageUrl = uploadRes.data.url;
+      }
+
+      const { data: updatedProfile } = await api.put("/user/profile", {
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+        imageUrl,
+      });
+
+      // Update global DB user state
+      setDbUser(updatedProfile);
+
+      // Keep Clerk's local user metadata updated too
+      await user.update({
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+      });
+
+      toast.success("Profile updated successfully");
+      setIsEditingProfile(false);
+    } catch (error: any) {
+      console.error("Save Profile Error:", error);
+      toast.error(error.response?.data?.error || error.message || "Failed to update profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
+      setIsEditingProfile(false); // Reset profile edit mode on modal open
     }
   }, [isOpen, initialTab]);
   const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
@@ -576,21 +659,30 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-8">
-            {activeTab === "general" && (
+            {activeTab === "general" && !isEditingProfile && (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/3 border border-white/5">
-                  <div className="h-20 w-20 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
-                    <img src={user?.imageUrl} alt={user?.fullName || ""} className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold text-white">{user?.fullName}</h4>
-                    <p className="text-sm text-slate-500">{user?.primaryEmailAddress?.emailAddress}</p>
-                    <div className="mt-3 flex items-center gap-2">
-                       <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">Premium</span>
-                        {/* eslint-disable-next-line react-hooks/purity */}
-                        <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
+                <div className="flex items-center justify-between p-6 rounded-3xl bg-white/3 border border-white/5 relative overflow-hidden group">
+                  <div className="flex items-center gap-6">
+                    <div className="h-20 w-20 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
+                      <img src={dbUser?.imageUrl || user?.imageUrl} alt={dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "")} className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-white">{dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : user?.fullName}</h4>
+                      <p className="text-sm text-slate-500">{user?.primaryEmailAddress?.emailAddress}</p>
+                      <div className="mt-3 flex items-center gap-2">
+                         <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">Premium</span>
+                          {/* eslint-disable-next-line react-hooks/purity */}
+                          <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
+                      </div>
                     </div>
                   </div>
+                  <button 
+                    onClick={() => setIsEditingProfile(true)}
+                    className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 text-[9px] font-bold uppercase tracking-widest transition-all"
+                  >
+                    <Pencil size={12} />
+                    <span>Edit Profile</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -608,6 +700,81 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Occupation</p>
                       <p className="text-sm font-medium text-white">{personalizationData.occupation || "Not Set"}</p>
                    </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "general" && isEditingProfile && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex flex-col items-center justify-center p-6 rounded-3xl bg-white/3 border border-white/5 gap-4 relative">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-24 w-24 rounded-3xl overflow-hidden border-2 border-white/10 shadow-2xl relative cursor-pointer group/avatar"
+                  >
+                    <img
+                      src={previewUrl || user?.imageUrl}
+                      alt="Avatar Preview"
+                      className="w-full h-full object-cover group-hover/avatar:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover/avatar:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                      <Camera size={18} className="text-white" />
+                      <span className="text-[8px] font-bold text-white uppercase tracking-wider">Upload</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avatar Image</p>
+                    <p className="text-[9px] text-slate-600 mt-0.5">Click to choose a new picture</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">First Name</label>
+                    <input
+                      type="text"
+                      value={editFirstName}
+                      onChange={(e) => setEditFirstName(e.target.value)}
+                      placeholder="First Name"
+                      className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={editLastName}
+                      onChange={(e) => setEditLastName(e.target.value)}
+                      placeholder="Last Name"
+                      className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-2">
+                  <button
+                    onClick={() => setIsEditingProfile(false)}
+                    disabled={isSavingProfile}
+                    className="flex-1 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile || !editFirstName.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 bg-white text-black py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50"
+                  >
+                    {isSavingProfile ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    <span>{isSavingProfile ? "Saving..." : "Save Changes"}</span>
+                  </button>
                 </div>
               </div>
             )}

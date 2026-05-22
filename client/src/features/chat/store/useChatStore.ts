@@ -15,6 +15,8 @@ type ChatState = {
   page: number;
   viewingArchived: boolean;
   currentChat: Chat | null;
+  dbUser: any | null;
+  setDbUser: (dbUser: any) => void;
 
   setSidebarOpen: (open: boolean) => void;
   setChats: (chats: Chat[]) => void;
@@ -57,6 +59,9 @@ export const useChatStore = create<ChatState>()(
       page: 1,
       viewingArchived: false,
       currentChat: null,
+      dbUser: null,
+
+      setDbUser: (dbUser) => set({ dbUser }),
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
