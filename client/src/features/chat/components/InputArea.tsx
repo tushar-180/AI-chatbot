@@ -1,6 +1,7 @@
 import {
   type SyntheticEvent,
   type KeyboardEvent,
+  type ComponentType,
   useRef,
   useEffect,
   memo,
@@ -24,7 +25,10 @@ import {
   File as FileIcon,
 } from "lucide-react";
 
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,10 +71,10 @@ export interface InputAreaProps {
     allowed: boolean;
     scope: "ok" | "global" | "user" | "cooldown" | "monthly";
     reason?:
-    | "global_quota_exceeded"
-    | "user_quota_exceeded"
-    | "cooldown_active"
-    | "monthly_credits_exhausted";
+      | "global_quota_exceeded"
+      | "user_quota_exceeded"
+      | "cooldown_active"
+      | "monthly_credits_exhausted";
     message?: string;
     retryAfterMs?: number;
   } | null;
@@ -86,11 +90,11 @@ export interface InputAreaProps {
  */
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
-  const mapping: Record<string, any> = {
-    gemini: Gemini.Color,
-    claude: Anthropic,
-    openai: OpenAI,
-    nvidia: Nvidia.Color,
+  const mapping: Record<string, ComponentType<{ size?: number }>> = {
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
   };
   const Icon = mapping[p];
   return Icon ? <Icon size={size} /> : null;
@@ -124,10 +128,11 @@ const WebSearchToggle = ({
       aria-pressed={enabled}
       className={`
                 flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all
-                ${enabled
-          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
-          : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-        }
+                ${
+                  enabled
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
+                    : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                }
                 ${disabled ? "opacity-40 cursor-not-allowed" : ""}
             `}
     >
@@ -202,10 +207,11 @@ const ModelSelector = ({
             <DropdownMenuItem
               key={p.id}
               onClick={() => onProviderChange(p.id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${selectedProvider === p.id
-                ? "bg-white text-black"
-                : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                selectedProvider === p.id
+                  ? "bg-white text-black"
+                  : "text-slate-400 hover:bg-white/5 hover:text-white"
+              }`}
             >
               {getProviderIcon(p.id, 12)}
               <span className="capitalize">{getModelOnlyName(p.name)}</span>
@@ -226,7 +232,7 @@ const ModelSelector = ({
                 : quotaStatus.scope === "user"
                   ? "Daily user limit reached"
                   : quotaStatus.scope === "monthly" ||
-                    quotaStatus.reason === "monthly_credits_exhausted"
+                      quotaStatus.reason === "monthly_credits_exhausted"
                     ? "Monthly credits exhausted"
                     : "Cooldown active"
               : undefined
@@ -257,7 +263,7 @@ const InputArea = ({
   onUnarchive,
   quotaStatus,
   isQuotaLoading,
-  onSubmitDocument
+  onSubmitDocument,
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -267,6 +273,7 @@ const InputArea = ({
   );
   const [isUploading, setIsUploading] = useState(false);
   const selectionContext = useComposerStore((state) => state.selectionContext);
+  const [isFocused, setIsFocused] = useState(false);
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
     onResult: (text) => {
@@ -322,7 +329,6 @@ const InputArea = ({
         !isUploading
       ) {
         handleFormSubmit(e as any);
-
       }
     }
   };
@@ -463,7 +469,7 @@ const InputArea = ({
   };
 
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10  ">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 not-selectable">
       {isArchived ? (
         <div className="mx-auto max-w-4xl  px-4 md:px-0">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
@@ -597,6 +603,8 @@ const InputArea = ({
                 <textarea
                   ref={textareaRef}
                   value={input}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
                   onChange={(e) => onInputChange(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
@@ -607,7 +615,22 @@ const InputArea = ({
                         ? "Ask anything..."
                         : "Start a conversation..."
                   }
-                  className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                  // Prevent copy when NOT focused
+                  onCopy={(e) => {
+                    if (!isFocused) {
+                      e.preventDefault();
+                    }
+                  }}
+                  // Prevent selection when NOT focused
+                  onSelect={(e) => {
+                    if (!isFocused) {
+                      const el = e.currentTarget;
+                      requestAnimationFrame(() => {
+                        el.selectionStart = el.selectionEnd;
+                      });
+                    }
+                  }}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
                 />
                 <button
                   type="button"
@@ -618,10 +641,11 @@ const InputArea = ({
                       start();
                     }
                   }}
-                  className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${isListening
-                    ? "bg-rose-500/20 text-rose-400"
-                    : "text-slate-500 hover:bg-white/5 hover:text-white"
-                    }`}
+                  className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
+                    isListening
+                      ? "bg-rose-500/20 text-rose-400"
+                      : "text-slate-500 hover:bg-white/5 hover:text-white"
+                  }`}
                   aria-label="Voice input"
                 >
                   {isListening && !isSpeaking && (
@@ -664,16 +688,18 @@ const InputArea = ({
                       isUploading ||
                       (!input.trim() &&
                         attachments.length === 0 &&
-                        !selectionContext && !attachedFile)
+                        !selectionContext &&
+                        !attachedFile)
                     }
-                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${loading ||
+                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
+                      loading ||
                       isUploading ||
                       (!input.trim() &&
                         attachments.length === 0 &&
                         !selectionContext)
-                      ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                      : "bg-white text-slate-900 hover:bg-slate-200"
-                      }`}
+                        ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                        : "bg-white text-slate-900 hover:bg-slate-200"
+                    }`}
                   >
                     {loading ? (
                       <Loader2 size={18} className="animate-spin" />

@@ -9,7 +9,7 @@ import {
 import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 import { mcpClientService } from "../../mcpClient.service";
-import { CORE_VELORA_INSTRUCTIONS_GEMINI } from "../../../constants/prompt.constants";
+import { CORE_VELORA_INSTRUCTIONS } from "../../../constants/prompt.constants";
 
 dotenv.config();
 
@@ -136,8 +136,12 @@ export class GeminiAdapter implements IAIService {
     );
   }
 
-  private getSystemInstruction(combinedSystemPrompt?: string) {
-    const coreInstructions = CORE_VELORA_INSTRUCTIONS_GEMINI;
+  private getSystemInstruction(combinedSystemPrompt?: string, hasTools = false) {
+    let coreInstructions = CORE_VELORA_INSTRUCTIONS;
+
+    if (!hasTools) {
+      coreInstructions = coreInstructions.replace(/TOOL-USE & ANTI-HALLUCINATION RULES[\s\S]*?(?=OUTPUT RULES)/, "");
+    }
 
     const finalPrompt = combinedSystemPrompt
       ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
@@ -156,7 +160,7 @@ export class GeminiAdapter implements IAIService {
       if (last && last.role === msg.role) {
         if (msg.role === "user") {
           const currentName = msg.username || msg.userId || msg.role;
-          last.content = `${last.content}\n\n[${currentName}]: ${msg.content}`;
+          last.content = `${last.content}\n\n${currentName}: ${msg.content}`;
         } else {
           last.content = `${last.content}\n\n${msg.content}`;
         }
@@ -166,7 +170,7 @@ export class GeminiAdapter implements IAIService {
       } else {
         const finalContent =
           msg.role === "user" && msg.username
-            ? `[${msg.username}]: ${msg.content}`
+            ? `${msg.username}: ${msg.content}`
             : msg.content;
         collapsed.push({
           ...msg,
@@ -260,7 +264,7 @@ export class GeminiAdapter implements IAIService {
         hasToolCalls = false;
 
         const config: any = {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt),
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
         };
         if (geminiTools) {
           config.tools = geminiTools;
@@ -306,6 +310,10 @@ export class GeminiAdapter implements IAIService {
           const responseParts = await Promise.all(
             functionCalls.map(async (f) => {
               try {
+                const isAllowed = tools && tools.some((t) => t.name === f.name);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${f.name}" is disabled or not allowed.`);
+                }
                 const result = await mcpClientService.executeTool(
                   f.name!,
                   f.args,
@@ -317,10 +325,11 @@ export class GeminiAdapter implements IAIService {
                   },
                 };
               } catch (err: any) {
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 return {
                   functionResponse: {
                     name: f.name!,
-                    response: { error: err.message || String(err) },
+                    response: { error: errMsg },
                   },
                 };
               }
@@ -358,7 +367,7 @@ export class GeminiAdapter implements IAIService {
       .join("\n\n---\n\n");
 
     const geminiTools = this.mapMcpToolsToGemini(tools);
-    let latestUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
     let settleUsage: (
       usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
     ) => void = () => undefined;
@@ -389,7 +398,7 @@ export class GeminiAdapter implements IAIService {
 
             const config: any = {
               systemInstruction:
-                adapter.getSystemInstruction(combinedSystemPrompt),
+                adapter.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
             };
             if (geminiTools) {
               config.tools = geminiTools;
@@ -409,12 +418,13 @@ export class GeminiAdapter implements IAIService {
                 return;
               }
 
-              latestUsage = adapter.mergeUsage(
-                latestUsage,
-                normalizeGeminiUsageMetadata(
-                  (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
-                ),
+              // Gemini reports cumulative usage per chunk, so take the latest value
+              const chunkUsage = normalizeGeminiUsageMetadata(
+                (chunk as any).usageMetadata ?? (chunk as any).usage_metadata,
               );
+              if (chunkUsage) {
+                totalUsage = chunkUsage;
+              }
 
               const text = chunk.text;
               if (text) {
@@ -457,6 +467,10 @@ export class GeminiAdapter implements IAIService {
               yield `\n\n⚙️ *Running tool \`${f.name}\`...*\n`;
 
               try {
+                const isAllowed = tools && tools.some((t) => t.name === f.name);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${f.name}" is disabled or not allowed.`);
+                }
                 const result = await mcpClientService.executeTool(
                   f.name,
                   f.args,
@@ -474,10 +488,11 @@ export class GeminiAdapter implements IAIService {
                   err.message || err
                 }*\n\n`;
 
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseParts.push({
                   functionResponse: {
                     name: f.name,
-                    response: { error: err.message || String(err) },
+                    response: { error: errMsg },
                   },
                 });
               }
@@ -501,16 +516,16 @@ export class GeminiAdapter implements IAIService {
               contents,
               config: {
                 systemInstruction:
-                  adapter.getSystemInstruction(combinedSystemPrompt),
+                  adapter.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
               },
             });
-            latestUsage = adapter.mergeUsage(
-              latestUsage,
-              normalizeGeminiUsageMetadata(
+              const fallbackUsage = normalizeGeminiUsageMetadata(
                 (fallbackResponse as any).usageMetadata ??
                   (fallbackResponse as any).usage_metadata,
-              ),
-            );
+              );
+              if (fallbackUsage) {
+                totalUsage = fallbackUsage;
+              }
             const text =
               fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
               fallbackResponse?.text ||
@@ -524,7 +539,7 @@ export class GeminiAdapter implements IAIService {
 
           throw new AIServiceError(error.message, error.status || 500);
         } finally {
-          settleUsage(latestUsage);
+          settleUsage(totalUsage);
         }
       },
     };

@@ -51,15 +51,19 @@ export class NvidiaAdapter implements IAIService {
     };
   }
 
-  private getSystemInstruction(combinedSystemPrompt?: string): string {
-    const coreInstructions = CORE_VELORA_INSTRUCTIONS;
+  private getSystemInstruction(combinedSystemPrompt?: string, hasTools = false): string {
+    let coreInstructions = CORE_VELORA_INSTRUCTIONS;
+
+    if (!hasTools) {
+      coreInstructions = coreInstructions.replace(/TOOL-USE & ANTI-HALLUCINATION RULES[\s\S]*?(?=OUTPUT RULES)/, "");
+    }
 
     return combinedSystemPrompt
       ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
       : coreInstructions;
   }
 
-  private formatMessages(messages: AIMessage[]) {
+  private formatMessages(messages: AIMessage[], hasTools = false) {
     const isVision = supportsVision(this.model);
 
     const systemMessages = messages.filter((m) => m.role === "system");
@@ -71,7 +75,7 @@ export class NvidiaAdapter implements IAIService {
     const formattedMessages: any[] = [
       {
         role: "system",
-        content: this.getSystemInstruction(combinedSystemContent),
+        content: this.getSystemInstruction(combinedSystemContent, hasTools),
       },
     ];
 
@@ -117,7 +121,7 @@ export class NvidiaAdapter implements IAIService {
   }
 
   async generateResponse(messages: AIMessage[], tools?: any[]) {
-    const finalMessages = this.formatMessages(messages);
+    const finalMessages = this.formatMessages(messages, !!(tools && tools.length > 0));
     const nvidiaTools = this.mapMcpToolsToNvidia(tools);
 
     let hasToolCalls = true;
@@ -159,9 +163,14 @@ export class NvidiaAdapter implements IAIService {
           const responseMessages = await Promise.all(
             toolCalls.map(async (tc) => {
               try {
+                const toolName = (tc as any).function.name;
+                const isAllowed = tools && tools.some((t) => t.name === toolName);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${toolName}" is disabled or not allowed.`);
+                }
                 const args = JSON.parse((tc as any).function.arguments);
                 const result = await mcpClientService.executeTool(
-                  (tc as any).function.name,
+                  toolName,
                   args,
                 );
                 return {
@@ -170,11 +179,12 @@ export class NvidiaAdapter implements IAIService {
                   content: JSON.stringify(result),
                 };
               } catch (err: any) {
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
                   content: JSON.stringify({
-                    error: err.message || String(err),
+                    error: errMsg,
                   }),
                 };
               }
@@ -203,7 +213,7 @@ export class NvidiaAdapter implements IAIService {
     signal?: AbortSignal,
     tools?: any[],
   ): Promise<AIStreamResponse> {
-    const finalMessages = this.formatMessages(messages);
+    const finalMessages = this.formatMessages(messages, !!(tools && tools.length > 0));
     const nvidiaTools = this.mapMcpToolsToNvidia(tools);
 
     let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
@@ -234,6 +244,8 @@ export class NvidiaAdapter implements IAIService {
             loopCount++;
             hasToolCalls = false;
 
+            let streamOptions: { include_usage: boolean } | undefined = { include_usage: true };
+
             const stream = await adapter.openai.chat.completions.create(
               {
                 model: adapter.model,
@@ -243,10 +255,29 @@ export class NvidiaAdapter implements IAIService {
                 top_p: 0.7,
                 max_tokens: 4096,
                 stream: true,
-                stream_options: { include_usage: true },
+                ...(streamOptions ? { stream_options: streamOptions } : {}),
               },
               { signal },
-            );
+            ).catch(async (err: any) => {
+              // Some NIM models don't support stream_options — retry without it
+              if (err?.status === 400 || err?.message?.includes("stream_options")) {
+                console.warn(`[NvidiaAdapter] Model ${adapter.model} doesn't support stream_options, retrying without it`);
+                streamOptions = undefined;
+                return adapter.openai.chat.completions.create(
+                  {
+                    model: adapter.model,
+                    messages: finalMessages as any,
+                    ...(nvidiaTools ? { tools: nvidiaTools } : {}),
+                    temperature: 0.6,
+                    top_p: 0.7,
+                    max_tokens: 4096,
+                    stream: true,
+                  },
+                  { signal },
+                );
+              }
+              throw err;
+            });
 
             let accumulatedText = "";
             let activeToolCalls: any[] = [];
@@ -308,9 +339,14 @@ export class NvidiaAdapter implements IAIService {
               yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
 
               try {
+                const toolName = toolCall.function.name;
+                const isAllowed = tools && tools.some((t) => t.name === toolName);
+                if (!isAllowed) {
+                  throw new Error(`Tool "${toolName}" is disabled or not allowed.`);
+                }
                 const args = JSON.parse(toolCall.function.arguments);
                 const result = await mcpClientService.executeTool(
-                  toolCall.function.name,
+                  toolName,
                   args,
                 );
                 yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
@@ -325,11 +361,12 @@ export class NvidiaAdapter implements IAIService {
                   err.message || err
                 }*\n\n`;
 
+                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
                   content: JSON.stringify({
-                    error: err.message || String(err),
+                    error: errMsg,
                   }),
                 });
               }
@@ -351,6 +388,9 @@ export class NvidiaAdapter implements IAIService {
 
           throw new AIServiceError(message, error.status);
         } finally {
+          if (!latestUsage) {
+            console.warn(`[NvidiaAdapter] No usage data received from model ${adapter.model} during streaming — token counts will use estimation fallback`);
+          }
           settleUsage(latestUsage);
         }
       },

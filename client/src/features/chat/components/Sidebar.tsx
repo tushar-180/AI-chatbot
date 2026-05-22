@@ -31,6 +31,7 @@ import {
   Search,
   ListChecks,
   Shield,
+  Keyboard,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -44,6 +45,7 @@ import {
 import ShareModal from "./ShareModal";
 import CreateGroupModal from "./CreateGroupModal";
 import GroupLinkModal from "./GroupLinkModal";
+import DeleteConfirmModal from "./DeleteConfirmModal";
 
 const DEFAULT_EPOCH = "1970-01-01T00:00:00.000Z";
 import {
@@ -53,12 +55,11 @@ import {
   AvatarGroupCount,
   AvatarImage,
 } from "@/components/ui/avatar";
-
-const DeleteConfirmModal = lazy(() => import("./DeleteConfirmModal"));
 const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
 const SearchModal = lazy(() => import("./SearchModal"));
 const MoveToProjectModal = lazy(() => import("./MoveToProjectModal"));
+const ShortcutsCheatsheetModal = lazy(() => import("./ShortcutsCheatsheetModal"));
 
 /**
  * Sidebar Component
@@ -601,6 +602,7 @@ const Sidebar = () => {
   const chatListScrollRef = useRef<HTMLDivElement>(null);
   const fetchMoreChatsRef = useRef(fetchMoreChats);
   const observer = useRef<IntersectionObserver | null>(null);
+  const lastScrolledIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchMoreChatsRef.current = fetchMoreChats;
@@ -655,17 +657,135 @@ const Sidebar = () => {
   }, [user]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  const getShortcutsSettings = useCallback(() => {
+    try {
+      const stored = localStorage.getItem("velora-shortcuts-settings");
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Core toggle shortcuts modal: Ctrl/Cmd + /
+      // This is ALWAYS allowed as a failsafe!
+      if (e.key === "/" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+        return;
+      }
+
+      // Check settings to see if shortcuts are enabled
+      const settings = getShortcutsSettings() || {
+        globalEnabled: true,
+        toggleSidebar: true,
+        newChat: true,
+        openSettings: true,
+        openGallery: true,
+        toggleTempChat: true,
+        focusInput: true,
+      };
+
+      if (!settings.globalEnabled) return;
+
+      // 2. Toggle Search Modal: Ctrl/Cmd + K
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setSearchModalOpen((prev) => !prev);
+        return;
+      }
+
+      // 3. Toggle Sidebar: Ctrl/Cmd + \ or Ctrl/Cmd + B
+      if (settings.toggleSidebar && ((e.key === "\\" && (e.metaKey || e.ctrlKey)) || (e.key === "b" && (e.metaKey || e.ctrlKey)))) {
+        e.preventDefault();
+        setSidebarOpen(!sidebarOpen);
+        return;
+      }
+
+      // 4. Start New Chat: Ctrl/Cmd + Shift + O
+      if (settings.newChat && e.key === "O" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        if (isTemporaryChatActive) {
+          useTemporaryChatStore.getState().setTemporaryChatActive(false);
+          clearTemporaryChatStore();
+        }
+        createChat();
+        return;
+      }
+
+      // 5. Open Settings Modal: Ctrl/Cmd + ,
+      if (settings.openSettings && e.key === "," && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSettingsTab("general");
+        setSettingsOpen(true);
+        return;
+      }
+
+      // 6. Open Gallery Modal: Ctrl/Cmd + Shift + G
+      if (settings.openGallery && e.key === "G" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        setGalleryOpen(true);
+        return;
+      }
+
+      // 7. Toggle Temporary Chat Mode: Ctrl/Cmd + Shift + Y
+      if (settings.toggleTempChat && (e.key === "Y" || e.key === "y") && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault();
+        const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+        const newActive = !currentActive;
+        useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
+        if (newActive) {
+          useChatStore.getState().setCurrentChat(null);
+          useChatStore.getState().setIsNewChat(true);
+          useChatStore.getState().setMessages([]);
+          useTemporaryChatStore.getState().clearStore();
+          useChatStore.getState().setIsStreaming(false);
+          useChatStore.getState().setLoading(false);
+        } else {
+          useTemporaryChatStore.getState().clearStore();
+        }
+        navigate("/chat");
+        return;
+      }
+
+      // 8. Focus Prompt / Dismiss: Esc
+      if (e.key === "Escape") {
+        if (shortcutsOpen) {
+          e.preventDefault();
+          setShortcutsOpen(false);
+          return;
+        }
+        if (searchModalOpen) return; // let SearchModal close itself
+        if (settingsOpen) return;    // let SettingsModal close itself
+        if (galleryOpen) return;     // let GalleryModal close itself
+
+        // Focus input
+        if (settings.focusInput) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent("focus-prompt-input"));
+        }
       }
     };
+
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [
+    sidebarOpen,
+    searchModalOpen,
+    settingsOpen,
+    galleryOpen,
+    shortcutsOpen,
+    isTemporaryChatActive,
+    createChat,
+    clearTemporaryChatStore,
+    navigate,
+    setSidebarOpen,
+    getShortcutsSettings
+  ]);
 
   // Multi-select state
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -864,19 +984,38 @@ const Sidebar = () => {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [activeChatId, filteredChats.length, shouldPromoteActiveChat, showRecent]);
+  }, [activeChatId, shouldPromoteActiveChat, showRecent]);
 
   // Scroll active chat into view on initial mount/reload
   useEffect(() => {
     const activeId = urlChatId || urlGroupId;
-    if (!activeId || !chatListScrollRef.current) return;
+    if (!activeId) {
+      lastScrolledIdRef.current = null;
+      return;
+    }
 
+    if (!chatListScrollRef.current) return;
+    if (lastScrolledIdRef.current === activeId) return;
+
+    // Check if element is already in the DOM to scroll synchronously
+    const activeElement = chatListScrollRef.current.querySelector(
+      `[data-chat-id="${activeId}"]`
+    );
+
+    if (activeElement) {
+      activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
+      lastScrolledIdRef.current = activeId;
+      return;
+    }
+
+    // Fallback: schedule a check if the element isn't in the DOM yet
     const timer = setTimeout(() => {
-      const activeElement = chatListScrollRef.current?.querySelector(
-        `[data-chat-id="${activeId}"]`,
+      const el = chatListScrollRef.current?.querySelector(
+        `[data-chat-id="${activeId}"]`
       );
-      if (activeElement) {
-        activeElement.scrollIntoView({ block: "nearest", behavior: "auto" });
+      if (el) {
+        el.scrollIntoView({ block: "nearest", behavior: "auto" });
+        lastScrolledIdRef.current = activeId;
       }
     }, 200);
 
@@ -1099,9 +1238,9 @@ const Sidebar = () => {
                           key={item._id}
                           item={item}
                           isActive={
-                            item.itemType === "chat"
-                              ? currentChatId === item._id
-                              : urlGroupId === item._id
+                            location.pathname.includes("/group/")
+                              ? item.itemType === "group" && urlGroupId === item._id
+                              : item.itemType === "chat" && currentChatId === item._id
                           }
                           isSelectionMode={isSelectionMode}
                           isSelected={selectedIds.has(item._id)}
@@ -1246,6 +1385,14 @@ const Sidebar = () => {
                 <span>Settings</span>
               </DropdownMenuItem>
 
+              <DropdownMenuItem
+                onClick={() => setShortcutsOpen(true)}
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+              >
+                <Keyboard size={16} className="text-slate-400" />
+                <span>Keyboard Shortcuts</span>
+              </DropdownMenuItem>
+
               <DropdownMenuSeparator className="bg-white/5" />
 
               <SignOutButton>
@@ -1350,6 +1497,11 @@ const Sidebar = () => {
               toast.error("Failed to move chat");
             }
           }}
+        />
+
+        <ShortcutsCheatsheetModal
+          isOpen={shortcutsOpen}
+          onClose={() => setShortcutsOpen(false)}
         />
       </Suspense>
     </>

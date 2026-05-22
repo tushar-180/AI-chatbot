@@ -1333,6 +1333,9 @@ export const chatService = {
       (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
     );
 
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, String((assistantMessage as any)._id || assistantMessage.id));
+
     const lastUserMessage = contextMessages
       .filter((m) => m.role === "user")
       .pop();
@@ -1414,6 +1417,7 @@ export const chatService = {
           m.requestId === messageId) &&
         m.role === "assistant",
     );
+    console.log("Assistant message:", assistantMessage);
 
     // Fallback for old messages with mismatched UUIDs: use the last assistant message
     if (!assistantMessage && messageId.includes("-")) {
@@ -1435,6 +1439,9 @@ export const chatService = {
     const filteredMessages = (chat.messages as any[]).filter(
       (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
     );
+
+    // Delete all messages after this one
+    await chatRepository.deleteMessagesAfter(chatId, String((assistantMessage as any)._id || assistantMessage.id));
 
     const updatedChat = {
       ...chat,

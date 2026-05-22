@@ -10,6 +10,11 @@ export type Message = {
     isParsingDocument?: boolean;
     type?: "text" | "image" | "file" | "action";
     attachments?: Attachment[];
+    tokens?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+    };
     sources?: WebSource[];
     metadata?: {
         selection?: {

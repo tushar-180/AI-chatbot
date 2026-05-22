@@ -101,7 +101,14 @@ export const useGroupStore = create<GroupState>()(
           groups: [group, ...state.groups.filter((g) => g._id !== group._id)],
         })),
 
-      setCurrentGroup: (id) => set({ currentGroupId: id }),
+      setCurrentGroup: (id) =>
+        set((state) => {
+          const isSameGroup = state.currentGroupId === id;
+          return {
+            currentGroupId: id,
+            groupMessages: isSameGroup ? state.groupMessages : [],
+          };
+        }),
 
       setGroupMessages: (messages) =>
         set((state) => ({
@@ -112,9 +119,17 @@ export const useGroupStore = create<GroupState>()(
         })),
 
       addGroupMessage: (message) =>
-        set((state) => ({
-          groupMessages: [...state.groupMessages, message],
-        })),
+        set((state) => {
+          const updatedGroups = state.groups.map((g) =>
+            g._id === message.groupId
+              ? { ...g, updatedAt: message.createdAt || new Date().toISOString() }
+              : g
+          );
+          return {
+            groupMessages: [...state.groupMessages, message],
+            groups: updatedGroups,
+          };
+        }),
 
       // 🆕 EDIT MESSAGE
       updateGroupMessage: (messageId, content) =>

@@ -17,6 +17,7 @@ import { parseMultimedia } from "../utils/chatHistory";
 import crypto from "crypto";
 import { processAttachedFile } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
+import mongoose from "mongoose";
 
 const getEnabledMcpTools = async (userId: string) => {
   const user = await userService.getUserByClerkId(userId);
@@ -31,7 +32,7 @@ const getEnabledMcpTools = async (userId: string) => {
 export class GroupChatService {
   private static sanitizeAssistantResponse(content: string) {
     return content
-      .replace(/^(?:\s*\[(?:velora(?:\s*\([^\]]+\))?)\]:\s*)+/i, "")
+      .replace(/^(?:\s*\[?(?:velora(?:\s*\([^\]]+\))?)\]?:\s*)+/i, "")
       .trim();
   }
 
@@ -52,6 +53,33 @@ export class GroupChatService {
       attachments: message.attachments || [],
       feedback: message.feedback || null,
     };
+  }
+
+  private static async findAssistantMessageForRetry(
+    groupId: string,
+    messageId: string,
+  ) {
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(messageId);
+
+    let assistantMessage = isValidObjectId
+      ? await GroupMessage.findOne({
+          _id: messageId,
+          groupId,
+          role: "assistant",
+        })
+      : null;
+
+    // Streaming assistant placeholders use temporary UUIDs on the client.
+    // If one of those reaches the server, fall back to the latest persisted
+    // assistant message so retry stays usable instead of failing hard.
+    if (!assistantMessage && messageId.includes("-")) {
+      assistantMessage = await GroupMessage.findOne({
+        groupId,
+        role: "assistant",
+      }).sort({ createdAt: -1 });
+    }
+
+    return assistantMessage;
   }
 
   static async createGroup(chatId: string, clerkId: string) {
@@ -100,12 +128,12 @@ export class GroupChatService {
       await GroupMessage.insertMany(groupMessages);
     }
 
-    return groupChat;
+    return await this.populateGroupMembers(groupChat);
   }
 
   static async getGroupByInviteCode(inviteCode: string) {
     const group = await GroupChat.findOne({ inviteCode });
-    return group;
+    return await this.populateGroupMembers(group);
   }
 
   static async joinGroup(inviteCode: string, clerkId: string) {
@@ -149,7 +177,7 @@ export class GroupChatService {
       });
     }
 
-    return group;
+    return await this.populateGroupMembers(group);
   }
 
   static async leaveGroup(groupId: string, clerkId: string) {
@@ -267,7 +295,25 @@ export class GroupChatService {
   }
 
   static async getGroupMessages(groupId: string) {
-    return await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
+    const messages = await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
+    
+    const userIds = Array.from(new Set(messages.filter(m => m.role === "user").map(m => m.userId)));
+    if (userIds.length === 0) return messages;
+
+    const users = await User.find({ clerkId: { $in: userIds } });
+    const userMap = new Map(users.map((u: any) => [u.clerkId, u]));
+
+    return messages.map((message: any) => {
+      const msgObj = message.toObject ? message.toObject() : message;
+      if (msgObj.role === "user") {
+        const user = userMap.get(msgObj.userId);
+        if (user) {
+          msgObj.username = user.firstName || user.email?.split("@")[0] || msgObj.username;
+          msgObj.userImage = user.imageUrl || msgObj.userImage;
+        }
+      }
+      return msgObj;
+    });
   }
 
   static async addMessage(
@@ -286,10 +332,16 @@ export class GroupChatService {
     let userImage = null;
 
     if (role === "user") {
-      const member = group.members.find((m) => m.userId === clerkId);
-      if (!member) throw new Error("Not a member of this group");
-      username = member.username;
-      userImage = member.userImage;
+      const userRecord = await User.findOne({ clerkId });
+      if (userRecord) {
+        username = userRecord.firstName || userRecord.email?.split("@")[0] || username;
+        userImage = userRecord.imageUrl || userImage;
+      } else {
+        const member = group.members.find((m) => m.userId === clerkId);
+        if (!member) throw new Error("Not a member of this group");
+        username = member.username;
+        userImage = member.userImage;
+      }
     }
 
     let messageAttachments = [...attachments];
@@ -643,17 +695,19 @@ export class GroupChatService {
   }
 
   static async getUserGroups(clerkId: string) {
-    return await GroupChat.find({ "members.userId": clerkId }).sort({
+    const groups = await GroupChat.find({ "members.userId": clerkId }).sort({
       isPinned: -1,
       updatedAt: -1,
     });
+    return await this.populateGroupsMembers(groups);
   }
 
   static async getUserCreatedGroups(clerkId: string) {
-    return await GroupChat.find({ creatorId: clerkId }).sort({
+    const groups = await GroupChat.find({ creatorId: clerkId }).sort({
       isPinned: -1,
       updatedAt: -1,
     });
+    return await this.populateGroupsMembers(groups);
   }
 
   static async updateGroupTitle(
@@ -671,7 +725,7 @@ export class GroupChatService {
 
     group.title = title;
     await group.save();
-    return group;
+    return await this.populateGroupMembers(group);
   }
 
   static async pinGroup(groupId: string) {
@@ -681,7 +735,7 @@ export class GroupChatService {
       { new: true },
     );
     if (!group) throw new Error("Group not found");
-    return group;
+    return await this.populateGroupMembers(group);
   }
 
   static async unpinGroup(groupId: string) {
@@ -691,7 +745,7 @@ export class GroupChatService {
       { new: true },
     );
     if (!group) throw new Error("Group not found");
-    return group;
+    return await this.populateGroupMembers(group);
   }
 
   static async editGroupMessage(
@@ -750,10 +804,10 @@ export class GroupChatService {
     messageId: string,
     targetProvider?: string,
   ) {
-    const assistantMessage = await GroupMessage.findOne({
-      _id: messageId,
-      role: "assistant",
-    });
+    const assistantMessage = await this.findAssistantMessageForRetry(
+      groupId,
+      messageId,
+    );
 
     if (!assistantMessage) {
       throw new Error("Assistant message not found for retry");
@@ -843,5 +897,65 @@ export class GroupChatService {
     await GroupMessage.deleteMany({ groupId });
 
     return { success: true };
+  }
+
+  private static async populateGroupMembers(group: any) {
+    if (!group) return null;
+    const groupObj = group.toObject ? group.toObject() : group;
+    if (groupObj.members && groupObj.members.length > 0) {
+      const userIds = groupObj.members.map((m: any) => m.userId);
+      const users = await User.find({ clerkId: { $in: userIds } });
+      const userMap = new Map(users.map((u: any) => [u.clerkId, u]));
+
+      groupObj.members = groupObj.members.map((member: any) => {
+        const user = userMap.get(member.userId);
+        if (user) {
+          const username = user.firstName || user.email?.split("@")[0] || member.username;
+          const userImage = user.imageUrl || member.userImage;
+          return {
+            ...member,
+            username,
+            userImage,
+          };
+        }
+        return member;
+      });
+    }
+    return groupObj;
+  }
+
+  private static async populateGroupsMembers(groups: any[]) {
+    if (!groups || groups.length === 0) return [];
+    
+    const allUserIds = new Set<string>();
+    groups.forEach((group: any) => {
+      const g = group.toObject ? group.toObject() : group;
+      if (g.members) {
+        g.members.forEach((m: any) => allUserIds.add(m.userId));
+      }
+    });
+
+    const users = await User.find({ clerkId: { $in: Array.from(allUserIds) } });
+    const userMap = new Map(users.map((u: any) => [u.clerkId, u]));
+
+    return groups.map((group: any) => {
+      const g = group.toObject ? group.toObject() : group;
+      if (g.members) {
+        g.members = g.members.map((member: any) => {
+          const user = userMap.get(member.userId);
+          if (user) {
+            const username = user.firstName || user.email?.split("@")[0] || member.username;
+            const userImage = user.imageUrl || member.userImage;
+            return {
+              ...member,
+              username,
+              userImage,
+            };
+          }
+          return member;
+        });
+      }
+      return g;
+    });
   }
 }

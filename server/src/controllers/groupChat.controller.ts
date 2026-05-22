@@ -263,7 +263,7 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const messageId = req.params.messageId as string;
-      const { provider } = req.body;
+      const provider = req.body?.provider;
 
       const result = await GroupChatService.retryGroupMessage(
         groupId,

@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X, FileText } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
@@ -23,10 +26,10 @@ interface Provider {
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
   const mapping: Record<string, React.ComponentType<{ size?: number }>> = {
-    gemini: Gemini.Color,
-    claude: Anthropic,
-    openai: OpenAI,
-    nvidia: Nvidia.Color,
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
   };
   const Icon = mapping[p];
   return Icon ? <Icon size={size} /> : null;
@@ -79,6 +82,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { groupId } = useParams<{ groupId?: string }>();
+    const [isFocused, setIsFocused] = useState(false);
 
   // Clear typed input, attachments, and reset web search when switching group chats
   useEffect(() => {
@@ -510,7 +514,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none ">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none not-selectable ">
       <form
         onSubmit={handleSubmit}
         className="mx-auto max-w-4xl relative pointer-events-auto"
@@ -660,12 +664,30 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               <textarea
                 ref={textareaRef}
                 value={input}
+                 onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 onScroll={handleScroll}
+                  // Prevent copy when NOT focused
+                  onCopy={(e) => {
+                    if (!isFocused) {
+                      e.preventDefault();
+                    }
+                  }}
+                  // Prevent selection when NOT focused
+                  onSelect={(e) => {
+                    if (!isFocused) {
+                      const el = e.currentTarget;
+
+                      requestAnimationFrame(() => {
+                        el.selectionStart = el.selectionEnd;
+                      });
+                    }
+                  }}
                 rows={1}
                 placeholder="Message group..."
-                className="relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent"
+                className={`${ isFocused ? "" : "selection:bg-transparent select-none" } not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent`}
                 style={sharedTextStyles}
               />
             </div>

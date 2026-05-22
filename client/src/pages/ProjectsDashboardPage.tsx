@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Edit2, Folder, Plus, Search, Sparkles, Trash2, X, MoreVertical, LogOut } from "lucide-react";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
 import { useChatStore } from "@/features/chat/store/useChatStore";
-import { useAvailableProviders } from "@/features/chat/hooks/useAvailableProviders";
+
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import {
@@ -257,7 +257,6 @@ export default function ProjectsPage() {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("gemini:gemini-2.5-pro");
-  useAvailableProviders(selectedProvider, setSelectedProvider);
 
   useEffect(() => {
     fetchProjects();
