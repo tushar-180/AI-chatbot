@@ -1,4 +1,5 @@
 import React, { useState, memo } from "react";
+import { createPortal } from "react-dom";
 import { Menu, Users, LogOut, X } from "lucide-react";
 import { useGroupStore } from "../store/useGroupStore";
 import { api } from "@/lib/api";
@@ -106,7 +107,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
       </div>
 
       {/* Members Modal */}
-      {showMembers && (
+      {showMembers && createPortal(
         <div 
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" 
           onClick={() => setShowMembers(false)}
@@ -169,7 +170,8 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
               </p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* Leave Group Confirmation Modal */}
       <DeleteConfirmModal

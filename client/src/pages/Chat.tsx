@@ -7,7 +7,10 @@ import InputArea from "@/features/chat/components/InputArea";
 import SourcesSidebar from "@/features/chat/components/SourceSidebar";
 import { useChatMessages } from "@/features/chat/hooks/useChatMessages";
 import { useChatStream } from "@/features/chat/hooks/useChatStream";
-import { useChatInput, type Attachment } from "@/features/chat/hooks/useChatInput";
+import {
+  useChatInput,
+  type Attachment,
+} from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
@@ -26,7 +29,10 @@ import { useProjectStore } from "@/features/chat/store/useProjectStore";
  */
 const Chat = () => {
   useTextSelection();
-  const { chatId, projectId } = useParams<{ chatId?: string; projectId?: string }>();
+  const { chatId, projectId } = useParams<{
+    chatId?: string;
+    projectId?: string;
+  }>();
   const location = useLocation();
   const navigate = useNavigate();
   const hasAutoStartedRef = useRef(false);
@@ -41,7 +47,7 @@ const Chat = () => {
       setActiveProjectId(null);
       navigate("/chat", { replace: true });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync active project state based on URL route parameter
@@ -63,8 +69,12 @@ const Chat = () => {
     setMessages,
     setIsNewChat,
   } = useChatStore();
-  const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
-  const clearTemporaryChatStore = useTemporaryChatStore((state) => state.clearStore);
+  const isTemporaryChatActive = useTemporaryChatStore(
+    (state) => state.isTemporaryChatActive,
+  );
+  const clearTemporaryChatStore = useTemporaryChatStore(
+    (state) => state.clearStore,
+  );
   const pendingState = location.state as {
     pendingInput?: string;
     pendingProvider?: string;
@@ -93,7 +103,8 @@ const Chat = () => {
   // CRITICAL: Immediately clear messages to prevent leaking between chats.
   useEffect(() => {
     const store = useChatStore.getState();
-    const isNavigatingToActiveStream = chatId && store.streamingChatId === chatId && store.isStreaming;
+    const isNavigatingToActiveStream =
+      chatId && store.streamingChatId === chatId && store.isStreaming;
 
     // Only reset streaming state if we are NOT navigating into a chat that is currently streaming
     if (!isNavigatingToActiveStream) {
@@ -112,7 +123,14 @@ const Chat = () => {
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [chatId, projectId, currentChatId, setCurrentChat, setMessages, setIsNewChat]);
+  }, [
+    chatId,
+    projectId,
+    currentChatId,
+    setCurrentChat,
+    setMessages,
+    setIsNewChat,
+  ]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -157,7 +175,12 @@ const Chat = () => {
         clearTemporaryChatStore();
       }
     }
-  }, [chatId, location.pathname, isTemporaryChatActive, clearTemporaryChatStore]);
+  }, [
+    chatId,
+    location.pathname,
+    isTemporaryChatActive,
+    clearTemporaryChatStore,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -188,7 +211,9 @@ const Chat = () => {
       const selectionContext = useComposerStore.getState().selectionContext;
       useComposerStore.getState().clearSelectionContext();
       const res = await streamMessage(input, provider, attachments, {
-        forceNewChat: isTemporaryChatActive ? false : Boolean(messagesError && currentChatId),
+        forceNewChat: isTemporaryChatActive
+          ? false
+          : Boolean(messagesError && currentChatId),
         webSearchEnabled: options?.webSearchEnabled,
         selection: selectionContext || undefined,
       });
@@ -198,7 +223,10 @@ const Chat = () => {
 
   // 5. Handle auto-start message from SharedChatPage or Project Dashboard
   useEffect(() => {
-    const isReady = loadedChatId === currentChatId || canAutoStartFromSeededMessages || currentChatId === null;
+    const isReady =
+      loadedChatId === currentChatId ||
+      canAutoStartFromSeededMessages ||
+      currentChatId === null;
     if (
       pendingState?.pendingInput &&
       isReady &&
@@ -231,8 +259,6 @@ const Chat = () => {
     location.pathname,
   ]);
 
-
-
   const handleSourcesOpen = useCallback(
     (sources: WebSource[], sourceId?: number) => {
       setSelectedSources(sources);
@@ -252,12 +278,13 @@ const Chat = () => {
 
   return (
     <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
-
-      <main className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
-        isTemporaryChatActive
-          ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
-          : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
-      }`}>
+      <main
+        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
+          isTemporaryChatActive
+            ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
+            : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
+        }`}
+      >
         {/* Spotlight Component - Positioned correctly */}
         {!isTemporaryChatActive && (
           <Spotlight
@@ -267,7 +294,7 @@ const Chat = () => {
         )}
 
         <div
-          className={`flex-1 overflow-y-auto scroll-smooth flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
+          className={`flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
         >
           <ChatHeader
             currentChatId={currentChatId}
@@ -275,42 +302,61 @@ const Chat = () => {
           />
 
           <div className="relative flex-1">
-            <MessageList
-              messages={displayMessages}
-              loading={isCurrentChatLoading}
-              messagesLoading={messagesLoading}
-              messagesError={messagesError}
-              hasLoadedCurrentChat={
-                !currentChatId ||
-                loadedChatId === currentChatId ||
-                canAutoStartFromSeededMessages
-              }
-              isStreaming={isStreaming}
-              currentChatId={currentChatId}
-              isNewChat={isNewChat}
-              onSuggestionClick={setInput}
-              onEditMessage={(messageId, content) =>
-                editMessage(messageId, content, selectedProvider, {
-                  webSearchEnabled,
-                })
-              }
-              onEditStart={stopGeneration}
-              onFeedback={(messageId, feedback) => {
-                if (isTemporaryChatActive) {
-                  useTemporaryChatStore.getState().setMessageFeedback(messageId, feedback);
-                } else {
-                  useChatStore.getState().setMessageFeedback(messageId, feedback);
-                  if (currentChatId) {
-                    chatService.updateMessageFeedback(currentChatId, messageId, feedback);
+            {(() => {
+              const isTransitioning = (chatId || null) !== currentChatId;
+              return (
+                <MessageList
+                  messages={isTransitioning ? [] : displayMessages}
+                  loading={isTransitioning ? false : isCurrentChatLoading}
+                  messagesLoading={
+                    isTransitioning ? Boolean(chatId) : messagesLoading
                   }
-                }
-              }}
-              onRetryMessage={(messageId) =>
-                retryMessage(messageId, selectedProvider)
-              }
-              onCitationClick={handleCitationClick}
-              onSourcesClick={handleSourcesOpen}
-            />
+                  messagesError={isTransitioning ? null : messagesError}
+                  hasLoadedCurrentChat={
+                    isTransitioning
+                      ? !chatId
+                      : !currentChatId ||
+                        loadedChatId === currentChatId ||
+                        canAutoStartFromSeededMessages
+                  }
+                  isStreaming={isTransitioning ? false : isStreaming}
+                  currentChatId={
+                    isTransitioning ? chatId || null : currentChatId
+                  }
+                  isNewChat={isTransitioning ? !chatId : isNewChat}
+                  onSuggestionClick={setInput}
+                  onEditMessage={(messageId, content) =>
+                    editMessage(messageId, content, selectedProvider, {
+                      webSearchEnabled,
+                    })
+                  }
+                  onEditStart={stopGeneration}
+                  onFeedback={(messageId, feedback) => {
+                    if (isTemporaryChatActive) {
+                      useTemporaryChatStore
+                        .getState()
+                        .setMessageFeedback(messageId, feedback);
+                    } else {
+                      useChatStore
+                        .getState()
+                        .setMessageFeedback(messageId, feedback);
+                      if (currentChatId) {
+                        chatService.updateMessageFeedback(
+                          currentChatId,
+                          messageId,
+                          feedback,
+                        );
+                      }
+                    }
+                  }}
+                  onRetryMessage={(messageId) =>
+                    retryMessage(messageId, selectedProvider)
+                  }
+                  onCitationClick={handleCitationClick}
+                  onSourcesClick={handleSourcesOpen}
+                />
+              );
+            })()}
           </div>
         </div>
 
