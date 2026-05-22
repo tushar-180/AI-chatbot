@@ -59,7 +59,7 @@ export const SelectionToolbar = () => {
         transform: "translateX(-50%)",
         zIndex: 9999,
       }}
-      className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 shadow-2xl backdrop-blur-xl transition-all duration-200 ease-out pointer-events-auto ${
+      className={`flex items-center gap-1.5 rounded-xl border px-3.5 py-2 shadow-2xl not-selectable backdrop-blur-xl transition-all duration-200 ease-out pointer-events-auto ${
         selection.isExceeded
           ? "border-rose-500/20 bg-slate-900/95"
           : "border-white/10 bg-slate-900/90"
