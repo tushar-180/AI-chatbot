@@ -12,33 +12,30 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const fetchedUserIdRef = useRef<string | null>(null);
-  const {
-    chats,
-    currentChatId,
-    messages,
-    loading,
-    isStreaming,
-    isNewChat,
-    page,
-    hasMore,
-    setChats,
-    appendChats,
-    setHasMore,
-    setPage,
-    setCurrentChat,
-    setMessages,
-    setIsNewChat,
-    setSidebarOpen,
-    removeChat,
-    updateChatTitle,
-    updateChatArchive,
-    updateChatPin,
-    viewingArchived,
-    setViewingArchived,
-    upsertChat,
-    currentChat,
-    setLoading,
-  } = useChatStore();
+  const chats = useChatStore((state) => state.chats);
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const loading = useChatStore((state) => state.loading);
+  const isStreaming = useChatStore((state) => state.isStreaming);
+  const isNewChat = useChatStore((state) => state.isNewChat);
+  const page = useChatStore((state) => state.page);
+  const hasMore = useChatStore((state) => state.hasMore);
+  const setChats = useChatStore((state) => state.setChats);
+  const appendChats = useChatStore((state) => state.appendChats);
+  const setHasMore = useChatStore((state) => state.setHasMore);
+  const setPage = useChatStore((state) => state.setPage);
+  const setCurrentChat = useChatStore((state) => state.setCurrentChat);
+  const setMessages = useChatStore((state) => state.setMessages);
+  const setIsNewChat = useChatStore((state) => state.setIsNewChat);
+  const setSidebarOpen = useChatStore((state) => state.setSidebarOpen);
+  const removeChat = useChatStore((state) => state.removeChat);
+  const updateChatTitle = useChatStore((state) => state.updateChatTitle);
+  const updateChatArchive = useChatStore((state) => state.updateChatArchive);
+  const updateChatPin = useChatStore((state) => state.updateChatPin);
+  const viewingArchived = useChatStore((state) => state.viewingArchived);
+  const setViewingArchived = useChatStore((state) => state.setViewingArchived);
+  const upsertChat = useChatStore((state) => state.upsertChat);
+  const currentChat = useChatStore((state) => state.currentChat);
+  const setLoading = useChatStore((state) => state.setLoading);
 
   const createChat = () => {
     setIsNewChat(true);
@@ -267,8 +264,8 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
 
-  const messagesLengthRef = useRef(messages.length);
-  messagesLengthRef.current = messages.length;
+  const messagesLengthRef = useRef(useChatStore.getState().messages.length);
+  messagesLengthRef.current = useChatStore.getState().messages.length;
 
   useEffect(() => {
     if (!shouldFetch) return;

@@ -16,8 +16,7 @@ interface ChatHeaderProps {
 const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) => {
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const chats = useChatStore((state) => state.chats);
-  const isStreaming = useChatStore((state) => state.isStreaming);
-  const streamingChatId = useChatStore((state) => state.streamingChatId);
+  const streamingChatIds = useChatStore((state) => state.streamingChatIds);
   const isNewChat = useChatStore((state) => state.isNewChat);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const navigate = useNavigate();
@@ -45,7 +44,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
   const currentChat = chats.find((chat) => chat._id === currentChatId) || projectChats.find((chat) => chat._id === currentChatId);
   chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
-    isStreaming && !!currentChatId && streamingChatId === currentChatId;
+    !!currentChatId && streamingChatIds[currentChatId] === true;
 
  
 

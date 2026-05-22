@@ -12,7 +12,7 @@ interface UseChatMessagesOptions {
 export const useChatMessages = ({
   skipFetch = false,
 }: UseChatMessagesOptions = {}) => {
-  const { currentChatId, isStreaming, streamingChatId, setMessages } =
+  const { currentChatId, streamingChatIds, setMessages } =
     useChatStore();
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
@@ -57,10 +57,15 @@ export const useChatMessages = ({
       return;
     }
 
+    const isChatStreaming = Boolean(
+      currentChatId && streamingChatIds[currentChatId] === true,
+    );
+
     // 2. Let the active stream drive the visible messages without forcing a refetch later.
-    if (isStreaming && streamingChatId === currentChatId) {
+    if (isChatStreaming) {
       queueMicrotask(() => {
         setMessagesLoading(false);
+        setLoadedChatId(currentChatId);
         setMessagesError(null);
       });
       return;
@@ -117,9 +122,8 @@ export const useChatMessages = ({
   }, [
     currentChatId,
     isLoaded,
-    isStreaming,
+    streamingChatIds,
     skipFetch,
-    streamingChatId,
     loadedChatId,
     setMessages,
     user?.id,

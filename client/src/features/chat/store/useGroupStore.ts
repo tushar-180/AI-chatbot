@@ -52,6 +52,8 @@ type GroupState = {
   loading: boolean;
   isAiThinking: boolean;
   isWebSearching: boolean;
+  aiThinkingGroupIds: Record<string, boolean>;
+  webSearchingGroupIds: Record<string, boolean>;
 
   setGroups: (groups: GroupChat[]) => void;
   addGroup: (group: GroupChat) => void;
@@ -77,8 +79,8 @@ type GroupState = {
   retryAiMessage: (messageId: string) => GroupMessage | null;
 
   setLoading: (loading: boolean) => void;
-  setIsAiThinking: (isAiThinking: boolean) => void;
-  setIsWebSearching: (isWebSearching: boolean) => void;
+  setIsAiThinking: (isAiThinking: boolean, groupId?: string | null) => void;
+  setIsWebSearching: (isWebSearching: boolean, groupId?: string | null) => void;
 
   removeGroup: (id: string) => void;
   updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
@@ -93,6 +95,8 @@ export const useGroupStore = create<GroupState>()(
       loading: false,
       isAiThinking: false,
       isWebSearching: false,
+      aiThinkingGroupIds: {},
+      webSearchingGroupIds: {},
 
       setGroups: (groups) => set({ groups }),
 
@@ -104,9 +108,12 @@ export const useGroupStore = create<GroupState>()(
       setCurrentGroup: (id) =>
         set((state) => {
           const isSameGroup = state.currentGroupId === id;
+          const targetId = id ?? "";
           return {
             currentGroupId: id,
             groupMessages: isSameGroup ? state.groupMessages : [],
+            isAiThinking: !!state.aiThinkingGroupIds[targetId],
+            isWebSearching: !!state.webSearchingGroupIds[targetId],
           };
         }),
 
@@ -172,10 +179,35 @@ export const useGroupStore = create<GroupState>()(
 
       setLoading: (loading) => set({ loading }),
 
-      setIsAiThinking: (isAiThinking) => set({ isAiThinking }),
+      setIsAiThinking: (isAiThinking, groupId) =>
+        set((state) => {
+          const targetGroupId = groupId ?? state.currentGroupId ?? "";
+          const nextThinking = { ...state.aiThinkingGroupIds };
+          if (isAiThinking) {
+            nextThinking[targetGroupId] = true;
+          } else {
+            delete nextThinking[targetGroupId];
+          }
+          return {
+            aiThinkingGroupIds: nextThinking,
+            isAiThinking: targetGroupId === state.currentGroupId ? isAiThinking : state.isAiThinking,
+          };
+        }),
 
-      setIsWebSearching: (isWebSearching) =>
-        set({ isWebSearching }),
+      setIsWebSearching: (isWebSearching, groupId) =>
+        set((state) => {
+          const targetGroupId = groupId ?? state.currentGroupId ?? "";
+          const nextSearching = { ...state.webSearchingGroupIds };
+          if (isWebSearching) {
+            nextSearching[targetGroupId] = true;
+          } else {
+            delete nextSearching[targetGroupId];
+          }
+          return {
+            webSearchingGroupIds: nextSearching,
+            isWebSearching: targetGroupId === state.currentGroupId ? isWebSearching : state.isWebSearching,
+          };
+        }),
 
       removeGroup: (id) =>
         set((state) => ({
