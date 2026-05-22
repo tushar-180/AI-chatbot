@@ -45,6 +45,7 @@ interface Message {
   };
   // 🆕 Web search sources (if any)
   sources?: WebSource[];
+  metadata?: any;
 }
 
 interface MessageItemProps {
@@ -549,8 +550,33 @@ const MessageItem = ({
                       }
                     >
                       {isUser ? (
-                        <div className="whitespace-pre-wrap break-words text-white">
-                          {msg.content}
+                        <div className="flex flex-col gap-3">
+                          {msg.metadata?.selection && (
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                              {/* Header */}
+                              <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+                                <div className="h-2 w-2 rounded-full bg-indigo-400" />
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Selected text
+                                </span>
+                              </div>
+                              {/* Selected Content */}
+                              <div className="border-l-2 border-l-indigo-400 px-3 py-2">
+                                <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300">
+                                  {
+                                    (
+                                      msg.metadata.selection as {
+                                        selectedText?: string;
+                                      }
+                                    )?.selectedText
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div className="whitespace-pre-wrap break-words text-white">
+                            {msg.content}
+                          </div>
                         </div>
                       ) : (
                         <ReactMarkdown

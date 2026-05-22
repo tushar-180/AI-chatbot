@@ -1123,15 +1123,21 @@ export const useChatStream = (hookOptions?: {
 
     if (messageIndex === -1) return;
 
-    // Keep all messages, but update the target one to streaming status and clear content
-    const nextMessages = [...currentMessages];
-    nextMessages[messageIndex] = {
-      ...nextMessages[messageIndex],
+    // Add a temporary streaming/loading assistant message
+    const assistantPlaceholder: Message = {
+      id: requestId, // Use the same ID as requestId
+      role: "assistant",
       content: "",
-      status: "streaming",
-      requestId,
       model: provider,
+      requestId,
+      status: "streaming",
     };
+
+    // Trim the messages array up to the assistant message index and append placeholder
+    const nextMessages = [
+      ...currentMessages.slice(0, messageIndex),
+      assistantPlaceholder,
+    ];
 
     setOptimisticMessagesForChat(currentChatId, nextMessages);
     setLoading(true);
@@ -1176,7 +1182,7 @@ export const useChatStream = (hookOptions?: {
         false,
         currentChatId,
         requestId,
-        messageId, // Reuse the same message ID
+        assistantPlaceholder.id!,
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
