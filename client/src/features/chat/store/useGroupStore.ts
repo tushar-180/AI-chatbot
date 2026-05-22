@@ -101,7 +101,14 @@ export const useGroupStore = create<GroupState>()(
           groups: [group, ...state.groups.filter((g) => g._id !== group._id)],
         })),
 
-      setCurrentGroup: (id) => set({ currentGroupId: id }),
+      setCurrentGroup: (id) =>
+        set((state) => {
+          const isSameGroup = state.currentGroupId === id;
+          return {
+            currentGroupId: id,
+            groupMessages: isSameGroup ? state.groupMessages : [],
+          };
+        }),
 
       setGroupMessages: (messages) =>
         set((state) => ({
