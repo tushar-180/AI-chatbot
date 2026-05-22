@@ -46,7 +46,6 @@ const GroupMessageList = ({
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const shouldAutoScrollRef = useRef(true);
   const prevMessageCountRef = useRef(0);
-  const prevGroupIdRef = useRef<string | null>(null);
 
   const getScrollContainer = useCallback(() => {
     return scrollContainerRef.current?.closest(
