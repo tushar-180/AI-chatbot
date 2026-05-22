@@ -15,7 +15,7 @@ export const chatRepository = {
     return chat;
   },
 
-  create(data: { userId: string; title: string; projectId?: string }) {
+  create(data: { userId: string; title: string; projectId?: string; isSidebarVisible?: boolean }) {
     return new Chat(data);
   },
 
@@ -55,8 +55,8 @@ export const chatRepository = {
   ) {
     const skip = (page - 1) * limit;
     const query = isArchived
-      ? { userId, isArchived: true, $or: [{ projectId: null }, { projectId: { $exists: false } }] }
-      : { userId, isArchived: { $ne: true }, $or: [{ projectId: null }, { projectId: { $exists: false } }] };
+      ? { userId, isArchived: true, isSidebarVisible: { $ne: false }, $or: [{ projectId: null }, { projectId: { $exists: false } }] }
+      : { userId, isArchived: { $ne: true }, isSidebarVisible: { $ne: false }, $or: [{ projectId: null }, { projectId: { $exists: false } }] };
 
     return Chat.find(query)
       .select("-messages -legacyMessages")
@@ -230,15 +230,16 @@ export const chatRepository = {
   },
 
   async updateMessageByRequestId(
-    chatId: string,
+    chatId: string | null | undefined,
     requestId: string,
     updateData: Partial<ChatMessage>,
   ) {
+    const query = (chatId && chatId !== "null") ? { chatId, requestId } : { requestId };
     // Read existing message to get old token values for delta calculation
-    const existingMessage = await Message.findOne({ chatId, requestId });
+    const existingMessage = await Message.findOne(query);
 
     const message = await Message.findOneAndUpdate(
-      { chatId, requestId },
+      query,
       updateData,
       {
         returnDocument: "after",

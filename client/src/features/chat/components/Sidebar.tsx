@@ -2,6 +2,8 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useGroupStore } from "../store/useGroupStore";
+import { cleanupGroupChatStream } from "../hooks/useGroupChat";
+import { cleanupTemporaryChatStream } from "../hooks/useTemporaryChat";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { api } from "@/lib/api";
@@ -116,7 +118,7 @@ const SidebarItem = memo(
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
 
-    const { groups } = useGroupStore();
+    const groups = useGroupStore((state) => state.groups);
     const group = groups.find((g) => g._id === item._id);
     const inviteCode = group?.inviteCode || "";
 
@@ -559,22 +561,22 @@ const Sidebar = () => {
     groupId?: string;
   }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
-    useChatStore();
+  const sidebarOpen = useChatStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useChatStore((state) => state.setSidebarOpen);
+  const dbUser = useChatStore((state) => state.dbUser);
+  const setDbUser = useChatStore((state) => state.setDbUser);
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
   );
   const clearTemporaryChatStore = useTemporaryChatStore(
     (state) => state.clearStore,
   );
-  const {
-    groups,
-    setGroups,
-    currentGroupId,
-    setCurrentGroup,
-    removeGroup,
-    updateGroup,
-  } = useGroupStore();
+  const groups = useGroupStore((state) => state.groups);
+  const setGroups = useGroupStore((state) => state.setGroups);
+  const currentGroupId = useGroupStore((state) => state.currentGroupId);
+  const setCurrentGroup = useGroupStore((state) => state.setCurrentGroup);
+  const removeGroup = useGroupStore((state) => state.removeGroup);
+  const updateGroup = useGroupStore((state) => state.updateGroup);
   const { user } = useUser();
   const navigate = useNavigate();
   const {
@@ -650,11 +652,12 @@ const Sidebar = () => {
       .get("/user/profile")
       .then(({ data }) => {
         setIsAdmin(data.role === "admin");
+        setDbUser(data);
       })
       .catch((err) => {
         console.error("Failed to fetch user role for sidebar:", err);
       });
-  }, [user]);
+  }, [user, setDbUser]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -709,6 +712,8 @@ const Sidebar = () => {
       // 4. Start New Chat: Ctrl/Cmd + Shift + O
       if (settings.newChat && e.key === "O" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         e.preventDefault();
+        cleanupGroupChatStream();
+        cleanupTemporaryChatStream();
         if (isTemporaryChatActive) {
           useTemporaryChatStore.getState().setTemporaryChatActive(false);
           clearTemporaryChatStore();
@@ -849,10 +854,6 @@ const Sidebar = () => {
   const isSearchNavigation = new URLSearchParams(location.search).has(
     "highlight",
   );
-  const isStreamingActiveChat = Boolean(
-    activeChatId && isStreaming && streamingChatId === activeChatId,
-  );
-  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
   const filteredChats = useMemo(() => {
     return chats
       .filter((c) => (c.isArchived ?? false) === viewingArchived)
@@ -861,19 +862,15 @@ const Sidebar = () => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
 
-        // 2. Search-selected or currently streaming chats sit at the top of
-        // their section, below pinned chats.
-        if (shouldPromoteActiveChat) {
-          if (a._id === activeChatId) return -1;
-          if (b._id === activeChatId) return 1;
-        }
-
-        // 3. Finally, sort by update time (most recent first).
+        // 2. Sort by update time (most recent first).
         const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        return dateB - dateA;
+        if (dateB !== dateA) {
+          return dateB - dateA;
+        }
+        return a._id.localeCompare(b._id);
       });
-  }, [activeChatId, chats, shouldPromoteActiveChat, viewingArchived]);
+  }, [chats, viewingArchived]);
 
   // Merge and sort chats and groups
   const unifiedList = useMemo(() => {
@@ -901,22 +898,17 @@ const Sidebar = () => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
 
-      // 2. Search-selected or currently streaming chat stays near the top.
-      if (shouldPromoteActiveChat) {
-        if (a.itemType === "chat" && a._id === activeChatId) return -1;
-        if (b.itemType === "chat" && b._id === activeChatId) return 1;
-      }
-
-      // 3. Sort by update time (most recent first).
+      // 2. Sort by update time (most recent first).
       const dateA = new Date(a.updatedAt).getTime();
       const dateB = new Date(b.updatedAt).getTime();
-      return dateB - dateA;
+      if (dateB !== dateA) {
+        return dateB - dateA;
+      }
+      return a._id.localeCompare(b._id);
     });
   }, [
-    activeChatId,
     filteredChats,
     groups,
-    shouldPromoteActiveChat,
     viewingArchived,
   ]);
 
@@ -977,14 +969,14 @@ const Sidebar = () => {
   }, [user?.id, setGroups]);
 
   useEffect(() => {
-    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+    if (!activeChatId || !showRecent || !isSearchNavigation) return;
 
     const frame = window.requestAnimationFrame(() => {
       chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [activeChatId, shouldPromoteActiveChat, showRecent]);
+  }, [activeChatId, isSearchNavigation, showRecent]);
 
   // Scroll active chat into view on initial mount/reload
   useEffect(() => {
@@ -1062,6 +1054,8 @@ const Sidebar = () => {
           <div className="flex flex-col gap-3">
             <button
               onClick={() => {
+                cleanupGroupChatStream();
+                cleanupTemporaryChatStream();
                 if (isTemporaryChatActive) {
                   useTemporaryChatStore
                     .getState()
@@ -1245,6 +1239,8 @@ const Sidebar = () => {
                           isSelectionMode={isSelectionMode}
                           isSelected={selectedIds.has(item._id)}
                           onSelect={(target) => {
+                            cleanupGroupChatStream();
+                            cleanupTemporaryChatStream();
                             if (target.itemType === "chat") {
                               selectChat(target._id);
                             } else {
@@ -1302,10 +1298,10 @@ const Sidebar = () => {
                       : "border border-white/5"
                   }`}
                 >
-                  {user?.imageUrl ? (
+                  {(dbUser?.imageUrl || user?.imageUrl) ? (
                     <img
-                      src={user.imageUrl}
-                      alt={user.fullName || "User"}
+                      src={dbUser?.imageUrl || user?.imageUrl}
+                      alt={dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "User")}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -1316,7 +1312,7 @@ const Sidebar = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate leading-tight">
-                    {user?.fullName || "User"}
+                    {dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "User")}
                   </p>
                   {isAdmin && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">

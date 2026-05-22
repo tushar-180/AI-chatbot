@@ -110,6 +110,11 @@ const chatSchema = new mongoose.Schema(
       default: false,
       index: true,
     },
+    isSidebarVisible: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     tokens: {
       type: tokenUsageSchema,
       default: () => ({ promptTokens: 0, completionTokens: 0, totalTokens: 0 }),

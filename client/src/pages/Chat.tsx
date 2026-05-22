@@ -16,7 +16,7 @@ import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
 import { Spotlight } from "@/components/ui/spotlight";
 import type { WebSource } from "@/features/chat/types/chat.types";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
-import { useTemporaryChat } from "@/features/chat/hooks/useTemporaryChat";
+import { useTemporaryChat, cleanupTemporaryChatStream } from "@/features/chat/hooks/useTemporaryChat";
 import { chatService } from "@/features/chat/services/chat.service";
 import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
@@ -105,21 +105,15 @@ const Chat = () => {
   useEffect(() => {
     const store = useChatStore.getState();
     const isNavigatingToActiveStream =
-      chatId && store.streamingChatId === chatId && store.isStreaming;
+      Boolean(chatId && store.streamingChatIds[chatId] === true);
 
-    // Only reset streaming state if we are NOT navigating into a chat that is currently streaming
-    if (!isNavigatingToActiveStream) {
-      store.setIsStreaming(false);
-      store.setLoading(false);
-    }
-
-    if (chatId && chatId !== currentChatId) {
+    if (chatId && chatId !== store.currentChatId) {
       setCurrentChat(chatId);
       if (!isNavigatingToActiveStream) {
         setMessages([]);
       }
       setIsNewChat(false);
-    } else if (!chatId) {
+    } else if (!chatId && store.currentChatId !== null) {
       setCurrentChat(null);
       setMessages([]);
       setIsNewChat(true);
@@ -127,7 +121,6 @@ const Chat = () => {
   }, [
     chatId,
     projectId,
-    currentChatId,
     setCurrentChat,
     setMessages,
     setIsNewChat,
@@ -172,6 +165,7 @@ const Chat = () => {
     if (isTemporaryChatActive) {
       const path = location.pathname;
       if (chatId || path.includes("/group/")) {
+        cleanupTemporaryChatStream();
         useTemporaryChatStore.getState().setTemporaryChatActive(false);
         clearTemporaryChatStore();
       }
@@ -190,6 +184,7 @@ const Chat = () => {
         useTemporaryChatStore.getState().isTemporaryChatActive &&
         !window.location.pathname.startsWith("/chat")
       ) {
+        cleanupTemporaryChatStream();
         useTemporaryChatStore.getState().setTemporaryChatActive(false);
         useTemporaryChatStore.getState().clearStore();
       }

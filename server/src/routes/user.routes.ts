@@ -5,6 +5,7 @@ const router = Router();
 
 // clerkId is no longer in the URL — it comes from the verified JWT (req.clerkId)
 router.get("/profile", userController.getProfile);
+router.put("/profile", userController.updateProfile);
 router.put("/personalization", userController.updatePersonalization);
 router.get("/export", userController.exportData);
 

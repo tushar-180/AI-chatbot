@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
+import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
   User,
   Globe,
@@ -195,7 +196,7 @@ const MessageItem = ({
   onSourcesClick,
 }: MessageItemProps) => {
   const { user } = useUser();
-
+  const dbUser = useChatStore((state) => state.dbUser);
   const isUser = msg.role === "user";
   const isFailed = msg.status === "failed";
 
@@ -427,7 +428,7 @@ const MessageItem = ({
         <div className="hidden xs:block">
           <MessageAvatar
             isUser={isUser}
-            imageUrl={user?.imageUrl}
+            imageUrl={dbUser?.imageUrl || user?.imageUrl}
             failed={isFailed}
           />
         </div>

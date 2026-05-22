@@ -19,11 +19,11 @@ const getActiveChatKey = (chatId: string | null) =>
 const createOptimisticTitle = (input: string) =>
   input.trim().slice(0, CHAT_TITLE_MAX_LENGTH) || "New Chat";
 
-const activeAbortControllerRef: { current: AbortController | null } = { current: null };
-const connectionTimeoutRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
-const activeRequestIdRef: { current: string | null } = { current: null };
-const activeResolvedChatIdRef: { current: string | null } = { current: null };
-const stopRequestedRef: { current: boolean } = { current: false };
+const activeAbortControllersRef: { current: Record<string, AbortController | null> } = { current: {} };
+const connectionTimeoutsRef: { current: Record<string, ReturnType<typeof setTimeout> | null> } = { current: {} };
+const activeRequestIdsRef: { current: Record<string, string | null> } = { current: {} };
+const activeResolvedChatIdsRef: { current: Record<string, string | null> } = { current: {} };
+const stopRequestedRef: { current: Record<string, boolean> } = { current: {} };
 const pendingOptimisticUpdateRef: {
   current: Record<string, { messageId: string; partialMessage: Partial<Message> }>;
 } = { current: {} };
@@ -36,16 +36,17 @@ export const useChatStream = (hookOptions?: {
   const { getToken } = useAuth();
   const navigate = useNavigate();
   const currentChatId = useChatStore((state) => state.currentChatId);
-  const loading = useChatStore((state) => state.loading);
-  const isStreaming = useChatStore((state) => state.isStreaming);
-  const streamingChatId = useChatStore((state) => state.streamingChatId);
+  const storeMessages = useChatStore((state) => state.messages);
+  const streamingChatIds = useChatStore((state) => state.streamingChatIds);
+  const loadingChatIds = useChatStore((state) => state.loadingChatIds);
   const setCurrentChat = useChatStore((state) => state.setCurrentChat);
   const setChats = useChatStore((state) => state.setChats);
   const setIsNewChat = useChatStore((state) => state.setIsNewChat);
   const upsertChat = useChatStore((state) => state.upsertChat);
   const setMessages = useChatStore((state) => state.setMessages);
-  const setLoading = useChatStore((state) => state.setLoading);
   const setIsStreaming = useChatStore((state) => state.setIsStreaming);
+  const setLoading = useChatStore((state) => state.setLoading);
+  const removeChat = useChatStore((state) => state.removeChat);
 
   const [optimisticMessagesByChatId, setOptimisticMessagesByChatId] = useState<
     Record<string, Message[] | null>
@@ -127,13 +128,9 @@ export const useChatStream = (hookOptions?: {
     [],
   );
   const isStreamingCurrentChat =
-    isStreaming &&
-    streamingChatId === getActiveChatKey(currentChatId) &&
-    !!streamingChatId;
+    streamingChatIds[getActiveChatKey(currentChatId)] === true;
   const isLoadingCurrentChat =
-    loading &&
-    streamingChatId === getActiveChatKey(currentChatId) &&
-    !!streamingChatId;
+    loadingChatIds[getActiveChatKey(currentChatId)] === true;
 
   // Clear stale optimistic messages only when the selected chat actually changes.
   useEffect(() => {
@@ -142,14 +139,37 @@ export const useChatStream = (hookOptions?: {
     const chatIdToClear = currentChatId;
     previousChatIdRef.current = currentChatId;
 
-    if (!chatIdToClear) return;
+    if (!chatIdToClear) {
+      // Clear the temporary new chat stream state when transitioning back to '/chat'
+      setOptimisticMessagesForChat(null, null);
+      return;
+    }
 
     queueMicrotask(() => {
-      const { isStreaming, streamingChatId } = useChatStore.getState();
-      if (isStreaming && streamingChatId === chatIdToClear) return;
+      const { streamingChatIds } = useChatStore.getState();
+      if (streamingChatIds[getActiveChatKey(chatIdToClear)]) return;
       setOptimisticMessagesForChat(chatIdToClear, null);
     });
   }, [currentChatId, setOptimisticMessagesForChat]);
+
+  // Automatically clear temporary new chat stream state if we are back on '/chat',
+  // we are not actively streaming or loading, and the store's messages array is empty (e.g. from createChat).
+  useEffect(() => {
+    if (
+      currentChatId === null &&
+      !isStreamingCurrentChat &&
+      !isLoadingCurrentChat &&
+      storeMessages.length === 0
+    ) {
+      setOptimisticMessagesForChat(null, null);
+    }
+  }, [
+    currentChatId,
+    isStreamingCurrentChat,
+    isLoadingCurrentChat,
+    storeMessages.length,
+    setOptimisticMessagesForChat,
+  ]);
 
   const refreshChats = async () => {
     const chats = await chatService.fetchChats();
@@ -271,6 +291,8 @@ export const useChatStream = (hookOptions?: {
     let resolvedChatId = initialChatId;
     let activeRequestId = requestId;
     const initialKey = getActiveChatKey(initialChatId);
+    let hasUpsertedSidebar = false;
+    let pendingChatPayload: any = null;
 
     if (!reader) throw new Error("Stream reader unavailable");
 
@@ -280,13 +302,19 @@ export const useChatStream = (hookOptions?: {
 
       if (data.requestId) {
         activeRequestId = data.requestId;
-        activeRequestIdRef.current = data.requestId;
+        activeRequestIdsRef.current[resolvedChatId ?? initialKey] = data.requestId;
       }
 
       if (data.chatId) {
         const nextChatId: string = data.chatId;
         resolvedChatId = nextChatId;
-        activeResolvedChatIdRef.current = nextChatId;
+        activeResolvedChatIdsRef.current[nextChatId] = nextChatId;
+
+        // CRITICAL: We must set streaming and loading states for nextChatId BEFORE transitioning the active chat ID.
+        // This prevents useChatMessages hook from triggering a DB load and showing stuck skeletons/dots.
+        setIsStreaming(true, nextChatId);
+        setLoading(true, nextChatId);
+
         if (isCreatingChat) {
           const chatPayload = {
             _id: nextChatId,
@@ -295,19 +323,13 @@ export const useChatStream = (hookOptions?: {
             isPinned: false,
             updatedAt: new Date().toISOString(),
           };
-
-          const activeProjectId = useProjectStore.getState().activeProjectId;
-          if (activeProjectId) {
-            // Project chats go only to the project store, not global history
-            useProjectStore.getState().addChatToProjectStore(chatPayload);
-          } else {
-            upsertChat(chatPayload);
-          }
+          pendingChatPayload = chatPayload;
 
           const shouldSelectResolvedChat =
             useChatStore.getState().currentChatId === initialChatId;
           if (shouldSelectResolvedChat) {
             setCurrentChat(nextChatId);
+            const activeProjectId = useProjectStore.getState().activeProjectId;
             if (activeProjectId) {
               navigate(`/projects/${activeProjectId}/chat/${nextChatId}`, { replace: true });
             } else {
@@ -333,8 +355,38 @@ export const useChatStream = (hookOptions?: {
               pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
             delete pendingOptimisticUpdateRef.current[NEW_CHAT_STREAM_KEY];
           }
+
+          // Migrate references
+          if (activeAbortControllersRef.current[NEW_CHAT_STREAM_KEY]) {
+            activeAbortControllersRef.current[nextChatId] =
+              activeAbortControllersRef.current[NEW_CHAT_STREAM_KEY];
+            delete activeAbortControllersRef.current[NEW_CHAT_STREAM_KEY];
+          }
+          if (connectionTimeoutsRef.current[NEW_CHAT_STREAM_KEY]) {
+            connectionTimeoutsRef.current[nextChatId] =
+              connectionTimeoutsRef.current[NEW_CHAT_STREAM_KEY];
+            delete connectionTimeoutsRef.current[NEW_CHAT_STREAM_KEY];
+          }
+          if (activeRequestIdsRef.current[NEW_CHAT_STREAM_KEY]) {
+            activeRequestIdsRef.current[nextChatId] =
+              activeRequestIdsRef.current[NEW_CHAT_STREAM_KEY];
+            delete activeRequestIdsRef.current[NEW_CHAT_STREAM_KEY];
+          }
+          if (activeResolvedChatIdsRef.current[NEW_CHAT_STREAM_KEY]) {
+            activeResolvedChatIdsRef.current[nextChatId] =
+              activeResolvedChatIdsRef.current[NEW_CHAT_STREAM_KEY];
+            delete activeResolvedChatIdsRef.current[NEW_CHAT_STREAM_KEY];
+          }
+          if (stopRequestedRef.current[NEW_CHAT_STREAM_KEY] !== undefined) {
+            stopRequestedRef.current[nextChatId] =
+              stopRequestedRef.current[NEW_CHAT_STREAM_KEY];
+            delete stopRequestedRef.current[NEW_CHAT_STREAM_KEY];
+          }
+
+          // Clear Zustand temporary key values to prevent leaking stream state to subsequent new chats
+          setIsStreaming(false, NEW_CHAT_STREAM_KEY);
+          setLoading(false, NEW_CHAT_STREAM_KEY);
         }
-        setIsStreaming(true, nextChatId);
       }
 
       if (data.messageId) {
@@ -392,6 +444,17 @@ export const useChatStream = (hookOptions?: {
       if (data.chunk) {
         fullContent += data.chunk;
         const key = resolvedChatId ?? initialKey;
+
+        if (pendingChatPayload && !hasUpsertedSidebar) {
+          hasUpsertedSidebar = true;
+          const activeProjectId = useProjectStore.getState().activeProjectId;
+          if (activeProjectId) {
+            useProjectStore.getState().addChatToProjectStore(pendingChatPayload);
+          } else {
+            upsertChat(pendingChatPayload);
+          }
+        }
+
         queueOptimisticMessageUpdate(key, placeholderMessageId, {
           content: fullContent,
           requestId: activeRequestId,
@@ -430,7 +493,7 @@ export const useChatStream = (hookOptions?: {
 
           // Find the last assistant message (the streaming one)
           const lastAssistantIdx = messagesForChat.findLastIndex(
-            (m) => m.role === "assistant" && m.status === "streaming",
+            (m) => m.role === "assistant" && m.status === "streaming"
           );
           if (lastAssistantIdx === -1) return current;
 
@@ -454,6 +517,15 @@ export const useChatStream = (hookOptions?: {
       }
 
       if (data.done) {
+        if (pendingChatPayload && !hasUpsertedSidebar) {
+          hasUpsertedSidebar = true;
+          const activeProjectId = useProjectStore.getState().activeProjectId;
+          if (activeProjectId) {
+            useProjectStore.getState().addChatToProjectStore(pendingChatPayload);
+          } else {
+            upsertChat(pendingChatPayload);
+          }
+        }
         if (pendingOptimisticFrameRef.current !== null) {
           flushOptimisticUpdates();
         }
@@ -493,11 +565,11 @@ export const useChatStream = (hookOptions?: {
           }
           return { ...current, [key]: next };
         });
-        activeAbortControllerRef.current = null;
-        activeRequestIdRef.current = null;
-        activeResolvedChatIdRef.current = null;
-        setIsStreaming(false);
-        setLoading(false);
+        activeAbortControllersRef.current[key] = null;
+        activeRequestIdsRef.current[key] = null;
+        activeResolvedChatIdsRef.current[key] = null;
+        setIsStreaming(false, key);
+        setLoading(false, key);
       }
     };
 
@@ -519,13 +591,14 @@ export const useChatStream = (hookOptions?: {
         }
       }
     } finally {
-      setIsStreaming(false);
-      setLoading(false);
-      const chatIdToRefresh = activeResolvedChatIdRef.current ?? initialChatId;
-      const wasStopped = stopRequestedRef.current;
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
+      const activeKey = resolvedChatId ?? initialKey;
+      setIsStreaming(false, activeKey);
+      setLoading(false, activeKey);
+      const chatIdToRefresh = resolvedChatId ?? initialChatId;
+      const wasStopped = stopRequestedRef.current[activeKey] === true;
+      activeAbortControllersRef.current[activeKey] = null;
+      activeRequestIdsRef.current[activeKey] = null;
+      activeResolvedChatIdsRef.current[activeKey] = null;
 
       // Ensure we have the latest messages with real IDs after ANY stream ends
       if (chatIdToRefresh && user?.id && !wasStopped) {
@@ -549,20 +622,30 @@ export const useChatStream = (hookOptions?: {
     }
   };
   const resumeStream = async (chatId: string) => {
-    stopRequestedRef.current = false;
+    const chatKey = getActiveChatKey(chatId);
+    stopRequestedRef.current[chatKey] = false;
     try {
       // First fetch the latest messages from the server to ensure UI is up-to-date
       // even if the stream has already completed on the server.
       const baseMessages = await loadMessagesForResume(chatId);
 
+      const lastMessage = baseMessages[baseMessages.length - 1];
+      if (
+        !lastMessage ||
+        lastMessage.role !== "assistant" ||
+        lastMessage.status !== "streaming"
+      ) {
+        return false;
+      }
+
       const url = chatService.getStreamUpdatesUrl(chatId);
       const abortController = new AbortController();
-      activeAbortControllerRef.current = abortController;
-      activeResolvedChatIdRef.current = chatId;
+      activeAbortControllersRef.current[chatKey] = abortController;
+      activeResolvedChatIdsRef.current[chatKey] = chatId;
 
       // Client-side safety timeout for connection
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
+      connectionTimeoutsRef.current[chatKey] = setTimeout(() => {
+        if (activeAbortControllersRef.current[chatKey] === abortController) {
           abortController.abort();
         }
       }, 35000);
@@ -576,9 +659,9 @@ export const useChatStream = (hookOptions?: {
         signal: abortController.signal,
       });
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[chatKey]) {
+        clearTimeout(connectionTimeoutsRef.current[chatKey]!);
+        connectionTimeoutsRef.current[chatKey] = null;
       }
 
       if (!response.ok) return false;
@@ -612,7 +695,7 @@ export const useChatStream = (hookOptions?: {
         status: "streaming",
       };
 
-      setLoading(true);
+      setLoading(true, chatId);
       setIsStreaming(true, chatId);
 
       const { nextMessages, targetMessageId } = buildResumeMessages(
@@ -636,16 +719,16 @@ export const useChatStream = (hookOptions?: {
       }
 
       console.error("Error resuming stream", err);
-      setLoading(false);
-      setIsStreaming(false);
+      setLoading(false, chatId);
+      setIsStreaming(false, chatId);
       setOptimisticMessagesForChat(chatId, null);
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
+      activeAbortControllersRef.current[chatKey] = null;
+      activeRequestIdsRef.current[chatKey] = null;
+      activeResolvedChatIdsRef.current[chatKey] = null;
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[chatKey]) {
+        clearTimeout(connectionTimeoutsRef.current[chatKey]!);
+        connectionTimeoutsRef.current[chatKey] = null;
       }
 
       return false;
@@ -666,14 +749,14 @@ export const useChatStream = (hookOptions?: {
     if (resumeAttemptedChatIdRef.current === currentChatId) return;
     resumeAttemptedChatIdRef.current = currentChatId;
 
-    if (isStreaming && streamingChatId === currentChatId) return;
+    if (streamingChatIds[getActiveChatKey(currentChatId)]) return;
 
     // Small timeout to ensure messages are loaded first before attempting recovery.
     const timer = setTimeout(() => {
       resumeStreamRef.current(currentChatId);
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentChatId, isStreaming, streamingChatId]);
+  }, [currentChatId, streamingChatIds]);
 
   const streamMessage = async (
     input: string,
@@ -693,7 +776,7 @@ export const useChatStream = (hookOptions?: {
   ) => {
     if (!input.trim() && attachments.length === 0 && !options?.selection)
       return;
-    if (loading || !user?.id) return;
+    if (!user?.id) return;
 
     const forceNewChat = options?.forceNewChat === true;
     const webSearchEnabled = options?.webSearchEnabled === true;
@@ -716,6 +799,9 @@ export const useChatStream = (hookOptions?: {
         },
       ];
     }
+
+    const activeKey = getActiveChatKey(effectiveCurrentChatId);
+    if (loadingChatIds[activeKey]) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -740,7 +826,6 @@ export const useChatStream = (hookOptions?: {
       isParsingDocument: !!options?.attachedFile,
     };
     const isCreatingChat = !effectiveCurrentChatId;
-    const activeKey = getActiveChatKey(effectiveCurrentChatId);
     const baseMessages = forceNewChat
       ? []
       : (optimisticMessagesByChatId[activeKey] ?? storeState.messages);
@@ -754,9 +839,9 @@ export const useChatStream = (hookOptions?: {
       navigate("/chat");
     }
 
-    activeAbortControllerRef.current = abortController;
-    activeRequestIdRef.current = requestId;
-    activeResolvedChatIdRef.current = effectiveCurrentChatId;
+    activeAbortControllersRef.current[activeKey] = abortController;
+    activeRequestIdsRef.current[activeKey] = requestId;
+    activeResolvedChatIdsRef.current[activeKey] = effectiveCurrentChatId;
 
     // Set optimistic UI
     setOptimisticMessagesForChat(activeKey, [
@@ -783,16 +868,16 @@ export const useChatStream = (hookOptions?: {
         upsertChat(updatedChat);
       }
     }
-    setLoading(true);
+    setLoading(true, activeKey);
     setIsStreaming(true, activeKey);
-    stopRequestedRef.current = false;
+    stopRequestedRef.current[activeKey] = false;
 
     try {
       const url = chatService.getStreamUrl(effectiveCurrentChatId || undefined);
 
       // Client-side safety timeout for connection
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
+      connectionTimeoutsRef.current[activeKey] = setTimeout(() => {
+        if (activeAbortControllersRef.current[activeKey] === abortController) {
           abortController.abort();
         }
       }, 35000); // 35s to allow server-side 30s timeout to trigger first
@@ -840,18 +925,18 @@ export const useChatStream = (hookOptions?: {
         body,
       });
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[activeKey]) {
+        clearTimeout(connectionTimeoutsRef.current[activeKey]!);
+        connectionTimeoutsRef.current[activeKey] = null;
       }
 
       if (!response.ok) {
         if (
-          stopRequestedRef.current &&
-          activeRequestIdRef.current === requestId
+          stopRequestedRef.current[activeKey] &&
+          activeRequestIdsRef.current[activeKey] === requestId
         ) {
           const resolvedChatId =
-            activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
+            activeResolvedChatIdsRef.current[activeKey] ?? effectiveCurrentChatId;
           const key = getActiveChatKey(resolvedChatId);
 
           setOptimisticMessagesByChatId((current) => {
@@ -860,7 +945,7 @@ export const useChatStream = (hookOptions?: {
             const next = [...messagesForChat];
             next[next.length - 1] = {
               ...next[next.length - 1],
-              status: stopRequestedRef.current ? "stopped" : "failed",
+              status: stopRequestedRef.current[key] ? "stopped" : "failed",
             };
             queueMicrotask(() => {
               commitMessagesForChat(resolvedChatId, next);
@@ -868,8 +953,8 @@ export const useChatStream = (hookOptions?: {
             return { ...current, [key]: next };
           });
 
-          setLoading(false);
-          setIsStreaming(false);
+          setLoading(false, resolvedChatId);
+          setIsStreaming(false, resolvedChatId);
           return;
         }
 
@@ -889,18 +974,22 @@ export const useChatStream = (hookOptions?: {
         hookOptions.onWebSearchComplete();
       }
     } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        const resolvedChatId =
-          activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
-        const key = getActiveChatKey(resolvedChatId);
+      const resolvedChatId =
+        activeResolvedChatIdsRef.current[activeKey] ?? effectiveCurrentChatId;
+      const key = getActiveChatKey(resolvedChatId);
+      const isCleanStop =
+        !!stopRequestedRef.current[key] ||
+        !!stopRequestedRef.current[activeKey] ||
+        !!stopRequestedRef.current[NEW_CHAT_STREAM_KEY];
 
+      if (err instanceof DOMException && err.name === "AbortError") {
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
           if (!messagesForChat?.length) return current;
           const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
-            status: stopRequestedRef.current ? "stopped" : "failed",
+            status: isCleanStop ? "stopped" : "failed",
           };
           queueMicrotask(() => {
             commitMessagesForChat(resolvedChatId, next);
@@ -908,19 +997,12 @@ export const useChatStream = (hookOptions?: {
           return { ...current, [key]: next };
         });
 
-        setLoading(false);
-        setIsStreaming(false);
+        setLoading(false, key);
+        setIsStreaming(false, key);
         return;
       }
 
-      if (
-        stopRequestedRef.current &&
-        activeRequestIdRef.current === requestId
-      ) {
-        const resolvedChatId =
-          activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
-        const key = getActiveChatKey(resolvedChatId);
-
+      if (isCleanStop) {
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
           if (!messagesForChat?.length) return current;
@@ -935,15 +1017,12 @@ export const useChatStream = (hookOptions?: {
           return { ...current, [key]: next };
         });
 
-        setLoading(false);
-        setIsStreaming(false);
+        setLoading(false, key);
+        setIsStreaming(false, key);
         return;
       }
 
       console.error("Error streaming message", err);
-      const resolvedChatId =
-        activeResolvedChatIdRef.current ?? effectiveCurrentChatId;
-      const key = getActiveChatKey(resolvedChatId);
       const errorMessage = chatService.getChatErrorMessage(err);
 
       setOptimisticMessagesByChatId((current) => {
@@ -961,35 +1040,57 @@ export const useChatStream = (hookOptions?: {
         return { ...current, [key]: next };
       });
     } finally {
-      if (activeRequestIdRef.current === requestId) {
-        activeAbortControllerRef.current = null;
-        activeRequestIdRef.current = null;
-        activeResolvedChatIdRef.current = null;
-        stopRequestedRef.current = false;
+      if (activeRequestIdsRef.current[activeKey] === requestId) {
+        const resolvedChatId =
+          activeResolvedChatIdsRef.current[activeKey] ?? effectiveCurrentChatId;
+        const key = getActiveChatKey(resolvedChatId);
+        activeAbortControllersRef.current[activeKey] = null;
+        activeRequestIdsRef.current[activeKey] = null;
+        activeResolvedChatIdsRef.current[activeKey] = null;
+        stopRequestedRef.current[activeKey] = false;
 
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current);
-          connectionTimeoutRef.current = null;
+        if (connectionTimeoutsRef.current[activeKey]) {
+          clearTimeout(connectionTimeoutsRef.current[activeKey]!);
+          connectionTimeoutsRef.current[activeKey] = null;
         }
 
-        setLoading(false);
-        setIsStreaming(false);
+        setLoading(false, key);
+        setIsStreaming(false, key);
       }
     }
   };
 
-  const stopGeneration = async () => {
-    const requestId = activeRequestIdRef.current;
-    const chatId = activeResolvedChatIdRef.current ?? currentChatId;
+  const stopGeneration = async (targetChatId?: string | null | any) => {
+    const resolvedChatIdParam = typeof targetChatId === "string" ? targetChatId : null;
+    const chatKey = getActiveChatKey(resolvedChatIdParam ?? currentChatId);
+    const requestId = activeRequestIdsRef.current[chatKey];
+    const chatId = activeResolvedChatIdsRef.current[chatKey] ?? (resolvedChatIdParam ?? currentChatId);
 
     if (!requestId) return;
 
-    stopRequestedRef.current = true;
+    stopRequestedRef.current[chatKey] = true;
     markAssistantMessageStatus(chatId, requestId, "stopped");
-    activeAbortControllerRef.current?.abort();
+    activeAbortControllersRef.current[chatKey]?.abort();
 
     try {
-      await chatService.stopStream(requestId, chatId);
+      const res = await chatService.stopStream(requestId, chatId);
+      const isDeleted = res?.data?.deleted === true;
+
+      if (isDeleted) {
+        if (chatId) {
+          removeChat(chatId);
+        }
+        setOptimisticMessagesForChat(NEW_CHAT_STREAM_KEY, null);
+        if (chatId) {
+          setOptimisticMessagesForChat(chatId, null);
+        }
+        useChatStore.getState().setCurrentChat(null);
+        useChatStore.getState().setMessages([]);
+        useChatStore.getState().setIsNewChat(true);
+        navigate("/chat", { replace: true });
+        return;
+      }
+
       if (user?.id) {
         await refreshChats();
         if (chatId) {
@@ -1002,16 +1103,16 @@ export const useChatStream = (hookOptions?: {
       console.error("Error stopping stream", err);
       toast.error("Could not stop generation cleanly on the server.");
     } finally {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[chatKey]) {
+        clearTimeout(connectionTimeoutsRef.current[chatKey]!);
+        connectionTimeoutsRef.current[chatKey] = null;
       }
-      activeAbortControllerRef.current = null;
-      activeRequestIdRef.current = null;
-      activeResolvedChatIdRef.current = null;
-      stopRequestedRef.current = false;
-      setIsStreaming(false);
-      setLoading(false);
+      activeAbortControllersRef.current[chatKey] = null;
+      activeRequestIdsRef.current[chatKey] = null;
+      activeResolvedChatIdsRef.current[chatKey] = null;
+      stopRequestedRef.current[chatKey] = false;
+      setIsStreaming(false, chatKey);
+      setLoading(false, chatKey);
     }
   };
 
@@ -1026,9 +1127,11 @@ export const useChatStream = (hookOptions?: {
     if (!newContent.trim()) return;
     if (!user?.id || !currentChatId) return;
 
+    const activeKey = getActiveChatKey(currentChatId);
+
     // If streaming is active, stop it first before editing
-    if (activeRequestIdRef.current) {
-      await stopGeneration();
+    if (activeRequestIdsRef.current[activeKey]) {
+      await stopGeneration(currentChatId);
     }
 
     const webSearchEnabled = options?.webSearchEnabled === true;
@@ -1036,13 +1139,13 @@ export const useChatStream = (hookOptions?: {
     const requestId = crypto.randomUUID();
     const abortController = new AbortController();
 
-    activeAbortControllerRef.current = abortController;
-    activeRequestIdRef.current = requestId;
-    activeResolvedChatIdRef.current = currentChatId;
+    activeAbortControllersRef.current[activeKey] = abortController;
+    activeRequestIdsRef.current[activeKey] = requestId;
+    activeResolvedChatIdsRef.current[activeKey] = currentChatId;
 
     // Set optimistic UI: find the edited message and remove everything after it
     const currentMessages =
-      optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ??
+      optimisticMessagesByChatId[activeKey] ??
       storeState.messages;
     const messageIndex = currentMessages.findIndex((m) => m.id === messageId);
 
@@ -1071,15 +1174,15 @@ export const useChatStream = (hookOptions?: {
     ];
 
     setOptimisticMessagesForChat(currentChatId, nextMessages);
-    setLoading(true);
+    setLoading(true, currentChatId);
     setIsStreaming(true, currentChatId);
-    stopRequestedRef.current = false;
+    stopRequestedRef.current[activeKey] = false;
 
     try {
       const url = chatService.getEditStreamUrl(currentChatId, messageId);
 
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
+      connectionTimeoutsRef.current[activeKey] = setTimeout(() => {
+        if (activeAbortControllersRef.current[activeKey] === abortController) {
           abortController.abort();
         }
       }, 35000);
@@ -1101,9 +1204,9 @@ export const useChatStream = (hookOptions?: {
         }),
       });
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[activeKey]) {
+        clearTimeout(connectionTimeoutsRef.current[activeKey]!);
+        connectionTimeoutsRef.current[activeKey] = null;
       }
 
       if (!response.ok) {
@@ -1123,7 +1226,7 @@ export const useChatStream = (hookOptions?: {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const resolvedChatId = activeResolvedChatIdsRef.current[activeKey] ?? currentChatId;
         const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
@@ -1132,7 +1235,7 @@ export const useChatStream = (hookOptions?: {
           const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
-            status: stopRequestedRef.current ? "stopped" : "failed",
+            status: stopRequestedRef.current[key] ? "stopped" : "failed",
           };
           queueMicrotask(() => {
             commitMessagesForChat(resolvedChatId, next);
@@ -1143,12 +1246,12 @@ export const useChatStream = (hookOptions?: {
       }
       console.error("Error editing message", err);
     } finally {
-      if (activeRequestIdRef.current === requestId) {
-        activeAbortControllerRef.current = null;
-        activeRequestIdRef.current = null;
-        activeResolvedChatIdRef.current = null;
-        setLoading(false);
-        setIsStreaming(false);
+      if (activeRequestIdsRef.current[activeKey] === requestId) {
+        activeAbortControllersRef.current[activeKey] = null;
+        activeRequestIdsRef.current[activeKey] = null;
+        activeResolvedChatIdsRef.current[activeKey] = null;
+        setLoading(false, currentChatId);
+        setIsStreaming(false, currentChatId);
       }
     }
   };
@@ -1156,22 +1259,24 @@ export const useChatStream = (hookOptions?: {
   const retryMessage = async (messageId: string, provider: string) => {
     if (!user?.id || !currentChatId) return;
 
+    const activeKey = getActiveChatKey(currentChatId);
+
     // If streaming is active, stop it first before retrying
-    if (activeRequestIdRef.current) {
-      await stopGeneration();
+    if (activeRequestIdsRef.current[activeKey]) {
+      await stopGeneration(currentChatId);
     }
 
     const storeState = useChatStore.getState();
     const requestId = crypto.randomUUID();
     const abortController = new AbortController();
 
-    activeAbortControllerRef.current = abortController;
-    activeRequestIdRef.current = requestId;
-    activeResolvedChatIdRef.current = currentChatId;
+    activeAbortControllersRef.current[activeKey] = abortController;
+    activeRequestIdsRef.current[activeKey] = requestId;
+    activeResolvedChatIdsRef.current[activeKey] = currentChatId;
 
     // Set optimistic UI: find the message being retried
     const currentMessages =
-      optimisticMessagesByChatId[getActiveChatKey(currentChatId)] ??
+      optimisticMessagesByChatId[activeKey] ??
       storeState.messages;
     const messageIndex = currentMessages.findIndex((m) => m.id === messageId);
 
@@ -1194,15 +1299,15 @@ export const useChatStream = (hookOptions?: {
     ];
 
     setOptimisticMessagesForChat(currentChatId, nextMessages);
-    setLoading(true);
+    setLoading(true, currentChatId);
     setIsStreaming(true, currentChatId);
-    stopRequestedRef.current = false;
+    stopRequestedRef.current[activeKey] = false;
 
     try {
       const url = chatService.getRetryStreamUrl(currentChatId, messageId);
 
-      connectionTimeoutRef.current = setTimeout(() => {
-        if (activeAbortControllerRef.current === abortController) {
+      connectionTimeoutsRef.current[activeKey] = setTimeout(() => {
+        if (activeAbortControllersRef.current[activeKey] === abortController) {
           abortController.abort();
         }
       }, 35000);
@@ -1222,9 +1327,9 @@ export const useChatStream = (hookOptions?: {
         }),
       });
 
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+      if (connectionTimeoutsRef.current[activeKey]) {
+        clearTimeout(connectionTimeoutsRef.current[activeKey]!);
+        connectionTimeoutsRef.current[activeKey] = null;
       }
 
       if (!response.ok) {
@@ -1240,7 +1345,7 @@ export const useChatStream = (hookOptions?: {
       );
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        const resolvedChatId = activeResolvedChatIdRef.current ?? currentChatId;
+        const resolvedChatId = activeResolvedChatIdsRef.current[activeKey] ?? currentChatId;
         const key = getActiveChatKey(resolvedChatId);
 
         setOptimisticMessagesByChatId((current) => {
@@ -1249,7 +1354,7 @@ export const useChatStream = (hookOptions?: {
           const next = [...messagesForChat];
           next[next.length - 1] = {
             ...next[next.length - 1],
-            status: stopRequestedRef.current ? "stopped" : "failed",
+            status: stopRequestedRef.current[key] ? "stopped" : "failed",
           };
           queueMicrotask(() => {
             commitMessagesForChat(resolvedChatId, next);
@@ -1260,12 +1365,12 @@ export const useChatStream = (hookOptions?: {
       }
       console.error("Error retrying message", err);
     } finally {
-      if (activeRequestIdRef.current === requestId) {
-        activeAbortControllerRef.current = null;
-        activeRequestIdRef.current = null;
-        activeResolvedChatIdRef.current = null;
-        setLoading(false);
-        setIsStreaming(false);
+      if (activeRequestIdsRef.current[activeKey] === requestId) {
+        activeAbortControllersRef.current[activeKey] = null;
+        activeRequestIdsRef.current[activeKey] = null;
+        activeResolvedChatIdsRef.current[activeKey] = null;
+        setLoading(false, currentChatId);
+        setIsStreaming(false, currentChatId);
       }
     }
   };

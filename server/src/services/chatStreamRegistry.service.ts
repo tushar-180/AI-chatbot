@@ -3,6 +3,7 @@ import type { ActiveStream } from "../types/chat.types";
 
 const activeStreams = new Map<string, ActiveStream>();
 const activeChatRequests = new Map<string, string>();
+const stoppedRequestIds = new Set<string>();
 
 export const chatStreamRegistry = {
   create({
@@ -16,6 +17,21 @@ export const chatStreamRegistry = {
     messageId: string;
     model: string;
   }) {
+    if (stoppedRequestIds.has(requestId)) {
+      const activeStream: ActiveStream = {
+        requestId,
+        chatId,
+        messageId,
+        fullResponse: "",
+        emitter: new EventEmitter(),
+        model,
+        status: "stopped",
+        abortController: new AbortController(),
+      };
+      activeStream.abortController.abort();
+      return activeStream;
+    }
+
     const activeStream: ActiveStream = {
       requestId,
       chatId,
@@ -71,6 +87,11 @@ export const chatStreamRegistry = {
   },
 
   stop(requestId: string) {
+    stoppedRequestIds.add(requestId);
+    setTimeout(() => {
+      stoppedRequestIds.delete(requestId);
+    }, 60000);
+
     const activeStream = activeStreams.get(requestId);
 
     if (!activeStream) return null;
@@ -81,6 +102,10 @@ export const chatStreamRegistry = {
     activeStreams.delete(requestId);
     activeChatRequests.delete(activeStream.chatId);
     return activeStream;
+  },
+
+  isStopped(requestId: string): boolean {
+    return stoppedRequestIds.has(requestId);
   },
 
   fail(requestId: string, message: string) {

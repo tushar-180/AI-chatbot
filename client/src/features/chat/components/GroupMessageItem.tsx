@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
+import { useChatStore } from "@/features/chat/store/useChatStore";
 import {
   AlertCircle,
   ChevronDown,
@@ -128,6 +129,7 @@ const GroupMessageItem = ({
   onFeedback,
 }: GroupMessageItemProps) => {
   const { user } = useUser();
+  const dbUser = useChatStore((state) => state.dbUser);
 
   const isAssistant = msg.role === "assistant" || msg.userId === "velora";
   const isMe = msg.userId === user?.id && !isAssistant;
@@ -222,7 +224,7 @@ const GroupMessageItem = ({
     );
   }
 
-  const displayImageUrl = isMe ? user?.imageUrl : msg.userImage;
+  const displayImageUrl = isMe ? (dbUser?.imageUrl || user?.imageUrl) : msg.userImage;
 
   const formatBadgeText = (model: string) => {
     if (model.toLowerCase().startsWith("gemini-")) {

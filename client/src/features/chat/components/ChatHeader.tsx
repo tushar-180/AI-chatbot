@@ -1,6 +1,5 @@
 import { memo } from "react";
-import { UserButton } from "@clerk/react";
-import { Menu, Share, Ghost, ChevronLeft } from "lucide-react";
+import { Menu, Ghost, ChevronLeft, Share2 } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
@@ -17,8 +16,7 @@ interface ChatHeaderProps {
 const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) => {
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const chats = useChatStore((state) => state.chats);
-  const isStreaming = useChatStore((state) => state.isStreaming);
-  const streamingChatId = useChatStore((state) => state.streamingChatId);
+  const streamingChatIds = useChatStore((state) => state.streamingChatIds);
   const isNewChat = useChatStore((state) => state.isNewChat);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const navigate = useNavigate();
@@ -46,7 +44,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
   const currentChat = chats.find((chat) => chat._id === currentChatId) || projectChats.find((chat) => chat._id === currentChatId);
   chatTitle = chatTitle || currentChat?.title || "New Conversation";
   const isStreamingCurrentChat =
-    isStreaming && !!currentChatId && streamingChatId === currentChatId;
+    !!currentChatId && streamingChatIds[currentChatId] === true;
 
  
 
@@ -136,18 +134,11 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white"
               aria-label="Share chat"
             >
-              <Share size={16} />
+              <Share2 size={16} />
             </button>
           )}
 
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonAvatarBox: "h-7 w-7",
-                userButtonTrigger: "h-8 w-8",
-              },
-            }}
-          />
+         
         </div>
       </div>
 

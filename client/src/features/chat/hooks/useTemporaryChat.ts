@@ -3,6 +3,58 @@ import { useAuth, useUser } from "@clerk/react";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { temporaryChatService } from "@/features/chat/services/temporaryChat.service";
 import type { Message, WebSource } from "@/features/chat/types/chat.types";
+import { API_ORIGIN } from "@/lib/api";
+
+let activeAbortController: AbortController | null = null;
+let moduleActiveRequestId: string | null = null;
+
+export const cleanupTemporaryChatStream = () => {
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+  }
+  if (moduleActiveRequestId) {
+    temporaryChatService.stopStream(moduleActiveRequestId).catch((err) => {
+      console.error("Error stopping temporary stream during cleanup:", err);
+    });
+    moduleActiveRequestId = null;
+  }
+
+  try {
+    const store = useTemporaryChatStore.getState();
+    if (store.isStreaming || store.loading) {
+      store.setIsStreaming(false);
+      store.setLoading(false);
+      store.setRequestId(null);
+      store.setMessages((current) =>
+        current.map((m) =>
+          m.status === "streaming" ? { ...m, status: "stopped" as const } : m
+        )
+      );
+    }
+  } catch (err) {
+    console.error("Error cleaning up temporary chat store:", err);
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", () => {
+    if (moduleActiveRequestId) {
+      const url = `${API_ORIGIN}/api/chat/stop`;
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requestId: moduleActiveRequestId,
+          chatId: `temp_chat_${moduleActiveRequestId}`,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  });
+}
 
 const parseClientMultimedia = (content: string) => {
   const markdownImageRegex = /!\[.*?\]\((.*?)\)/g;
@@ -268,6 +320,8 @@ export const useTemporaryChat = () => {
 
     activeAbortControllerRef.current = abortController;
     activeRequestIdRef.current = requestId;
+    activeAbortController = abortController;
+    moduleActiveRequestId = requestId;
     setRequestId(requestId);
 
     const baseMessages = useTemporaryChatStore.getState().messages;
@@ -378,6 +432,8 @@ export const useTemporaryChat = () => {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
         activeRequestIdRef.current = null;
+        if (activeAbortController === abortController) activeAbortController = null;
+        if (moduleActiveRequestId === requestId) moduleActiveRequestId = null;
         setRequestId(null);
         setLoading(false);
         setIsStreaming(false);
@@ -386,7 +442,7 @@ export const useTemporaryChat = () => {
   };
 
   const stopGeneration = async () => {
-    const rId = activeRequestIdRef.current || activeRequestId;
+    const rId = activeRequestIdRef.current || moduleActiveRequestId || activeRequestId;
     if (!rId) return;
 
     stopRequestedRef.current = true;
@@ -411,6 +467,8 @@ export const useTemporaryChat = () => {
     } finally {
       activeAbortControllerRef.current = null;
       activeRequestIdRef.current = null;
+      activeAbortController = null;
+      moduleActiveRequestId = null;
       setRequestId(null);
       setLoading(false);
       setIsStreaming(false);
@@ -438,6 +496,8 @@ export const useTemporaryChat = () => {
 
     activeAbortControllerRef.current = abortController;
     activeRequestIdRef.current = requestId;
+    activeAbortController = abortController;
+    moduleActiveRequestId = requestId;
     setRequestId(requestId);
 
     const currentMessages = useTemporaryChatStore.getState().messages;
@@ -552,6 +612,8 @@ export const useTemporaryChat = () => {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
         activeRequestIdRef.current = null;
+        if (activeAbortController === abortController) activeAbortController = null;
+        if (moduleActiveRequestId === requestId) moduleActiveRequestId = null;
         setRequestId(null);
         setLoading(false);
         setIsStreaming(false);
@@ -571,6 +633,8 @@ export const useTemporaryChat = () => {
 
     activeAbortControllerRef.current = abortController;
     activeRequestIdRef.current = requestId;
+    activeAbortController = abortController;
+    moduleActiveRequestId = requestId;
     setRequestId(requestId);
 
     const currentMessages = useTemporaryChatStore.getState().messages;
@@ -677,6 +741,8 @@ export const useTemporaryChat = () => {
       if (activeRequestIdRef.current === requestId) {
         activeAbortControllerRef.current = null;
         activeRequestIdRef.current = null;
+        if (activeAbortController === abortController) activeAbortController = null;
+        if (moduleActiveRequestId === requestId) moduleActiveRequestId = null;
         setRequestId(null);
         setLoading(false);
         setIsStreaming(false);

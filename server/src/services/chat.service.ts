@@ -434,6 +434,25 @@ async function* streamAssistantResponse(
     model: providerName,
   });
 
+  if (activeStream.status === "stopped") {
+    await chatRepository.updateMessage(messageId, {
+      status: "stopped",
+    });
+    yield (
+      includeChatId
+        ? {
+            chatId,
+            messageId,
+            requestId,
+            model: providerName,
+            status: "stopped",
+            done: true,
+          }
+        : { messageId, requestId, model: providerName, status: "stopped", done: true }
+    ) as StreamPayload;
+    return;
+  }
+
   yield (
     includeChatId
       ? {
@@ -498,6 +517,9 @@ async function* streamAssistantResponse(
           receivedFirstChunk = true;
           firstTokenTimedOut = false;
           clearTimeout(timeout);
+          chatRepository.update(chatId, { isSidebarVisible: true }).catch((err) => {
+            console.error("Failed to make chat sidebar visible on first chunk:", err);
+          });
         }
 
         fullResponse += chunk;
@@ -648,6 +670,7 @@ export const chatService = {
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
       projectId,
+      isSidebarVisible: true,
     });
 
     await chat.save();
@@ -995,6 +1018,8 @@ export const chatService = {
         };
       }
 
+      // Keep empty/stopped chats in DB so they can be retried or edited.
+
       let tokens;
       try {
         const chatObj = await chatRepository.findById(activeStream.chatId);
@@ -1036,15 +1061,22 @@ export const chatService = {
       };
     }
 
-    if (chatId) {
-      await chatRepository.updateMessageByRequestId(chatId, resolvedRequestId, {
+    // Ensure we register this requestId in the stopped list to prevent it from starting in the future
+    chatStreamRegistry.stop(resolvedRequestId);
+
+    // Keep empty/stopped chats in DB so they can be retried or edited.
+
+    const updatedMessage = await chatRepository.updateMessageByRequestId(
+      chatId,
+      resolvedRequestId,
+      {
         status: "stopped",
-      });
-    }
+      },
+    );
 
     return {
-      stopped: false,
-      chatId,
+      stopped: !!updatedMessage,
+      chatId: updatedMessage?.chatId?.toString() || chatId,
       requestId: resolvedRequestId,
     };
   },
