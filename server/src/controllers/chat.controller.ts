@@ -97,7 +97,7 @@ export const createChat = asyncHandler(
         attachments,
         selection,
         webSearchEnabled,
-        documentFile: (req as any).file || null,
+        attachedFile: (req as any).file || null,
       });
       return res.json(chat);
     } catch (error) {
@@ -128,7 +128,7 @@ export const createChatStream = async (
         attachments,
         selection,
         webSearchEnabled,
-        documentFile: (req as any).file || null,
+        attachedFile: (req as any).file || null,
       }),
     );
   } catch (error) {
@@ -156,7 +156,7 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
       attachments,
       selection,
       webSearchEnabled,
-      documentFile: (req as any).file || null,
+      attachedFile: (req as any).file || null,
     });
 
     return res.json(chat);
@@ -240,7 +240,7 @@ export const streamMessage = async (req: Request, res: Response) => {
         attachments,
         selection,
         webSearchEnabled,
-        documentFile: (req as any).file || null,
+        attachedFile: (req as any).file || null,
       }),
     );
   } catch (error) {

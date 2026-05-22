@@ -74,6 +74,7 @@ const Chat = () => {
     pendingProvider?: string;
     pendingAttachments?: any[];
     pendingWebSearch?: boolean;
+    pendingAttachedFile?: File;
     prefetchedChatId?: string;
     skipInitialFetch?: boolean;
   } | null;
@@ -221,7 +222,10 @@ const Chat = () => {
         pendingState.pendingInput,
         pendingState.pendingProvider || selectedProvider,
         pendingState.pendingAttachments || [],
-        { webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled },
+        { 
+          webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled,
+          attachedFile: pendingState.pendingAttachedFile
+        },
       );
     }
   }, [
@@ -263,7 +267,7 @@ const Chat = () => {
         : Boolean(messagesError && currentChatId),
       webSearchEnabled,
       selection: selectionContext || undefined,
-      documentFile: file,
+      attachedFile: file,
     });
     setInput('');
   };

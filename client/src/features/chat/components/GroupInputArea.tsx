@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, memo } from "react";
-import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X } from "lucide-react";
+import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X, FileText } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
 import { api } from "@/lib/api";
@@ -9,7 +9,7 @@ import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { supportsVision } from "@/features/chat/constants/chat.constants";
 
 interface GroupInputAreaProps {
-  onSubmit: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[]) => Promise<void>;
+  onSubmit: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[], attachedFile?: File | null) => Promise<void>;
   isStreaming?: boolean;
   onStop?: () => void;
   onTyping?: (isTyping: boolean) => void;
@@ -76,6 +76,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const activeItemRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { groupId } = useParams<{ groupId?: string }>();
 
@@ -83,6 +84,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   useEffect(() => {
     setInput("");
     setAttachments([]);
+    setAttachedFile(null);
     setWebSearchEnabled(false);
   }, [groupId]);
 
@@ -258,7 +260,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() && attachments.length === 0) return;
+    if (!input.trim() && attachments.length === 0 && !attachedFile) return;
     if (isSending || isUploading) return;
 
     if (hasMultipleModelMentions(input)) {
@@ -276,23 +278,50 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
     setIsSending(true);
     try {
-      await onSubmit(input, webSearchEnabled, attachments);
+      await onSubmit(input, webSearchEnabled, attachments, attachedFile);
       setInput("");
       setWebSearchEnabled(false);
       setShowModelDropdown(false);
       setFilterText("");
       setAttachments([]);
+      setAttachedFile(null);
     } finally {
       setIsSending(false);
     }
   };
 
+  const ALLOWED_FILE_TYPES = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ];
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image uploads are supported currently");
+    const isImage = file.type.startsWith("image/");
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+
+    if (attachments.length > 0 || attachedFile) {
+      toast.error("You can only upload one file per message.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (isDocument) {
+      setAttachedFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (!isImage) {
+      toast.error("Only images and documents (.pdf, .doc, etc) are supported.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
@@ -550,7 +579,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept="image/*"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                 />
                 <button
                   type="button"
@@ -595,6 +624,25 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Document Previews */}
+          {attachedFile && (
+            <div className="flex flex-wrap gap-2 px-4 py-2">
+              <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                <FileText size={20} className="text-slate-300 shrink-0" />
+                <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                  {attachedFile.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAttachedFile(null)}
+                  className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             </div>
           )}
 

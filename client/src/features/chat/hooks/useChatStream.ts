@@ -381,6 +381,14 @@ export const useChatStream = (hookOptions?: {
         });
       }
 
+      if (data.status && !data.chunk && !data.done) {
+        const key = resolvedChatId ?? initialKey;
+        queueOptimisticMessageUpdate(key, placeholderMessageId, {
+          status: data.status,
+          requestId: activeRequestId,
+        });
+      }
+
       if (data.chunk) {
         fullContent += data.chunk;
         const key = resolvedChatId ?? initialKey;
@@ -389,6 +397,7 @@ export const useChatStream = (hookOptions?: {
           requestId: activeRequestId,
           status: data.status ?? "streaming",
           isWebSearching: false,
+          isParsingDocument: false,
         });
       }
 
@@ -404,6 +413,7 @@ export const useChatStream = (hookOptions?: {
             content: errorMessage,
             status: "failed",
             isWebSearching: false,
+            isParsingDocument: false,
             requestId: activeRequestId,
           };
           return { ...current, [key]: next };
@@ -429,6 +439,7 @@ export const useChatStream = (hookOptions?: {
             ...next[lastAssistantIdx],
             sources,
             isWebSearching: false, // sources are ready, stop spinning globe
+            isParsingDocument: false,
           };
           return { ...current, [key]: next };
         });
@@ -458,6 +469,7 @@ export const useChatStream = (hookOptions?: {
             requestId: activeRequestId,
             status: data.status ?? "completed",
             isWebSearching: false,
+            isParsingDocument: false,
           };
 
           if (resolvedChatId) {
@@ -676,7 +688,7 @@ export const useChatStream = (hookOptions?: {
         sourceMessageId: string;
         actionType: string;
       };
-      documentFile?: File;
+      attachedFile?: File;
     },
   ) => {
     if (!input.trim() && attachments.length === 0 && !options?.selection)
@@ -692,13 +704,13 @@ export const useChatStream = (hookOptions?: {
 
     // Build final attachments: include document file as a virtual attachment
     let finalAttachments = attachments;
-    if (options?.documentFile) {
+    if (options?.attachedFile) {
       finalAttachments = [
         ...attachments,
         {
-          name: options.documentFile.name,
-          mimeType: options.documentFile.type,
-          size: options.documentFile.size,
+          name: options.attachedFile.name,
+          mimeType: options.attachedFile.type,
+          size: options.attachedFile.size,
           url: '',
           isDocument: true,   // custom flag for the UI
         },
@@ -725,6 +737,7 @@ export const useChatStream = (hookOptions?: {
       requestId,
       status: "streaming",
       isWebSearching: webSearchEnabled,
+      isParsingDocument: !!options?.attachedFile,
     };
     const isCreatingChat = !effectiveCurrentChatId;
     const activeKey = getActiveChatKey(effectiveCurrentChatId);
@@ -784,7 +797,7 @@ export const useChatStream = (hookOptions?: {
         }
       }, 35000); // 35s to allow server-side 30s timeout to trigger first
 
-      const hasDocument = !!options?.documentFile;
+      const hasDocument = !!options?.attachedFile;
 
       const headers: Record<string, string> = {
         Accept: "text/event-stream",
@@ -804,7 +817,7 @@ export const useChatStream = (hookOptions?: {
         if (options?.selection) {
           fd.append("selection", JSON.stringify(options.selection));
         }
-        fd.append("document", options.documentFile!);
+        fd.append("file", options.attachedFile!);
         body = fd;
         // Let the browser set multipart Content-Type with boundary
       } else {

@@ -336,21 +336,35 @@ export const useGroupChat = () => {
     content: string,
     webSearchEnabled?: boolean,
     attachments?: any[],
+    attachedFile?: File | null,
   ) => {
     if (
       !groupId ||
-      (!content.trim() && (!attachments || attachments.length === 0)) ||
+      (!content.trim() && (!attachments || attachments.length === 0) && !attachedFile) ||
       !user?.id
     )
       return;
     stopRequestedRef.current = false;
     try {
-      await api.post(`/group/${groupId}/message`, {
-        content,
-        userId: user.id,
-        webSearchEnabled,
-        attachments,
-      });
+      if (attachedFile) {
+        const formData = new FormData();
+        formData.append("content", content);
+        formData.append("userId", user.id);
+        if (webSearchEnabled) formData.append("webSearchEnabled", "true");
+        if (attachments && attachments.length > 0) formData.append("attachments", JSON.stringify(attachments));
+        formData.append("file", attachedFile);
+
+        await api.post(`/group/${groupId}/message`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await api.post(`/group/${groupId}/message`, {
+          content,
+          userId: user.id,
+          webSearchEnabled,
+          attachments,
+        });
+      }
     } catch (err) {
       console.error("Error sending message:", err);
     }

@@ -7,6 +7,7 @@ export type Message = {
     status?: "streaming" | "stopped" | "completed" | "failed";
     feedback?: "like" | "dislike" | null;
     isWebSearching?: boolean;
+    isParsingDocument?: boolean;
     type?: "text" | "image" | "file" | "action";
     attachments?: Attachment[];
     sources?: WebSource[];

@@ -33,12 +33,10 @@ import {
 } from "../utils/tokenCounter";
 import { buildProjectContext } from "./buildProjectContext";
 
-import { parseDocument } from "../modules/tools/document-parser";
-import { processDocumentFile, cleanupChatFiles } from "../utils/documentHandler";
+import { parseFile } from "../modules/file-rag/fileParser";
+import { processAttachedFile, cleanupChatFiles } from "../modules/file-rag/fileHandler";
+import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import { extractTranscript } from "../modules/tools/youtube";
-
-import { textCache } from "../utils/textCache";
-import { supabaseAdmin } from "../config/supabase";
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -238,38 +236,19 @@ const buildPromptMessages = async (
   const lastUserMsg = [...rawPromptMessages]
     .reverse()
     .find((m) => m.role === "user");
-  // --- Document context injection (new) ---
-  let documentContext: string | null = null;
-  const userMessagesWithDocs = rawPromptMessages
+  // --- File context injection (new) ---
+  let fileContext: string | null = null;
+  const userMessagesWithFiles = rawPromptMessages
     .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
     .slice(-1); // take the most recent one
 
-  if (userMessagesWithDocs.length > 0) {
-    const lastDocMsg = userMessagesWithDocs[0];
-    const storagePath = lastDocMsg.attachments?.find((a) => a.storagePath)?.storagePath;
+  if (userMessagesWithFiles.length > 0) {
+    const lastFileMsg = userMessagesWithFiles[0];
+    const storagePath = lastFileMsg.attachments?.find((a) => a.storagePath)?.storagePath;
     if (storagePath) {
-      // 1. Try cache
-      let text = textCache.get(storagePath);
-      if (!text) {
-        // 2. Download from Supabase and extract
-        try {
-          const { data } = await supabaseAdmin.storage
-            .from("documents")
-            .download(storagePath);
-          if (data) {
-            const buffer = Buffer.from(await data.arrayBuffer());
-            const parsed = await parseDocument(buffer, "", lastDocMsg.attachments?.[0]?.mimeType || "");
-            if (parsed.success) {
-              text = parsed.text;
-              textCache.set(storagePath, text);
-            }
-          }
-        } catch (err) {
-          console.error("Failed to fetch document from storage:", err);
-        }
-      }
-      if (text) {
-        documentContext = `The user provided a document. Use its content to answer any questions. The document text:\n\n${text}`;
+      const context = await retrieveFileContext(rawPromptMessages, storagePath);
+      if (context) {
+        fileContext = context;
       }
     }
   }
@@ -363,8 +342,8 @@ ${userRequest}`;
       priority: 30,
     },
     {
-      content: documentContext
-        ? `The user provided a document. Use its content to answer any questions. The document text:\n\n${documentContext}`
+      content: fileContext
+        ? `The user provided a file. Use its content to answer any questions. The file text:\n\n${fileContext}`
         : null,
       priority: 30,
     },
@@ -496,16 +475,11 @@ async function* streamAssistantResponse(
       role: m.role,
       length: m.content?.length || 0,
     }));
-    console.log(`[stream] Prompt messages (${promptMessages.length}):`, promptSizes);
-    const totalPromptChars = promptMessages.reduce((sum, m) => sum + (m.content?.length || 0), 0);
-    console.log(`[stream] Total prompt characters: ${totalPromptChars}`);
     const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
       tools,
     );
-
-    // 30s timeout for first token
     const timeout = setTimeout(() => {
       if (!receivedFirstChunk) {
         console.error(`AI generation timed out for requestId: ${requestId}`);
@@ -665,7 +639,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
-    documentFile,
+    attachedFile,
   }: CreateChatInput) {
     const resolvedUserId = requireUserId(userId);
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
@@ -687,12 +661,12 @@ export const chatService = {
         provider,
         attachments,
       );
-      let documentText: string | null = null;
+      let fileText: string | null = null;
       let allAttachments = attachments || [];
 
-      if (documentFile) {
-        const result = await processDocumentFile(documentFile, resolvedUserId, allAttachments);
-        documentText = result.documentText;
+      if (attachedFile) {
+        const result = await processAttachedFile(attachedFile, resolvedUserId, allAttachments);
+        fileText = result.fileText;
         allAttachments = result.attachments;
       }
       userMessage.metadata = {
@@ -801,15 +775,15 @@ export const chatService = {
       String(resolvedUserId),
       input.provider,
       input.attachments,
-    ); let documentText: string | null = null;
+    ); let fileText: string | null = null;
     let allAttachments = input.attachments || [];
-    if (input.documentFile) {
-      const result = await processDocumentFile(input.documentFile, resolvedUserId, allAttachments);
-      documentText = result.documentText;
+    if (input.attachedFile) {
+      const result = await processAttachedFile(input.attachedFile, resolvedUserId, allAttachments);
+      fileText = result.fileText;
       allAttachments = result.attachments;
     }
     userMsg.attachments = allAttachments;
-    // metadata still has webSearchEnabled and selection, but NOT documentText
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(input.webSearchEnabled),
       selection: input.selection,
@@ -841,7 +815,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
-    documentFile,
+    attachedFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const chat = await requireChat(chatId);
@@ -853,19 +827,19 @@ export const chatService = {
       provider,
       attachments,
     );
-    let documentText: string | null = null;
+    let fileText: string | null = null;
     let allAttachments = attachments || [];
-    if (documentFile) {
-      const result = await processDocumentFile(documentFile, String(chat.userId), allAttachments);
-      documentText = result.documentText;
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
       allAttachments = result.attachments;
     }
     userMsg.attachments = allAttachments;
-    // metadata still has webSearchEnabled and selection, but NOT documentText
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,
-      documentText,
+      fileText,
     };
     const userPromptText = userMsg.content || "";
     const attachmentCount = attachments?.length || 0;
@@ -956,7 +930,7 @@ export const chatService = {
     attachments,
     webSearchEnabled,
     selection,
-    documentFile,
+    attachedFile,
   }: SendMessageInput) {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const resolvedRequestId = requireRequestId(requestId);
@@ -969,15 +943,15 @@ export const chatService = {
       provider,
       attachments,
     );
-    let documentText: string | null = null;
+    let fileText: string | null = null;
     let allAttachments = attachments || [];
-    if (documentFile) {
-      const result = await processDocumentFile(documentFile, String(chat.userId), allAttachments);
-      documentText = result.documentText;
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
       allAttachments = result.attachments;
     }
     userMsg.attachments = allAttachments;
-    // metadata still has webSearchEnabled and selection, but NOT documentText
+    // metadata still has webSearchEnabled and selection, but NOT fileText
     userMsg.metadata = {
       webSearchEnabled: Boolean(webSearchEnabled),
       selection,

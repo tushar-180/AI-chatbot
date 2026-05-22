@@ -38,6 +38,7 @@ interface Message {
   type?: "text" | "image" | "file" | "action";
   attachments?: Attachment[];
   isWebSearching?: boolean;
+  isParsingDocument?: boolean;
   feedback?: "like" | "dislike" | null;
   tokens?: {
     promptTokens: number;
@@ -494,7 +495,12 @@ const MessageItem = ({
             data-message-content={msg.content}
           >
             {isStreaming && !msg.content ? (
-              msg.isWebSearching ? (
+              msg.isParsingDocument ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
+                  <span className="h-4 w-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  <span>Parsing document...</span>
+                </div>
+              ) : msg.isWebSearching ? (
                 <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
                   <Globe size={14} className="animate-pulse" />
                   <span>Searching the web...</span>
@@ -729,8 +735,8 @@ const areEqual = (
     prev.message.status === next.message.status &&
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
-    prev.message.isWebSearching ===
-    next.message.isWebSearching &&
+    prev.message.isWebSearching === next.message.isWebSearching &&
+    prev.message.isParsingDocument === next.message.isParsingDocument &&
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===

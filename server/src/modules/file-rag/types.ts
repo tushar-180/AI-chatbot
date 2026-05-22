@@ -1,4 +1,4 @@
-export interface ParsedDocument {
+export interface ParsedFile {
   success: boolean;
   text: string;
   fileName: string;

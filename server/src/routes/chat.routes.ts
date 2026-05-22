@@ -7,13 +7,13 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 const router = Router();
 
 // Create new chat
-router.post("/", upload.single('document'), ChatController.createChat);
-router.post("/stream", upload.single('document'), ChatController.createChatStream);
+router.post("/", upload.single('file'), ChatController.createChat);
+router.post("/stream", upload.single('file'), ChatController.createChatStream);
 router.post("/stop", ChatController.stopStream);
 
 // Add message to existing chat
-router.post("/:id", upload.single('document'), ChatController.sendMessage);
-router.post("/:id/stream", upload.single('document'),ChatController.streamMessage);
+router.post("/:id", upload.single('file'), ChatController.sendMessage);
+router.post("/:id/stream", upload.single('file'),ChatController.streamMessage);
 router.get("/:id/stream-updates", ChatController.getStreamUpdates);
 
 // Get All Chats

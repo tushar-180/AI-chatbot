@@ -261,7 +261,7 @@ const InputArea = ({
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
   );
@@ -348,8 +348,14 @@ const InputArea = ({
     const isImage = file.type.startsWith("image/");
     const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
 
+    if (attachments.length > 0 || attachedFile) {
+      toast.error("You can only upload one file per message.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     if (isDocument) {
-      setDocumentFile(file);
+      setAttachedFile(file);
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -446,9 +452,9 @@ const InputArea = ({
     e.preventDefault();
     if (loading || isUploading) return;
 
-    if (documentFile && onSubmitDocument) {
-      onSubmitDocument(documentFile);
-      setDocumentFile(null);
+    if (attachedFile && onSubmitDocument) {
+      onSubmitDocument(attachedFile);
+      setAttachedFile(null);
       return;
     }
 
@@ -545,16 +551,16 @@ const InputArea = ({
                   })}
                 </div>
               )}
-              {documentFile && (
+              {attachedFile && (
                 <div className="flex flex-wrap gap-2 px-4 py-2">
                   <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
                     <FileText size={20} className="text-slate-300 shrink-0" />
                     <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
-                      {documentFile.name}
+                      {attachedFile.name}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setDocumentFile(null)}
+                      onClick={() => setAttachedFile(null)}
                       className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
                     >
                       <X size={12} />
@@ -658,7 +664,7 @@ const InputArea = ({
                       isUploading ||
                       (!input.trim() &&
                         attachments.length === 0 &&
-                        !selectionContext && !documentFile)
+                        !selectionContext && !attachedFile)
                     }
                     className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${loading ||
                       isUploading ||

@@ -1,5 +1,6 @@
 import { Chat, Message } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
+import mongoose from "mongoose";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
@@ -170,10 +171,12 @@ export const chatRepository = {
   },
 
   async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    // Try to update by _id first, if that fails (e.g. it's a UUID), try by requestId
-    let message = await Message.findByIdAndUpdate(messageId, updateData, {
-      returnDocument: "after",
-    });
+    let message = null;
+    if (mongoose.Types.ObjectId.isValid(messageId)) {
+      message = await Message.findByIdAndUpdate(messageId, updateData, {
+        returnDocument: "after",
+      });
+    }
 
     if (!message) {
       message = await Message.findOneAndUpdate(
@@ -361,6 +364,16 @@ export const chatRepository = {
       }
     }
     return Array.from(paths);
+  },
+
+  /**
+   * Check if a storage path is used in any other chat.
+   */
+  async countStoragePathUsages(chatIdToExclude: string, storagePath: string): Promise<number> {
+    return await Message.countDocuments({
+      chatId: { $ne: chatIdToExclude },
+      'attachments.storagePath': storagePath
+    });
   },
 
   /**
