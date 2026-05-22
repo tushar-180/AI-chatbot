@@ -18,35 +18,9 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import type { WebSource } from "../types/chat.types";
+import type { WebSource, Message, Attachment } from "../types/chat.types";
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
-
-interface Attachment {
-  url: string;
-  name?: string;
-  mimeType?: string;
-  size?: number;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  status?: "streaming" | "stopped" | "completed" | "failed";
-  type?: "text" | "image" | "file" | "action";
-  attachments?: Attachment[];
-  isWebSearching?: boolean;
-  feedback?: "like" | "dislike" | null;
-  tokens?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-  // 🆕 Web search sources (if any)
-  sources?: WebSource[];
-}
 
 interface MessageItemProps {
   message: Message;
@@ -74,9 +48,9 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-          attachment.url.startsWith("data:image") ? (
+            attachment.url?.startsWith("data:image") ? (
             <img
-              src={attachment.url}
+              src={attachment.url || ""}
               alt={attachment.name || "Attachment"}
               className="h-auto w-full object-contain max-h-100"
             />
@@ -118,7 +92,8 @@ const MessageAvatar = ({
   failed?: boolean;
 }) => (
   <div
-    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl overflow-hidden transition-all duration-300 ${isUser ? "border border-white/[0.08] shadow-sm" : ""} ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
+    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl overflow-hidden transition-all duration-300 ${isUser ? "border border-white/[0.08] shadow-sm" : ""
+      } ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
   >
     {isUser ? (
       imageUrl ? (
@@ -164,27 +139,28 @@ const MessageMetadata = ({
   isStreaming?: boolean;
   content?: string;
 }) => {
-  const estimatedCompletionTokens = content ? Math.ceil(content.length / 4) : 0;
+  const estimatedCompletionTokens = content
+    ? Math.ceil(content.length / 4)
+    : 0;
 
   return (
     <div
-      className={`flex items-center gap-2.5 not-selectable ${
-        isUser ? "flex-row-reverse" : "flex-row"
-      }`}
+      className={`flex items-center gap-2.5 not-selectable ${isUser ? "flex-row-reverse" : "flex-row"
+        }`}
     >
       <span
-        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${
-          isUser ? "text-slate-400" : "text-slate-500"
-        } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${isUser ? "text-slate-400" : "text-slate-500"
+          } ${isUser ? "mr-0.5" : "ml-0.5"}`}
       >
         {isUser ? "You" : "Velora"}
       </span>
+
       {!isUser && model && (
         <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
           {formatModelName(model)}
         </span>
       )}
-      {/* Real-time thinking / generation status tracker */}
+
       {!isUser && isStreaming && (
         <>
           {!content ? (
@@ -198,7 +174,7 @@ const MessageMetadata = ({
           )}
         </>
       )}
-      {/* Finalized tokens badge shown after generation completes */}
+
       {!isUser && !isStreaming && tokens && tokens.completionTokens > 0 && (
         <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[9px] font-mono text-slate-500">
           {tokens.completionTokens?.toLocaleString()} tokens
@@ -208,10 +184,6 @@ const MessageMetadata = ({
   );
 };
 
-/**
- * MessageItem component
- * Renders an individual chat message with markdown support and distinctive styles for user/assistant.
- */
 const MessageItem = ({
   message: msg,
   isStreaming,
@@ -231,14 +203,18 @@ const MessageItem = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(msg.content);
   const [copied, setCopied] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+
   const highlightedRef = useRef(false);
   const lastHighlightedTerm = useRef<string | null>(null);
 
   const [isExpanded, setIsExpanded] = useState(false);
+
   const CHAR_LIMIT = 500;
   const needsToggle = msg.content.length > CHAR_LIMIT;
+
   useEffect(() => {
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
@@ -254,17 +230,21 @@ const MessageItem = ({
       return;
     }
 
-    // If we already highlighted this exact term for this message, skip
-    if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
+    if (
+      highlightedRef.current &&
+      lastHighlightedTerm.current === highlight
+    ) {
       return;
     }
 
     if (contentRef.current && !isStreaming) {
       const term = highlight.toLowerCase();
+
       const walker = document.createTreeWalker(
         contentRef.current,
-        NodeFilter.SHOW_TEXT,
+        NodeFilter.SHOW_TEXT
       );
+
       let node: Node | null;
       const nodes: Text[] = [];
       let fullText = "";
@@ -275,17 +255,19 @@ const MessageItem = ({
       }
 
       const startIndex = fullText.toLowerCase().indexOf(term);
+
       if (startIndex !== -1) {
         const endIndex = startIndex + term.length;
+
         let currentPos = 0;
         let firstMark: HTMLElement | null = null;
 
         nodes.forEach((textNode) => {
           const nodeText = textNode.textContent || "";
+
           const nodeStart = currentPos;
           const nodeEnd = currentPos + nodeText.length;
 
-          // Check if this node overlaps with the search term
           const overlapStart = Math.max(startIndex, nodeStart);
           const overlapEnd = Math.min(endIndex, nodeEnd);
 
@@ -298,9 +280,12 @@ const MessageItem = ({
             const after = nodeText.substring(relativeEnd);
 
             const span = document.createElement("span");
+
             const mark = document.createElement("mark");
+
             mark.className =
               "highlight-mark bg-emerald-500/40 text-emerald-300 font-bold px-0.5 rounded ring-1 ring-emerald-500/50 animate-pulse";
+
             mark.textContent = match;
 
             span.appendChild(document.createTextNode(before));
@@ -308,6 +293,7 @@ const MessageItem = ({
             span.appendChild(document.createTextNode(after));
 
             if (!firstMark) firstMark = mark;
+
             textNode.parentNode?.replaceChild(span, textNode);
           }
 
@@ -318,17 +304,17 @@ const MessageItem = ({
           lastHighlightedTerm.current = highlight;
           highlightedRef.current = true;
 
-          // Use requestAnimationFrame for smoother and more reliable scrolling
           requestAnimationFrame(() => {
-            if (firstMark) {
-              firstMark.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
+            firstMark?.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
           });
 
-          // Stop pulsing after 3s
           const timer = setTimeout(() => {
             const marks =
               contentRef.current?.querySelectorAll(".highlight-mark");
+
             marks?.forEach((m) => {
               m.classList.remove("animate-pulse");
               m.classList.add("bg-emerald-500/20");
@@ -356,12 +342,11 @@ const MessageItem = ({
     if (editContent.trim() && editContent !== msg.content) {
       onEdit?.(editContent);
     }
+
     setIsEditing(false);
   };
 
-
-
-  const handleExpantion = () => {
+  const handleExpansion = () => {
     if (isExpanded) {
       setIsExpanded(false);
 
@@ -380,7 +365,9 @@ const MessageItem = ({
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
+
     setCopied(true);
+
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -400,40 +387,43 @@ const MessageItem = ({
 
   const citationComponents = !isUser
     ? {
-        ...assistantMarkdownComponents,
-        cite: ({ node }: any) => {
-          const id = Number(node?.properties?.dataId);
-          if (isNaN(id)) return null;
-          return (
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                if (msg.sources?.length) {
-                  onSourcesClick?.(msg.sources, id);
-                } else {
-                  onCitationClick?.(id);
-                }
-              }}
-              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
-              title={`Source ${id}`}
-            >
-              {id}
-            </button>
-          );
-        },
-      }
+      ...assistantMarkdownComponents,
+      cite: ({ node }: any) => {
+        const id = Number(node?.properties?.dataId);
+
+        if (isNaN(id)) return null;
+
+        return (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+
+              if (msg.sources?.length) {
+                onSourcesClick?.(msg.sources, id);
+              } else {
+                onCitationClick?.(id);
+              }
+            }}
+            className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+            title={`Source ${id}`}
+          >
+            {id}
+          </button>
+        );
+      },
+    }
     : undefined;
 
   return (
     <div
-      className={`group flex w-full ${isUser ? "justify-end" : "justify-start"}`}
+      className={`group flex w-full ${isUser ? "justify-end" : "justify-start"
+        }`}
     >
       <div
-        className={`flex w-full gap-4 md:gap-6 ${
-          isUser
-            ? "max-w-full md:max-w-4xl flex-row-reverse"
-            : "max-w-full md:max-w-5xl flex-row items-start"
-        }`}
+        className={`flex w-full gap-4 md:gap-6 ${isUser
+          ? "max-w-full md:max-w-4xl flex-row-reverse"
+          : "max-w-full md:max-w-5xl flex-row items-start"
+          }`}
       >
         <div className="hidden xs:block">
           <MessageAvatar
@@ -444,13 +434,13 @@ const MessageItem = ({
         </div>
 
         <div
-          className={`flex flex-col gap-2 ${
-            isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
-          }`}
+          className={`flex flex-col gap-2 ${isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
+            }`}
         >
           {!isFailed && (
             <div
-              className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"}`}
+              className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"
+                }`}
             >
               <MessageMetadata
                 isUser={isUser}
@@ -463,13 +453,15 @@ const MessageItem = ({
           )}
 
           <div
-            className={`transition-all duration-200 ease-out ${
-              isUser
-                ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing ? "border-white/20 bg-white/5 ring-1 ring-white/5" : "border-white/10 bg-white/3"} px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
-                : isFailed
-                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
-                  : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
-            }`}
+            className={`transition-all duration-200 ease-out ${isUser
+              ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing
+                ? "border-white/20 bg-white/5 ring-1 ring-white/5"
+                : "border-white/10 bg-white/3"
+              } px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
+              : isFailed
+                ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
+                : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+              }`}
             ref={contentRef}
             key={highlight || "no-highlight"}
             data-message-role={msg.role}
@@ -477,7 +469,12 @@ const MessageItem = ({
             data-message-content={msg.content}
           >
             {isStreaming && !msg.content ? (
-              msg.isWebSearching ? (
+              msg.isParsingDocument ? (
+                <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
+                  <span className="h-4 w-4 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  <span>Parsing document...</span>
+                </div>
+              ) : msg.isWebSearching ? (
                 <div className="flex items-center gap-2 py-3 text-sm text-slate-400">
                   <Globe size={14} className="animate-pulse" />
                   <span>Searching the web...</span>
@@ -503,6 +500,7 @@ const MessageItem = ({
                   className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
                   rows={1}
                 />
+
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={handleEditCancel}
@@ -511,6 +509,7 @@ const MessageItem = ({
                     <X size={14} />
                     Cancel
                   </button>
+
                   <button
                     onClick={handleEditSave}
                     disabled={!editContent.trim()}
@@ -526,6 +525,7 @@ const MessageItem = ({
                 <span className="font-semibold text-red-300">
                   AI Response Failed
                 </span>
+
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   rehypePlugins={[rehypeRaw]}
@@ -540,19 +540,42 @@ const MessageItem = ({
                 {msg.content && (
                   <div
                     className={
-                      isUser ? "wrap-break-word whitespace-pre-wrap" : ""
+                      isUser ? "break-words whitespace-pre-wrap" : ""
                     }
                   >
-                    <div
-                      className={
-                        isUser
-                          ? `relative ${!isExpanded && needsToggle ? "line-clamp-10" : ""}`
-                          : ""
-                      }
-                    >
+                    <div>
                       {isUser ? (
-                        <div className="whitespace-pre-wrap break-words text-white">
-                          {msg.content}
+                        <div className="flex flex-col gap-3">
+                          {msg.metadata?.selection && (
+                            <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                              {/* Header */}
+                              <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2">
+                                <div className="h-2 w-2 rounded-full bg-indigo-400" />
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                                  Selected text
+                                </span>
+                              </div>
+                              {/* Selected Content */}
+                              <div className="border-l-2 border-l-indigo-400 px-3 py-2">
+                                <div className="max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-300">
+                                  {
+                                    (
+                                      msg.metadata.selection as {
+                                        selectedText?: string;
+                                      }
+                                    )?.selectedText
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          <div
+                            className={`whitespace-pre-wrap break-words text-white relative ${
+                              !isExpanded && needsToggle ? "line-clamp-10" : ""
+                            }`}
+                          >
+                            {msg.content}
+                          </div>
                         </div>
                       ) : (
                         <ReactMarkdown
@@ -565,10 +588,9 @@ const MessageItem = ({
                       )}
                     </div>
 
-                    {/* The Show More/Less Button */}
                     {needsToggle && isUser && (
                       <button
-                        onClick={handleExpantion}
+                        onClick={handleExpansion}
                         className="mt-2 text-xs font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
                       >
                         <div className="flex gap-2 justify-center items-center not-selectable">
@@ -586,16 +608,14 @@ const MessageItem = ({
                     )}
                   </div>
                 )}
+
                 <AttachmentList attachments={msg.attachments || []} />
               </>
             )}
           </div>
-          {/* Assistant Action Buttons (ChatGPT Style) */}
-          
+
           {!isUser && !isStreaming && (msg.content || isFailed) && (
-            <div
-              className={` flex items-center gap-1 transition-all duration-200 opacity-100`}
-            >
+            <div className="flex items-center gap-1 transition-all duration-200 opacity-100">
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -612,7 +632,10 @@ const MessageItem = ({
                 onClick={() =>
                   onFeedback?.(msg.feedback === "like" ? null : "like")
                 }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like" ? "text-indigo-400 bg-indigo-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like"
+                  ? "text-indigo-400 bg-indigo-500/10"
+                  : "text-slate-500 hover:text-slate-300"
+                  }`}
                 title="Like"
               >
                 <ThumbsUp
@@ -623,9 +646,14 @@ const MessageItem = ({
 
               <button
                 onClick={() =>
-                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
+                  onFeedback?.(
+                    msg.feedback === "dislike" ? null : "dislike"
+                  )
                 }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike" ? "text-red-400 bg-red-500/10" : "text-slate-500 hover:text-slate-300"}`}
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike"
+                  ? "text-red-400 bg-red-500/10"
+                  : "text-slate-500 hover:text-slate-300"
+                  }`}
                 title="Dislike"
               >
                 <ThumbsDown
@@ -646,7 +674,10 @@ const MessageItem = ({
                 <button
                   onClick={() => {
                     if (msg.sources?.length) {
-                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                      onSourcesClick?.(
+                        msg.sources,
+                        msg.sources[0]?.id
+                      );
                     }
                   }}
                   className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
@@ -658,11 +689,8 @@ const MessageItem = ({
             </div>
           )}
 
-          {/* User Action Buttons (Copy & Edit) */}
           {isUser && !isEditing && (
-            <div
-              className=" flex items-center gap-1 opacity-100 transition-all duration-200"
-            >
+            <div className="flex items-center gap-1 opacity-100 transition-all duration-200">
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -690,7 +718,10 @@ const MessageItem = ({
   );
 };
 
-const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
+const areEqual = (
+  prev: MessageItemProps,
+  next: MessageItemProps
+) => {
   return (
     prev.message.id === next.message.id &&
     prev.message.content === next.message.content &&
@@ -699,10 +730,11 @@ const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
     prev.isStreaming === next.isStreaming &&
     prev.message.attachments === next.message.attachments &&
     prev.message.isWebSearching === next.message.isWebSearching &&
+    prev.message.isParsingDocument === next.message.isParsingDocument &&
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===
-      next.message.tokens?.completionTokens &&
+    next.message.tokens?.completionTokens &&
     prev.message.sources === next.message.sources
   );
 };

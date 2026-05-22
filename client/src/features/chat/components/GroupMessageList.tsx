@@ -8,7 +8,7 @@ import {
 import GroupMessageItem from "./GroupMessageItem";
 import { useGroupStore } from "../store/useGroupStore";
 import { Globe, ChevronDown } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 
 interface GroupMessageListProps {
   onCitationClick?: (id: number) => void;
@@ -35,6 +35,8 @@ const GroupMessageList = ({
     isWebSearching: storeWebSearching,
   } = useGroupStore();
   const { groupId } = useParams<{ groupId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const highlight = searchParams.get("highlight");
 
   const isTransitioning = groupId !== currentGroupId;
   const loading = storeLoading || isTransitioning;
@@ -45,6 +47,8 @@ const GroupMessageList = ({
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const shouldAutoScrollRef = useRef(true);
+  const hasInitialScrolledRef = useRef<string | null>(null);
+  const prevGroupIdRef = useRef<string | null>(null);
   const prevMessageCountRef = useRef(0);
 
   const getScrollContainer = useCallback(() => {
@@ -66,8 +70,9 @@ const GroupMessageList = ({
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
+      const offset = 1015
       container.scrollTo({
-        top: container.scrollHeight,
+        top: container.scrollHeight - offset,
         behavior: smooth ? "smooth" : "auto",
       });
     },
@@ -96,39 +101,106 @@ const GroupMessageList = ({
     return () => container.removeEventListener("scroll", handleScroll);
   }, [getScrollContainer, handleScroll]);
 
-  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] = useState(false);
-  const [prevGroupIdState, setPrevGroupIdState] = useState<string | null>(null);
+  // CLEAR HIGHLIGHT ON CLICK OR AFTER 3s
+  useEffect(() => {
+    if (!highlight) return;
 
-  if ((groupId || null) !== prevGroupIdState) {
-    setPrevGroupIdState(groupId || null);
-    setHasCompletedInitialScroll(false);
-    shouldAutoScrollRef.current = true;
-    setShowScrollToBottom(false);
-  }
+    // Disable auto-scroll while searching
+    shouldAutoScrollRef.current = false;
 
-  // AUTO SCROLL ON NEW MESSAGES / AI THINKING
+    const clearHighlight = () => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (!next.has("highlight")) return prev;
+          next.delete("highlight");
+          return next;
+        },
+        { replace: true },
+      );
+    };
+
+    const handleClick = () => clearHighlight();
+    const timer = setTimeout(clearHighlight, 3000);
+
+    window.addEventListener("click", handleClick, true);
+    return () => {
+      window.removeEventListener("click", handleClick, true);
+      clearTimeout(timer);
+    };
+  }, [highlight, setSearchParams]);
+
+  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] =
+    useState(false);
+
+  useEffect(() => {
+    if ((groupId || null) !== prevGroupIdRef.current) {
+      prevGroupIdRef.current = groupId || null;
+
+      setHasCompletedInitialScroll(false);
+
+      hasInitialScrolledRef.current = null;
+
+      shouldAutoScrollRef.current = true;
+
+      setShowScrollToBottom(false);
+    }
+  }, [groupId]);
+
+  // AUTO SCROLL ON NEW MESSAGES (while streaming or sending)
   useLayoutEffect(() => {
+    if (highlight) {
+      shouldAutoScrollRef.current = false;
+    }
+
     const messageCountChanged =
       groupMessages.length !== prevMessageCountRef.current;
     prevMessageCountRef.current = groupMessages.length;
 
+    // Only auto-scroll on new messages when the user hasn't scrolled up
     if (
+      !highlight &&
+      !loading &&
       shouldAutoScrollRef.current &&
-      (messageCountChanged || isAiThinking) &&
+      messageCountChanged &&
       groupMessages.length > 0
     ) {
       scrollToBottom(false);
     }
-  }, [groupMessages.length, isAiThinking, scrollToBottom]);
+  }, [groupMessages, loading, scrollToBottom, highlight]);
 
+  // INSTANTLY POSITION AT BOTTOM AFTER CHAT FULLY LOADS
+  // useLayoutEffect fires before browser paint; direct scrollTop assignment
+  // bypasses CSS scroll-behavior: smooth so there is zero visible animation.
   useLayoutEffect(() => {
-    if (groupMessages.length > 0 && !loading) {
-      instantScrollToBottom();
+    if (!loading && groupMessages.length > 0 && groupId) {
+      if (hasInitialScrolledRef.current === groupId) {
+        setHasCompletedInitialScroll(true);
+        return;
+      }
+
+      if (highlight) {
+        hasInitialScrolledRef.current = groupId;
+        setHasCompletedInitialScroll(true);
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        instantScrollToBottom();
+      });
+
+      hasInitialScrolledRef.current = groupId;
       setHasCompletedInitialScroll(true);
-    } else if (groupMessages.length === 0 && !loading) {
+    } else if (!loading && groupMessages.length === 0) {
       setHasCompletedInitialScroll(true);
     }
-  }, [groupId, groupMessages.length, loading, instantScrollToBottom]);
+  }, [
+    loading,
+    groupId,
+    groupMessages.length,
+    instantScrollToBottom,
+    highlight,
+  ]);
 
   const isStreaming = groupMessages.some((msg) => msg.status === "streaming");
   const showLoader = loading || !hasCompletedInitialScroll;
@@ -136,7 +208,7 @@ const GroupMessageList = ({
   return (
     <div
       ref={scrollContainerRef}
-      className="min-h-full px-4 py-8 md:px-10 [overflow-anchor:none]"
+      className="px-4 py-8 md:px-10 [overflow-anchor:none]"
     >
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         {showLoader ? (

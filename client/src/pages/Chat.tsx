@@ -80,6 +80,7 @@ const Chat = () => {
     pendingProvider?: string;
     pendingAttachments?: Attachment[];
     pendingWebSearch?: boolean;
+    pendingAttachedFile?: File;
     prefetchedChatId?: string;
     skipInitialFetch?: boolean;
   } | null;
@@ -238,7 +239,10 @@ const Chat = () => {
         pendingState.pendingInput,
         pendingState.pendingProvider || selectedProvider,
         pendingState.pendingAttachments || [],
-        { webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled },
+        {
+          webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled,
+          attachedFile: pendingState.pendingAttachedFile
+        },
       );
     }
   }, [
@@ -271,14 +275,27 @@ const Chat = () => {
     setActiveSourceId(null);
   }, []);
 
+  const handleDocumentSubmit = (file: File) => {
+    const selectionContext = useComposerStore.getState().selectionContext;
+    useComposerStore.getState().clearSelectionContext();
+    streamMessage(input, selectedProvider, attachments, {
+      forceNewChat: isTemporaryChatActive
+        ? false
+        : Boolean(messagesError && currentChatId),
+      webSearchEnabled,
+      selection: selectionContext || undefined,
+      attachedFile: file,
+    });
+    setInput('');
+  };
+
   return (
     <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
       <main
-        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
-          isTemporaryChatActive
+        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${isTemporaryChatActive
             ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
             : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
-        }`}
+          }`}
       >
         {/* Spotlight Component - Positioned correctly */}
         {!isTemporaryChatActive && (
@@ -311,8 +328,8 @@ const Chat = () => {
                     isTransitioning
                       ? !chatId
                       : !currentChatId ||
-                        loadedChatId === currentChatId ||
-                        canAutoStartFromSeededMessages
+                      loadedChatId === currentChatId ||
+                      canAutoStartFromSeededMessages
                   }
                   isStreaming={isTransitioning ? false : isStreaming}
                   currentChatId={
@@ -361,6 +378,7 @@ const Chat = () => {
               input={input}
               onInputChange={setInput}
               onSubmit={handleFormSubmit}
+              onSubmitDocument={handleDocumentSubmit}
               loading={isCurrentChatLoading}
               isStreaming={isStreaming}
               onStop={stopGeneration}

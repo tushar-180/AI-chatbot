@@ -75,18 +75,39 @@ export class GeminiAdapter implements IAIService {
                       throw new Error(`Invalid image URL: ${att.url}`);
                     }
 
+                    // Fast path: if we already know it's not a vision/multimodal file, skip fetching entirely
+                    const isDefinitelyUnsupported =
+                      att.mimeType &&
+                      !att.mimeType.startsWith("image/") &&
+                      !att.mimeType.startsWith("video/") &&
+                      !att.mimeType.startsWith("audio/");
+
+                    if (isDefinitelyUnsupported) {
+                      return { text: `\n[File uploaded by user, text content should be in prompt: ${att.url}]` };
+                    }
+
                     const response = await fetch(att.url);
                     if (!response.ok) {
                       throw new Error(`Fetch failed: ${response.statusText}`);
                     }
 
-                    const arrayBuffer = await response.arrayBuffer();
-                    const base64Data =
-                      Buffer.from(arrayBuffer).toString("base64");
                     const mimeType =
                       att.mimeType ||
                       response.headers.get("content-type") ||
                       "image/jpeg";
+
+                    const isSupported =
+                      mimeType.startsWith("image/") ||
+                      mimeType.startsWith("video/") ||
+                      mimeType.startsWith("audio/");
+
+                    if (!isSupported) {
+                      return { text: `\n[File uploaded by user, text content should be in prompt: ${att.url}]` };
+                    }
+
+                    const arrayBuffer = await response.arrayBuffer();
+                    const base64Data =
+                      Buffer.from(arrayBuffer).toString("base64");
 
                     const data = { mimeType, data: base64Data };
                     GeminiAdapter.imageCache.set(att.url, data);
@@ -94,14 +115,14 @@ export class GeminiAdapter implements IAIService {
                     return { inlineData: data };
                   } catch (err) {
                     console.error(`Failed to process image: ${att.url}`, err);
-                    return { text: `\n[Image unavailable: ${att.url}]` };
+                    return { text: `\n[File unavailable: ${att.url}]` };
                   }
                 }),
               );
               parts.push(...imageParts);
             } else {
               const attachmentText = msg.attachments
-                .map((a) => `\n[Image: ${a.url}]`)
+                .map((a) => `\n[File: ${a.url}]`)
                 .join("");
               parts[0].text += attachmentText;
             }
@@ -139,7 +160,7 @@ export class GeminiAdapter implements IAIService {
       if (last && last.role === msg.role) {
         if (msg.role === "user") {
           const currentName = msg.username || msg.userId || msg.role;
-          last.content = `${last.content}\n\n[${currentName}]: ${msg.content}`;
+          last.content = `${last.content}\n\n${currentName}: ${msg.content}`;
         } else {
           last.content = `${last.content}\n\n${msg.content}`;
         }
@@ -149,7 +170,7 @@ export class GeminiAdapter implements IAIService {
       } else {
         const finalContent =
           msg.role === "user" && msg.username
-            ? `[${msg.username}]: ${msg.content}`
+            ? `${msg.username}: ${msg.content}`
             : msg.content;
         collapsed.push({
           ...msg,

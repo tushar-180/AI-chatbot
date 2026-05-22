@@ -19,11 +19,6 @@ export const supportsVision = (modelId: string): boolean => {
     // OpenAI
     "gpt-5",
     "gpt-5-mini",
-    "gpt-4.1",
-    "gpt-4.1-mini",
-    "o4-mini",
-    // Nvidia
-    "black-forest-labs/flux.2-klein-4b"
   ];
   
   if (explicitVisionModels.includes(modelName)) {

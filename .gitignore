@@ -63,6 +63,7 @@ coverage/
 .stylelintcache
 .cache/
 
+.agents/
 
 AI_Agents.md
 GROUP_CHAT_WORKFLOW.md

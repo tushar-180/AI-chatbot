@@ -213,7 +213,8 @@ const MessageList = ({
     };
   }, [highlight, setSearchParams]);
 
-  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] = useState(false);
+  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] =
+    useState(false);
   const [prevChatId, setPrevChatId] = useState<string | null>(null);
 
   if (currentChatId !== prevChatId) {
@@ -269,7 +270,11 @@ const MessageList = ({
       instantScrollToBottom();
       hasInitialScrolledRef.current = currentChatId;
       setHasCompletedInitialScroll(true);
-    } else if (hasLoadedCurrentChat && !messagesLoading && messages.length === 0) {
+    } else if (
+      hasLoadedCurrentChat &&
+      !messagesLoading &&
+      messages.length === 0
+    ) {
       setHasCompletedInitialScroll(true);
     }
   }, [
@@ -281,7 +286,11 @@ const MessageList = ({
     highlight,
   ]);
 
-  const showLoader = (messagesLoading || (currentChatId && !hasLoadedCurrentChat) || (currentChatId && !hasCompletedInitialScroll)) && !isNewChat;
+  const showLoader =
+    (messagesLoading ||
+      (currentChatId && !hasLoadedCurrentChat) ||
+      (currentChatId && !hasCompletedInitialScroll)) &&
+    !isNewChat;
 
   return (
     <div
@@ -411,8 +420,13 @@ const MessageList = ({
                 {messagesError}
               </p>
             </div>
-          ) : messages.length === 0 && !loading && !isStreaming && hasLoadedCurrentChat ? (
-            <div className={`flex flex-col items-center justify-center py-24 text-center `}>
+          ) : messages.length === 0 &&
+            !loading &&
+            !isStreaming &&
+            hasLoadedCurrentChat ? (
+            <div
+              className={`flex flex-col items-center justify-center py-24 text-center `}
+            >
               <p className="text-base tracking-wide text-slate-500 hidden">
                 No messages yet. The stage is yours.
               </p>
@@ -420,26 +434,21 @@ const MessageList = ({
           ) : (
             <>
               {messages.map((msg, i) => {
-                if (
-                  msg.role === "user" &&
-                  (msg.content === "Explain this" || msg.metadata?.selection)
-                ) {
-                  return null;
-                }
+                
                 return (
-                  <div key={msg.id}>
-                    <MessageItem
-                      message={msg}
-                      isStreaming={isStreaming && i === messages.length - 1}
-                      onEdit={(content) => onEditMessage?.(msg.id, content)}
-                      onEditStart={onEditStart}
-                      onRetry={() => onRetryMessage?.(msg.id)}
-                      onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
-                      highlight={highlight || undefined}
-                      onCitationClick={onCitationClick}
-                      onSourcesClick={onSourcesClick}
-                    />
-                  </div>
+                 
+                  <MessageItem
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isStreaming && i === messages.length - 1}
+                  onEdit={(content) => onEditMessage?.(msg.id, content)}
+                  onEditStart={onEditStart}
+                  onRetry={() => onRetryMessage?.(msg.id)}
+                  onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                  highlight={highlight || undefined}
+                  onCitationClick={onCitationClick}
+                  onSourcesClick={onSourcesClick}
+                />
                 );
               })}
 

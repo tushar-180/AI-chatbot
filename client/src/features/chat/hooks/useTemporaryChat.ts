@@ -289,6 +289,7 @@ export const useTemporaryChat = () => {
     attachments: Message["attachments"] = [],
     options?: {
       webSearchEnabled?: boolean;
+      attachedFile?: File | null;
     },
   ) => {
     if (!input.trim() && attachments.length === 0) return;
@@ -346,21 +347,42 @@ export const useTemporaryChat = () => {
         status: m.status,
       }));
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      let body: BodyInit;
+      let headers: Record<string, string>;
+
+      if (options?.attachedFile) {
+        const formData = new FormData();
+        formData.append("file", options.attachedFile);
+        formData.append("messages", JSON.stringify(historyToSend));
+        formData.append("provider", provider);
+        formData.append("requestId", requestId);
+        formData.append("webSearchEnabled", String(webSearchEnabled));
+        body = formData;
+        headers = {
           Accept: "text/event-stream",
           "Cache-Control": "no-cache",
           Authorization: `Bearer ${await getToken()}`,
-        },
-        signal: abortController.signal,
-        body: JSON.stringify({
+        };
+      } else {
+        body = JSON.stringify({
           messages: historyToSend,
           provider,
           requestId,
           webSearchEnabled,
-        }),
+        });
+        headers = {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          "Cache-Control": "no-cache",
+          Authorization: `Bearer ${await getToken()}`,
+        };
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        signal: abortController.signal,
+        body,
       });
 
       if (connectionTimeoutRef.current) {
@@ -619,14 +641,19 @@ export const useTemporaryChat = () => {
     const messageIndex = currentMessages.findIndex((m) => m.id === messageId);
     if (messageIndex === -1) return;
 
-    const nextMessages = [...currentMessages];
-    nextMessages[messageIndex] = {
-      ...nextMessages[messageIndex],
+    const assistantPlaceholder: Message = {
+      id: requestId,
+      role: "assistant",
       content: "",
-      status: "streaming",
-      requestId,
       model: provider,
+      requestId,
+      status: "streaming",
     };
+
+    const nextMessages = [
+      ...currentMessages.slice(0, messageIndex),
+      assistantPlaceholder,
+    ];
 
     setMessages(nextMessages);
     setLoading(true);
@@ -676,15 +703,14 @@ export const useTemporaryChat = () => {
         throw new Error("Failed to connect to temporary stream");
       }
 
-      await processStream(response, requestId, messageId);
+      await processStream(response, requestId, assistantPlaceholder.id);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
         setMessages((current) => {
           const next = [...current];
-          const assistantIndex = next.findIndex((m) => m.id === messageId);
-          if (assistantIndex !== -1) {
-            next[assistantIndex] = {
-              ...next[assistantIndex],
+          if (next.length > 0) {
+            next[next.length - 1] = {
+              ...next[next.length - 1],
               status: stopRequestedRef.current ? "stopped" : "failed",
               isWebSearching: false,
             };
@@ -701,10 +727,9 @@ export const useTemporaryChat = () => {
       const errorMessage = temporaryChatService.getChatErrorMessage(err);
       setMessages((current) => {
         const next = [...current];
-        const assistantIndex = next.findIndex((m) => m.id === messageId);
-        if (assistantIndex !== -1) {
-          next[assistantIndex] = {
-            ...next[assistantIndex],
+        if (next.length > 0) {
+          next[next.length - 1] = {
+            ...next[next.length - 1],
             content: errorMessage,
             status: "failed",
             isWebSearching: false,

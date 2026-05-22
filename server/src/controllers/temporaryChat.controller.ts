@@ -58,7 +58,10 @@ const pipeStreamResponse = async (
 
 export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { messages, provider, requestId, webSearchEnabled } = req.body;
+    const rawMessages = req.body.messages;
+    const messages = typeof rawMessages === "string" ? JSON.parse(rawMessages) : rawMessages;
+    const { provider, requestId } = req.body;
+    const webSearchEnabled = req.body.webSearchEnabled === true || req.body.webSearchEnabled === "true";
     const userId = req.clerkId!;
 
     await pipeStreamResponse(
@@ -70,6 +73,7 @@ export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: 
         provider,
         requestId,
         webSearchEnabled,
+        attachedFile: (req as any).file || null,
       }),
       requestId,
     );

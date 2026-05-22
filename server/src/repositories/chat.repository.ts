@@ -1,12 +1,13 @@
 import { Chat, Message } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
+import mongoose from "mongoose";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
     const chat = await Chat.findByIdAndUpdate(chatId, {
       $set: { updatedAt: new Date() },
     }, { new: true });
-    
+
     if (chat && chat.projectId) {
       const { projectRepository } = require("./project.repository");
       await projectRepository.touchProject(chat.projectId.toString());
@@ -71,17 +72,17 @@ export const chatRepository = {
         userId,
         title: { $regex: query, $options: "i" }
       })
-      .select("-messages -legacyMessages")
-      .limit(10)
-      .lean();
+        .select("-messages -legacyMessages")
+        .limit(10)
+        .lean();
 
       // Second, search in messages content
       const messageResults = await Message.find({
         userId,
         content: { $regex: query, $options: "i" }
       })
-      .limit(20)
-      .lean();
+        .limit(20)
+        .lean();
 
       const resultsMap = new Map<string, any>();
 
@@ -98,7 +99,7 @@ export const chatRepository = {
       for (const msg of messageResults) {
         const chatId = String(msg.chatId);
         const existing = resultsMap.get(chatId);
-        
+
         const content = msg.content || "";
         const index = content.toLowerCase().indexOf(query.toLowerCase());
         const start = Math.max(0, index - 40);
@@ -120,13 +121,13 @@ export const chatRepository = {
         }
       }
 
-      const finalResults = Array.from(resultsMap.values()).sort((a, b) => 
+      const finalResults = Array.from(resultsMap.values()).sort((a, b) =>
         new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf()
       );
 
       return finalResults;
 
-     
+
     } catch (err) {
       console.error("Search failed:", err);
       return [];
@@ -147,7 +148,7 @@ export const chatRepository = {
       userId: messageData.userId,
       ...messageData,
     });
-    
+
     if (messageData.tokens) {
       const chat = await Chat.findByIdAndUpdate(chatId, {
         $inc: {
@@ -165,7 +166,7 @@ export const chatRepository = {
     } else {
       await this.touchChat(chatId);
     }
-    
+
     return message;
   },
 
@@ -241,7 +242,7 @@ export const chatRepository = {
       query,
       updateData,
       {
-      returnDocument: "after",
+        returnDocument: "after",
       },
     );
     if (message?.chatId && updateData.tokens) {
@@ -302,7 +303,7 @@ export const chatRepository = {
     if (!chat) return null;
 
     const messages = await Message.find({ chatId: chat._id }).sort({ createdAt: 1 });
-    
+
     const formattedMessages = messages.map((msg) => ({
       ...msg.toObject(),
       id: msg._id.toString(),
@@ -344,4 +345,66 @@ export const chatRepository = {
       { new: true }
     );
   },
+
+  async findAttachmentByHash(
+    userId: string,
+    fileHash: string
+  ): Promise<string | null> {   // return the storagePath directly or null
+    const message = await Message.findOne(
+      {
+        userId,
+        'attachments.fileHash': fileHash,
+        'attachments.storagePath': { $exists: true, $ne: '' },
+      },
+      { 'attachments.$': 1 }
+    )
+      .lean()
+      .exec();
+
+    if (!message) return null;
+
+    // message.attachments is an array with exactly one matching element
+    const matchedAtt = (message as any).attachments?.[0];
+    if (!matchedAtt || !matchedAtt.storagePath) return null;
+
+    return matchedAtt.storagePath as string;
+  },
+
+  /**
+ * Return an array of unique storage paths for all attachments in messages of a chat.
+ */
+  async getStoragePathsForChat(chatId: string): Promise<string[]> {
+    const messages = await Message.find({
+      chatId,
+      'attachments.storagePath': { $exists: true, $ne: '' },
+    }, { 'attachments.storagePath': 1 })
+      .lean()
+      .exec();
+
+    const paths = new Set<string>();
+    for (const msg of messages) {
+      for (const att of (msg as any).attachments || []) {
+        if (att.storagePath) paths.add(att.storagePath);
+      }
+    }
+    return Array.from(paths);
+  },
+
+  /**
+   * Check if a storage path is used in any other chat.
+   */
+  async countStoragePathUsages(chatIdToExclude: string, storagePath: string): Promise<number> {
+    return await Message.countDocuments({
+      chatId: { $ne: chatIdToExclude },
+      'attachments.storagePath': storagePath
+    });
+  },
+
+  /**
+   * Delete all messages belonging to a chat.
+   */
+  async deleteMessagesByChatId(chatId: string): Promise<void> {
+    await Message.deleteMany({ chatId });
+  },
 };
+
