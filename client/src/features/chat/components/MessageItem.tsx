@@ -17,37 +17,9 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
-import type { WebSource } from "../types/chat.types";
+import type { WebSource, Message, Attachment } from "../types/chat.types";
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
-
-interface Attachment {
-  url: string;
-  name?: string;
-  mimeType?: string;
-  size?: number;
-  isDocument?: boolean;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  model?: string;
-  status?: "streaming" | "stopped" | "completed" | "failed";
-  type?: "text" | "image" | "file" | "action";
-  attachments?: Attachment[];
-  isWebSearching?: boolean;
-  isParsingDocument?: boolean;
-  feedback?: "like" | "dislike" | null;
-  tokens?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-  sources?: WebSource[];
-  metadata?: any;
-}
 
 interface MessageItemProps {
   message: Message;
@@ -75,9 +47,9 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-            attachment.url.startsWith("data:image") ? (
+            attachment.url?.startsWith("data:image") ? (
             <img
-              src={attachment.url}
+              src={attachment.url || ""}
               alt={attachment.name || "Attachment"}
               className="h-auto w-full object-contain max-h-100"
             />
