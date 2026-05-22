@@ -420,26 +420,21 @@ const MessageList = ({
           ) : (
             <>
               {messages.map((msg, i) => {
-                if (
-                  msg.role === "user" &&
-                  (msg.content === "Explain this" || msg.metadata?.selection)
-                ) {
-                  return null;
-                }
+                
                 return (
-                  <div key={msg.id}>
-                    <MessageItem
-                      message={msg}
-                      isStreaming={isStreaming && i === messages.length - 1}
-                      onEdit={(content) => onEditMessage?.(msg.id, content)}
-                      onEditStart={onEditStart}
-                      onRetry={() => onRetryMessage?.(msg.id)}
-                      onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
-                      highlight={highlight || undefined}
-                      onCitationClick={onCitationClick}
-                      onSourcesClick={onSourcesClick}
-                    />
-                  </div>
+                 
+                  <MessageItem
+                  key={msg.id}
+                  message={msg}
+                  isStreaming={isStreaming && i === messages.length - 1}
+                  onEdit={(content) => onEditMessage?.(msg.id, content)}
+                  onEditStart={onEditStart}
+                  onRetry={() => onRetryMessage?.(msg.id)}
+                  onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                  highlight={highlight || undefined}
+                  onCitationClick={onCitationClick}
+                  onSourcesClick={onSourcesClick}
+                />
                 );
               })}
 
