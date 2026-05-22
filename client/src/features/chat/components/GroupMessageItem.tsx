@@ -458,9 +458,10 @@ const GroupMessageItem = ({
                       }
                     >
                       {isUser ? (
-                        <div className="whitespace-pre-wrap break-words text-white">
-                          {msg.content}
-                        </div>
+                        <div
+                          className="whitespace-pre-wrap break-words text-white"
+                          dangerouslySetInnerHTML={{ __html: processedContent }}
+                        />
                       ) : (
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -602,4 +603,21 @@ const GroupMessageItem = ({
   );
 };
 
-export default memo(GroupMessageItem);
+const areEqual = (
+  prev: GroupMessageItemProps,
+  next: GroupMessageItemProps,
+) => {
+  return (
+    prev.message._id === next.message._id &&
+    prev.message.content === next.message.content &&
+    prev.message.status === next.message.status &&
+    prev.message.feedback === next.message.feedback &&
+    prev.message.username === next.message.username &&
+    prev.message.userImage === next.message.userImage &&
+    prev.message.attachments === next.message.attachments &&
+    prev.message.sources === next.message.sources &&
+    prev.message.metadata?.webSearchEnabled === next.message.metadata?.webSearchEnabled
+  );
+};
+
+export default memo(GroupMessageItem, areEqual);

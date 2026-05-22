@@ -1238,9 +1238,9 @@ const Sidebar = () => {
                           key={item._id}
                           item={item}
                           isActive={
-                            item.itemType === "chat"
-                              ? currentChatId === item._id
-                              : urlGroupId === item._id
+                            location.pathname.includes("/group/")
+                              ? item.itemType === "group" && urlGroupId === item._id
+                              : item.itemType === "chat" && currentChatId === item._id
                           }
                           isSelectionMode={isSelectionMode}
                           isSelected={selectedIds.has(item._id)}

@@ -5,6 +5,7 @@ import { api, API_ORIGIN } from "@/lib/api";
 import { useUser } from "@clerk/react";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
+import axios from "axios";
 
 export const useGroupChat = () => {
   const { groupId } = useParams<{ groupId: string }>();
@@ -183,6 +184,12 @@ export const useGroupChat = () => {
           isDoneRef.current = true;
           finalMessageRef.current = data.message;
           targetContentRef.current = data.message.content || "";
+
+          if (groupId) {
+            updateGroup(groupId, {
+              updatedAt: data.message.createdAt || new Date().toISOString(),
+            });
+          }
 
           // If the typewriter has already completed, swap immediately
           if (typewriterFrameRef.current === null) {
@@ -425,9 +432,65 @@ export const useGroupChat = () => {
 
   const retryMessage = async (messageId: string) => {
     if (!groupId) return;
+
+    const storeState = useGroupStore.getState();
+    const currentMessages = storeState.groupMessages;
+    const messageIndex = currentMessages.findIndex((m) => m._id === messageId);
+
+    if (messageIndex === -1) return;
+
+    const messageToRetry = currentMessages[messageIndex];
+
+    if (messageToRetry.role !== "assistant") return;
+
+    const hasActiveStream =
+      storeState.isAiThinking ||
+      currentMessages.some((m) => m.status === "streaming");
+
+    if (hasActiveStream) {
+      await stopStream();
+    }
+
+    const previousMessages = useGroupStore.getState().groupMessages;
+    const previousUserMessage = [...previousMessages]
+      .slice(0, messageIndex)
+      .reverse()
+      .find((m) => m.role === "user");
+
+    const webSearchEnabled = Boolean(
+      previousUserMessage?.metadata?.webSearchEnabled,
+    );
+
+    stopRequestedRef.current = false;
+
+    if (typewriterFrameRef.current !== null) {
+      cancelAnimationFrame(typewriterFrameRef.current);
+      typewriterFrameRef.current = null;
+    }
+
+    displayedContentRef.current = "";
+    targetContentRef.current = "";
+    activeStreamIdRef.current = null;
+    isDoneRef.current = false;
+    finalMessageRef.current = null;
+
+    // Remove the assistant message (and anything after it) so the
+    // isAiThinking loader is the only visible indicator. The typewriter
+    // handler will create a fresh streaming message once chunks arrive.
+    setGroupMessages((prev) => prev.slice(0, messageIndex));
+    setIsAiThinking(true);
+    setIsWebSearching(webSearchEnabled);
+
     try {
-      await api.post(`/group/${groupId}/messages/${messageId}/retry`);
+      await api.post(`/group/${groupId}/messages/${messageId}/retry`, {});
     } catch (err) {
+      setGroupMessages(previousMessages);
+      setIsAiThinking(false);
+      setIsWebSearching(false);
+      const errorMessage = axios.isAxiosError(err)
+        ? err.response?.data?.error || "Failed to retry the AI response."
+        : "Failed to retry the AI response.";
+      toast.error(errorMessage);
       console.error("Error retrying group message:", err);
     }
   };

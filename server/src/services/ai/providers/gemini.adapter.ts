@@ -139,7 +139,7 @@ export class GeminiAdapter implements IAIService {
       if (last && last.role === msg.role) {
         if (msg.role === "user") {
           const currentName = msg.username || msg.userId || msg.role;
-          last.content = `${last.content}\n\n[${currentName}]: ${msg.content}`;
+          last.content = `${last.content}\n\n${currentName}: ${msg.content}`;
         } else {
           last.content = `${last.content}\n\n${msg.content}`;
         }
@@ -149,7 +149,7 @@ export class GeminiAdapter implements IAIService {
       } else {
         const finalContent =
           msg.role === "user" && msg.username
-            ? `[${msg.username}]: ${msg.content}`
+            ? `${msg.username}: ${msg.content}`
             : msg.content;
         collapsed.push({
           ...msg,
