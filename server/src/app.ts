@@ -23,6 +23,7 @@ const app = express();
 export const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:4173",
+  "https://nhqwqwv2-5173.inc1.devtunnels.ms", // line-to-remove
   //"https://qpqhnchb-5173.inc1.devtunnels.ms",//ani
   "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
   process.env.CLIENT_URL,

@@ -486,12 +486,7 @@ export const useChatStream = (hookOptions?: {
       if ("sources" in data && data.sources && Array.isArray(data.sources)) {
         const sources = data.sources as WebSource[];
         const key = resolvedChatId ?? initialKey;
-        const sources = data.sources as WebSource[];
-        const key = resolvedChatId ?? initialKey;
 
-        setOptimisticMessagesByChatId((current) => {
-          const messagesForChat = current[key];
-          if (!messagesForChat?.length) return current;
         setOptimisticMessagesByChatId((current) => {
           const messagesForChat = current[key];
           if (!messagesForChat?.length) return current;
@@ -512,14 +507,6 @@ export const useChatStream = (hookOptions?: {
           return { ...current, [key]: next };
         });
 
-        // Also mark the placeholder as having sources (if needed)
-        // Optionally flush any pending updates
-        if (pendingOptimisticUpdateRef.current[key]) {
-          // force a flush to show sources immediately
-          flushOptimisticUpdates();
-        }
-        return; // no further processing for this event
-      }
         // Also mark the placeholder as having sources (if needed)
         // Optionally flush any pending updates
         if (pendingOptimisticUpdateRef.current[key]) {
@@ -789,7 +776,7 @@ export const useChatStream = (hookOptions?: {
   ) => {
     if (!input.trim() && attachments.length === 0 && !options?.selection)
       return;
-    if (loading || !user?.id) return;
+    if (!user?.id) return;
 
     const forceNewChat = options?.forceNewChat === true;
     const webSearchEnabled = options?.webSearchEnabled === true;
