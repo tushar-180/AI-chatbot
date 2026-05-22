@@ -40,7 +40,7 @@ export const useTextSelection = () => {
 
         while (element) {
           const role = element.getAttribute?.("data-message-role");
-          if (role === "assistant" || role === "user") {
+          if (role === "assistant") {
             return element;
           }
           element = element.parentElement;
