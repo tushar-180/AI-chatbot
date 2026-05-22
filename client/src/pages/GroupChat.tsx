@@ -64,7 +64,9 @@ const GroupChat = () => {
           fill="rgba(255, 255, 255, 0.05)"
         />
 
-        <div className="flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)]">
+        <div
+          className={`flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
+        >
           <GroupChatHeader
             groupId={groupId!}
             onMenuClick={() => setSidebarOpen(true)}

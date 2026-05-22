@@ -211,7 +211,8 @@ const MessageList = ({
     };
   }, [highlight, setSearchParams]);
 
-  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] = useState(false);
+  const [hasCompletedInitialScroll, setHasCompletedInitialScroll] =
+    useState(false);
   const [prevChatId, setPrevChatId] = useState<string | null>(null);
 
   if (currentChatId !== prevChatId) {
@@ -267,7 +268,11 @@ const MessageList = ({
       instantScrollToBottom();
       hasInitialScrolledRef.current = currentChatId;
       setHasCompletedInitialScroll(true);
-    } else if (hasLoadedCurrentChat && !messagesLoading && messages.length === 0) {
+    } else if (
+      hasLoadedCurrentChat &&
+      !messagesLoading &&
+      messages.length === 0
+    ) {
       setHasCompletedInitialScroll(true);
     }
   }, [
@@ -279,7 +284,11 @@ const MessageList = ({
     highlight,
   ]);
 
-  const showLoader = (messagesLoading || (currentChatId && !hasLoadedCurrentChat) || (currentChatId && !hasCompletedInitialScroll)) && !isNewChat;
+  const showLoader =
+    (messagesLoading ||
+      (currentChatId && !hasLoadedCurrentChat) ||
+      (currentChatId && !hasCompletedInitialScroll)) &&
+    !isNewChat;
 
   return (
     <div
@@ -411,8 +420,13 @@ const MessageList = ({
                 {messagesError}
               </p>
             </div>
-          ) : messages.length === 0 && !loading && !isStreaming && hasLoadedCurrentChat ? (
-            <div className={`flex flex-col items-center justify-center py-24 text-center `}>
+          ) : messages.length === 0 &&
+            !loading &&
+            !isStreaming &&
+            hasLoadedCurrentChat ? (
+            <div
+              className={`flex flex-col items-center justify-center py-24 text-center `}
+            >
               <p className="text-base tracking-wide text-slate-500 hidden">
                 No messages yet. The stage is yours.
               </p>

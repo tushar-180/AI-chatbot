@@ -542,13 +542,7 @@ const MessageItem = ({
                       isUser ? "wrap-break-word whitespace-pre-wrap" : ""
                     }
                   >
-                    <div
-                      className={
-                        isUser
-                          ? `relative ${!isExpanded && needsToggle ? "line-clamp-10" : ""}`
-                          : ""
-                      }
-                    >
+                    <div>
                       {isUser ? (
                         <div className="flex flex-col gap-3">
                           {msg.metadata?.selection && (
@@ -574,7 +568,11 @@ const MessageItem = ({
                               </div>
                             </div>
                           )}
-                          <div className="whitespace-pre-wrap break-words text-white">
+                          <div
+                            className={`whitespace-pre-wrap break-words text-white relative ${
+                              !isExpanded && needsToggle ? "line-clamp-10" : ""
+                            }`}
+                          >
                             {msg.content}
                           </div>
                         </div>

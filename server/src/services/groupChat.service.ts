@@ -15,6 +15,7 @@ import type { ChatMessage } from "../types/chat.types";
 import type { AIMessage, AIRole } from "./ai/types";
 import { parseMultimedia } from "../utils/chatHistory";
 import crypto from "crypto";
+import mongoose from "mongoose";
 
 const getEnabledMcpTools = async (userId: string) => {
   const user = await userService.getUserByClerkId(userId);
@@ -29,7 +30,7 @@ const getEnabledMcpTools = async (userId: string) => {
 export class GroupChatService {
   private static sanitizeAssistantResponse(content: string) {
     return content
-      .replace(/^(?:\s*\[(?:velora(?:\s*\([^\]]+\))?)\]:\s*)+/i, "")
+      .replace(/^(?:\s*\[?(?:velora(?:\s*\([^\]]+\))?)\]?:\s*)+/i, "")
       .trim();
   }
 
@@ -50,6 +51,33 @@ export class GroupChatService {
       attachments: message.attachments || [],
       feedback: message.feedback || null,
     };
+  }
+
+  private static async findAssistantMessageForRetry(
+    groupId: string,
+    messageId: string,
+  ) {
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(messageId);
+
+    let assistantMessage = isValidObjectId
+      ? await GroupMessage.findOne({
+          _id: messageId,
+          groupId,
+          role: "assistant",
+        })
+      : null;
+
+    // Streaming assistant placeholders use temporary UUIDs on the client.
+    // If one of those reaches the server, fall back to the latest persisted
+    // assistant message so retry stays usable instead of failing hard.
+    if (!assistantMessage && messageId.includes("-")) {
+      assistantMessage = await GroupMessage.findOne({
+        groupId,
+        role: "assistant",
+      }).sort({ createdAt: -1 });
+    }
+
+    return assistantMessage;
   }
 
   static async createGroup(chatId: string, clerkId: string) {
@@ -737,10 +765,10 @@ export class GroupChatService {
     messageId: string,
     targetProvider?: string,
   ) {
-    const assistantMessage = await GroupMessage.findOne({
-      _id: messageId,
-      role: "assistant",
-    });
+    const assistantMessage = await this.findAssistantMessageForRetry(
+      groupId,
+      messageId,
+    );
 
     if (!assistantMessage) {
       throw new Error("Assistant message not found for retry");
