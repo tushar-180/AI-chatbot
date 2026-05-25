@@ -824,7 +824,7 @@ const MessageItem = ({
             ) : isFailed ? (
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-red-300">
-                  AI Response Failed
+                  Server Band Hai Boss 🫡
                 </span>
 
                 <ReactMarkdown

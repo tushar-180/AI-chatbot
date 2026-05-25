@@ -4,6 +4,9 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  forwardRef,
+  useImperativeHandle,
+  memo,
 } from "react";
 import GroupMessageItem from "./GroupMessageItem";
 import { useGroupStore } from "../store/useGroupStore";
@@ -19,14 +22,14 @@ interface GroupMessageListProps {
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
 }
 
-const GroupMessageList = ({
+const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, GroupMessageListProps>(({
   onCitationClick,
   onSourcesClick,
   onEditMessage,
   onEditStart,
   onRetryMessage,
   onFeedback,
-}: GroupMessageListProps) => {
+}, ref) => {
   const {
     groupMessages: storeMessages,
     loading: storeLoading,
@@ -65,14 +68,13 @@ const GroupMessageList = ({
       120
     );
   }, [getScrollContainer]);
-
   const scrollToBottom = useCallback(
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-      const offset = 1015
+
       container.scrollTo({
-        top: container.scrollHeight - offset,
+        top: container.scrollHeight,
         behavior: smooth ? "smooth" : "auto",
       });
     },
@@ -83,8 +85,25 @@ const GroupMessageList = ({
   const instantScrollToBottom = useCallback(() => {
     const container = getScrollContainer();
     if (!container) return;
+    shouldAutoScrollRef.current = true;
     container.scrollTop = container.scrollHeight;
+
+    // Use requestAnimationFrame and small timeouts to guarantee we scroll
+    // to the absolute bottom after any layout updates or optimistic state renders.
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 50);
+    setTimeout(() => {
+      container.scrollTop = container.scrollHeight;
+    }, 150);
   }, [getScrollContainer]);
+
+  useImperativeHandle(ref, () => ({
+    instantScrollToBottom,
+  }));
 
   const handleScroll = useCallback(() => {
     const atBottom = isAtBottom();
@@ -343,6 +362,8 @@ const GroupMessageList = ({
       </div>
     </div>
   );
-};
+});
 
-export default GroupMessageList;
+GroupMessageList.displayName = "GroupMessageList";
+
+export default memo(GroupMessageList);
