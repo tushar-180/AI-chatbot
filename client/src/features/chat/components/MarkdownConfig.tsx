@@ -156,7 +156,8 @@ export const assistantMarkdownComponents = {
   img: (props: React.ComponentPropsWithoutRef<"img">) => (
     <span className="my-6 block">
       <img
-        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20"
+        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20 bg-slate-950/40"
+        style={{ aspectRatio: "auto 16 / 9" }}
         {...props}
         loading="lazy"
         onError={(e) => {
