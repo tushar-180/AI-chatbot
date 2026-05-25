@@ -208,6 +208,42 @@ const getEnabledMcpTools = async (userId: string) => {
     (tool) => !disabledMcpServers.includes(tool._serverName),
   );
 };
+
+async function fetchYoutubeTranscript(effectiveLatestUserMessage: string, sizeLimit: number): Promise<string | null> {
+  if (!effectiveLatestUserMessage) return null;
+  const youtubeRegex =
+    /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  const match = effectiveLatestUserMessage.match(youtubeRegex);
+  if (!match) return null;
+  const result = await withTimeout(
+    extractTranscript({ videoIdOrUrl: match[1], maxLength: sizeLimit }),
+    EXTERNAL_CALL_TIMEOUT_MS,
+  );
+  return result?.success ? result.text : null;
+}
+
+async function fetchWebGroundingContext(
+  webSearchEnabled: boolean,
+  effectiveLatestUserMessage: string,
+  chatMessages: ChatMessage[],
+  userId: string,
+  isGemini: boolean,
+): Promise<any | null> {
+  if (!webSearchEnabled) {
+    return null;
+  }
+  const result = await withTimeout(
+    webSearchService.buildGroundingContext(
+      effectiveLatestUserMessage,
+      chatMessages,
+      userId,
+      isGemini,
+    ),
+    30000,
+  );
+  return result && !("rejected" in result) ? result : null;
+}
+
 const buildPromptMessages = async (
   userId: string,
   chatMessages: ChatMessage[],
@@ -236,19 +272,41 @@ const buildPromptMessages = async (
   const lastUserMsg = [...rawPromptMessages]
     .reverse()
     .find((m) => m.role === "user");
-  // --- File context injection (new) ---
-  let fileContext: string | null = null;
-  const userMessagesWithFiles = rawPromptMessages
-    .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
-    .slice(-1); // take the most recent one
 
-  if (userMessagesWithFiles.length > 0) {
-    const lastFileMsg = userMessagesWithFiles[0];
-    const storagePath = lastFileMsg.attachments?.find((a) => a.storagePath)?.storagePath;
-    if (storagePath) {
-      const context = await retrieveFileContext(rawPromptMessages, storagePath);
-      if (context) {
-        fileContext = context;
+  let fileContext: string | null = null;
+
+  const userMessagesWithFilesAll = chatMessages
+    .filter((m) => m.role === "user" && m.attachments && m.attachments.length > 0)
+    .slice(-1); // take the most recent one across all chat history
+
+  if (userMessagesWithFilesAll.length > 0) {
+    const lastFileMsg = userMessagesWithFilesAll[0];
+    const firstAtt = lastFileMsg.attachments?.[0];
+    
+    if (firstAtt && firstAtt.mimeType && !firstAtt.mimeType.startsWith("image/")) {
+      const storagePath = firstAtt.storagePath;
+      if (storagePath) {
+        const context = await retrieveFileContext(rawPromptMessages, storagePath);
+        if (context) {
+          fileContext = context;
+        }
+      }
+    }
+
+    // Check if the message with the attachment fell out of the sliding window
+    const isFileInContext = rawPromptMessages.some((m) => 
+      (m.id && m.id === lastFileMsg.id) || 
+      (m as any)._id?.toString() === (lastFileMsg as any)._id?.toString()
+    );
+
+    if (!isFileInContext && lastFileMsg.attachments) {
+      // Re-inject the attachments into the oldest user message in the current window so the LLM doesn't forget them
+      const firstUserMsgInContext = rawPromptMessages.find((m) => m.role === "user");
+      if (firstUserMsgInContext) {
+        firstUserMsgInContext.attachments = [
+          ...(firstUserMsgInContext.attachments || []),
+          ...lastFileMsg.attachments
+        ];
       }
     }
   }
@@ -288,34 +346,8 @@ ${userRequest}`;
       memoryService.getMemoryContext(userId, effectiveLatestUserMessage),
       EXTERNAL_CALL_TIMEOUT_MS,
     ),
-    (async () => {
-      if (!effectiveLatestUserMessage) return null;
-      const youtubeRegex =
-        /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-      const match = effectiveLatestUserMessage.match(youtubeRegex);
-      if (!match) return null;
-      const result = await withTimeout(
-        extractTranscript({ videoIdOrUrl: match[1], maxLength: sizeLimit }),
-        EXTERNAL_CALL_TIMEOUT_MS,
-      );
-      return result?.success ? result.text : null;
-    })(),
-    (async () => {
-      if (!webSearchEnabled) {
-        return null;
-      }
-      const started = Date.now();
-      const result = await withTimeout(
-        webSearchService.buildGroundingContext(
-          effectiveLatestUserMessage,
-          chatMessages,
-          userId,
-          isGemini,
-        ),
-        30000,
-      );
-      return result && !("rejected" in result) ? result : null;
-    })()
+    fetchYoutubeTranscript(effectiveLatestUserMessage, sizeLimit),
+    fetchWebGroundingContext(webSearchEnabled, effectiveLatestUserMessage, chatMessages, userId, isGemini)
   ]);
 
   // Extract values (null on failure)
@@ -453,7 +485,7 @@ async function* streamAssistantResponse(
   ) {
     yield {
       type: "sources",
-      sources: webGrounding.sources.map((s) => ({
+      sources: webGrounding.sources.map((s: any) => ({
         id: s.id,
         url: s.url,
         title: s.title,

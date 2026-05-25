@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { PDFParse } from 'pdf-parse';
 
 import mammoth from 'mammoth';
 
@@ -18,14 +19,11 @@ import type {
   ParseOptions,
 } from './types';
 
-const DEFAULT_MAX_LENGTH = 30_000;
 
 const SUPPORTED_EXTENSIONS = new Set([
   '.pdf',
   '.docx',
-  '.xlsx',
   '.txt',
-  '.csv',
 ]);
 
 export async function parseFile(
@@ -34,11 +32,19 @@ export async function parseFile(
   mimeType: string,
   options: ParseOptions = {}
 ): Promise<ParsedFile> {
-  const maxLength =
-    options.maxLength ?? DEFAULT_MAX_LENGTH;
-
   try {
     validateInput(buffer, fileName);
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+    if (buffer.length > MAX_FILE_SIZE) {
+      return createErrorResponse({
+        fileName,
+        mimeType,
+        size: buffer.length,
+        code: 'FILE_TOO_LARGE',
+        message: `File size (${(buffer.length / 1024 / 1024).toFixed(1)}MB) exceeds the 10MB limit.`,
+      });
+    }
 
     const extension = path
       .extname(fileName)
@@ -56,32 +62,44 @@ export async function parseFile(
 
     let extractedText = '';
 
-    switch (extension) {
-      case '.pdf':
-        extractedText = await parsePDF(buffer);
-        break;
+    const parsePromise = (async () => {
+      switch (extension) {
+        case '.pdf':
+          return await parsePDF(buffer);
+        case '.docx':
+          return await parseDOCX(buffer);
+        case '.xlsx':
+          return await parseXLSX(buffer);
+        case '.txt':
+          return buffer.toString('utf8');
+        case '.csv':
+          return await parseCSV(buffer);
+        default:
+          return null;
+      }
+    })();
 
-      case '.docx':
-        extractedText = await parseDOCX(buffer);
-        break;
+    const timeoutMs = 15000;
+    const timeoutPromise = new Promise<null>((_, reject) => {
+      setTimeout(() => reject(new Error(`File parsing timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
 
-      case '.xlsx':
-        extractedText = await parseXLSX(buffer);
-        break;
+    const result = await Promise.race([parsePromise, timeoutPromise]);
 
-      case '.txt':
-      case '.csv':
-        extractedText = buffer.toString('utf8');
-        break;
+    if (result === null) {
+      return createErrorResponse({
+        fileName,
+        mimeType,
+        size: buffer.length,
+        code: 'UNSUPPORTED_FILE',
+        message: 'Unsupported file type.',
+      });
+    }
 
-      default:
-        return createErrorResponse({
-          fileName,
-          mimeType,
-          size: buffer.length,
-          code: 'UNSUPPORTED_FILE',
-          message: 'Unsupported file type.',
-        });
+    extractedText = result;
+
+    if (options.maxLength && extractedText.length > options.maxLength) {
+      extractedText = extractedText.substring(0, options.maxLength);
     }
 
     const normalizedText =
@@ -100,10 +118,7 @@ export async function parseFile(
 
     return {
       success: true,
-      text: truncateText(
-        normalizedText,
-        maxLength
-      ),
+      text: normalizedText,
       fileName,
       mimeType,
       size: buffer.length,
@@ -123,16 +138,16 @@ export async function parseFile(
 /*                                   PDF                                      */
 /* -------------------------------------------------------------------------- */
 
-const { PDFParse } = require('pdf-parse');
-
 async function parsePDF(
   buffer: Buffer
 ): Promise<string> {
-  const p = new PDFParse(new Uint8Array(buffer));
-  await p.load();
-  const result = await p.getText();
-
-  return result.text || '';
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    return result.text || '';
+  } finally {
+    await parser.destroy();
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -156,14 +171,6 @@ async function parseDOCX(
 async function parseXLSX(
   buffer: Buffer
 ): Promise<string> {
-  /**
-   * read-excel-file typings are inconsistent
-   * across versions.
-   *
-   * Runtime returns row arrays correctly.
-   * We normalize the type manually.
-   */
-
   const rows = (await readXlsxFile(
     buffer
   )) as unknown as ExcelRow[];
@@ -172,23 +179,45 @@ async function parseXLSX(
     (row: ExcelRow) =>
       row
         .map((cell: ExcelCell) => {
-          if (
-            cell === null ||
-            cell === undefined
-          ) {
-            return '';
-          }
-
-          if (cell instanceof Date) {
-            return cell.toISOString();
-          }
-
+          if (cell === null || cell === undefined) return '';
+          if (cell instanceof Date) return cell.toISOString();
           return String(cell);
         })
         .join(' | ')
   );
 
   return formattedRows.join('\n');
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   CSV                                      */
+/* -------------------------------------------------------------------------- */
+
+const { parse: parseCSVString } = require('csv-parse/sync');
+
+async function parseCSV(buffer: Buffer): Promise<string> {
+  try {
+    const text = buffer.toString('utf8');
+    const records = parseCSVString(text, {
+      skip_empty_lines: true,
+      relax_quotes: true,
+      relax_column_count: true,
+    });
+
+    const formattedRows = records.map((row: any[]) =>
+      row
+        .map((cell) => {
+          if (cell === null || cell === undefined) return '';
+          return String(cell).replace(/\n/g, ' ').trim();
+        })
+        .join(' | ')
+    );
+
+    return formattedRows.join('\n');
+  } catch (error) {
+    console.error('Error parsing CSV with csv-parse, falling back to raw text:', error);
+    return buffer.toString('utf8');
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -224,19 +253,6 @@ function normalizeText(
     .trim();
 }
 
-function truncateText(
-  text: string,
-  maxLength: number
-): string {
-  if (text.length <= maxLength) {
-    return text;
-  }
-
-  return `${text.slice(
-    0,
-    maxLength
-  )}\n\n... [truncated]`;
-}
 
 function getErrorMessage(
   error: unknown

@@ -1,5 +1,5 @@
-import { generateEmbedding } from "../../services/embedding.service";
-import { supabaseAdmin } from "../../config/supabase";
+import { generateEmbedding } from "./services/embedding.service";
+import { supabaseAdmin } from "./config/supabase";
 
 /**
  * Retrieves relevant file chunks from Supabase pgvector using the
@@ -10,14 +10,20 @@ export async function retrieveFileContext(
     storagePath: string
 ): Promise<string | null> {
     try {
-        // Find the last user message to use as the query
-        const lastUserMsg = rawPromptMessages
+        // Build a conversation-aware query from the last 3 user messages
+        const userMessages = rawPromptMessages
             .filter(m => m.role === "user")
-            .pop();
+            .slice(-3);
 
-        if (!lastUserMsg || !lastUserMsg.content) return null;
+        if (userMessages.length === 0) return null;
 
-        const userQuery = lastUserMsg.content.trim();
+        const queryParts = userMessages
+            .map(m => (typeof m.content === 'string' ? m.content.trim() : ''))
+            .filter(Boolean);
+
+        if (queryParts.length === 0) return null;
+
+        const userQuery = queryParts.join('\n');
 
         console.log(`[RAG] Generating embedding for query: "${userQuery}"`);
         const queryEmbedding = await generateEmbedding(userQuery);
@@ -27,7 +33,7 @@ export async function retrieveFileContext(
             'match_file_chunks',   // your PostgreSQL function
             {
                 query_embedding: queryEmbedding,
-                match_threshold: 0.5,   // adjust if needed
+                match_threshold: 0.35,   // adjusted for 256 dimensions
                 match_count: 5,
                 filter_path: storagePath,
             }

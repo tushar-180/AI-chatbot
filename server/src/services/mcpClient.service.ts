@@ -195,6 +195,7 @@ class McpClientService {
         name: originalToolName,
         arguments: args,
       });
+      console.log(`[MCP] Tool "${originalToolName}" succeeded.`);
       return result;
     } catch (error: any) {
       console.error(`[MCP] Error executing tool "${originalToolName}" on server "${serverName}":`, error);

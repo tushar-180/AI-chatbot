@@ -129,7 +129,7 @@ export const temporaryChatService = {
     const lastUserMessage = messages
       .filter((m) => m.role === "user")
       .pop();
-      
+
     if (attachedFile && lastUserMessage) {
       const result = await processAttachedFile(attachedFile, userId, lastUserMessage.attachments || []);
       lastUserMessage.attachments = result.attachments;

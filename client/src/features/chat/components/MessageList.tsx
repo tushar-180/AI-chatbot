@@ -62,7 +62,7 @@ interface MessageListProps {
   onSuggestionClick?: (text: string) => void;
   onEditMessage?: (messageId: string, content: string) => void;
   onEditStart?: () => void;
-  onRetryMessage?: (messageId: string) => void;
+  onRetryMessage?: (messageId: string, provider?: string) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;

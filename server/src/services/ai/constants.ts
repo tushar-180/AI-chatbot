@@ -1,7 +1,7 @@
 export const AI_PROVIDERS = {
   GEMINI: {
     id: "gemini",
-    models: ["gemini-3.1-flash-lite-preview", "gemini-2.0-flash", "gemini-2.5-flash-lite"],
+    models: ["gemini-3.1-flash-lite-preview", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-lite"],
     visionModels: ["gemini-2.0-flash", "gemini-3.1-flash-lite-preview"],
   },
   OPENAI: {
@@ -37,7 +37,7 @@ export const getDisplayProviderName = (providerId: string, modelName: string) =>
  */
 export const supportsVision = (modelId: string): boolean => {
   const mid = modelId.toLowerCase();
-  
+
   // Extract model name in case it contains provider prefix (e.g., "openai:gpt-5-mini" -> "gpt-5-mini")
   const parts = mid.split(":");
   const modelName = parts.length > 1 ? parts[1].trim() : parts[0].trim();

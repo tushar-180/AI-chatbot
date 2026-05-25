@@ -63,10 +63,10 @@ export class GroupChatService {
 
     let assistantMessage = isValidObjectId
       ? await GroupMessage.findOne({
-          _id: messageId,
-          groupId,
-          role: "assistant",
-        })
+        _id: messageId,
+        groupId,
+        role: "assistant",
+      })
       : null;
 
     // Streaming assistant placeholders use temporary UUIDs on the client.
@@ -296,7 +296,7 @@ export class GroupChatService {
 
   static async getGroupMessages(groupId: string) {
     const messages = await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
-    
+
     const userIds = Array.from(new Set(messages.filter(m => m.role === "user").map(m => m.userId)));
     if (userIds.length === 0) return messages;
 
@@ -926,7 +926,7 @@ export class GroupChatService {
 
   private static async populateGroupsMembers(groups: any[]) {
     if (!groups || groups.length === 0) return [];
-    
+
     const allUserIds = new Set<string>();
     groups.forEach((group: any) => {
       const g = group.toObject ? group.toObject() : group;

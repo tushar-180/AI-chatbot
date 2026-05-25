@@ -10,6 +10,9 @@ import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 import { mcpClientService } from "../../mcpClient.service";
 import { CORE_VELORA_INSTRUCTIONS } from "../../../constants/prompt.constants";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { existsSync } from "node:fs";
 
 dotenv.config();
 
@@ -82,8 +85,27 @@ export class GeminiAdapter implements IAIService {
                       !att.mimeType.startsWith("video/") &&
                       !att.mimeType.startsWith("audio/");
 
+                    // Auto-restore mechanism for ephemeral hostings (like Render free tier)
+                    const ensureLocalFileExists = async (localPath: string, url: string) => {
+                      if (localPath && url && !existsSync(localPath)) {
+                        try {
+                          await fs.mkdir(path.dirname(localPath), { recursive: true });
+                          const res = await fetch(url);
+                          if (res.ok) {
+                            const buffer = Buffer.from(await res.arrayBuffer());
+                            await fs.writeFile(localPath, buffer);
+                            console.log(`[Auto-Restore] Restored ${localPath} from Supabase.`);
+                          }
+                        } catch (err) {
+                          console.warn(`[Auto-Restore] Failed to restore ${localPath}:`, err);
+                        }
+                      }
+                    };
+
                     if (isDefinitelyUnsupported) {
-                      return { text: `\n[File uploaded by user, text content should be in prompt: ${att.url}]` };
+                      const mcpPath = (att as any).localPath || att.url;
+                      await ensureLocalFileExists((att as any).localPath, att.url);
+                      return { text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]` };
                     }
 
                     const response = await fetch(att.url);
@@ -96,13 +118,25 @@ export class GeminiAdapter implements IAIService {
                       response.headers.get("content-type") ||
                       "image/jpeg";
 
-                    const isSupported =
+                    const isImageVideoAudio =
                       mimeType.startsWith("image/") ||
                       mimeType.startsWith("video/") ||
                       mimeType.startsWith("audio/");
 
-                    if (!isSupported) {
-                      return { text: `\n[File uploaded by user, text content should be in prompt: ${att.url}]` };
+                    const isDocument =
+                      mimeType === "application/pdf" ||
+                      mimeType.startsWith("text/") ||
+                      mimeType === "application/json" ||
+                      mimeType === "application/rtf" ||
+                      mimeType === "application/x-javascript" ||
+                      mimeType === "application/x-python";
+
+                    if (!isImageVideoAudio && (!isDocument || !(att as any).inlineFallback)) {
+                      const mcpPath = (att as any).localPath || att.url;
+                      if (typeof ensureLocalFileExists === 'function') {
+                        await ensureLocalFileExists((att as any).localPath, att.url);
+                      }
+                      return { text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]` };
                     }
 
                     const arrayBuffer = await response.arrayBuffer();
@@ -254,7 +288,7 @@ export class GeminiAdapter implements IAIService {
     const geminiTools = this.mapMcpToolsToGemini(tools);
     let hasToolCalls = true;
     let loopCount = 0;
-    const maxLoops = 10;
+    const maxLoops = 5;
     let finalOutput = "";
     let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
 
@@ -300,11 +334,11 @@ export class GeminiAdapter implements IAIService {
               modelContent?.parts && modelContent.parts.length > 0
                 ? modelContent.parts
                 : functionCalls.map((f) => ({
-                    functionCall: {
-                      name: f.name,
-                      args: f.args,
-                    },
-                  })),
+                  functionCall: {
+                    name: f.name,
+                    args: f.args,
+                  },
+                })),
           } as any);
 
           const responseParts = await Promise.all(
@@ -318,10 +352,16 @@ export class GeminiAdapter implements IAIService {
                   f.name!,
                   f.args,
                 );
+                
+                let resultString = typeof result === "string" ? result : JSON.stringify(result);
+                if (resultString.length > 10000) {
+                  resultString = resultString.substring(0, 10000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
+                }
+                
                 return {
                   functionResponse: {
                     name: f.name!,
-                    response: { result },
+                    response: { result: resultString },
                   },
                 };
               } catch (err: any) {
@@ -340,6 +380,32 @@ export class GeminiAdapter implements IAIService {
             role: "user",
             parts: responseParts,
           } as any);
+        }
+      }
+
+      if (loopCount >= maxLoops && hasToolCalls) {
+        contents.push({
+          role: "user",
+          parts: [
+            {
+              text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
+            },
+          ],
+        } as any);
+
+        const finalConfig: any = {
+          systemInstruction: this.getSystemInstruction(combinedSystemPrompt, false),
+        };
+
+        const finalRes = await this.ai.models.generateContent({
+          model: this.model,
+          contents,
+          config: finalConfig,
+        });
+
+        const choiceText = finalRes.text || "";
+        if (choiceText) {
+          finalOutput += choiceText;
         }
       }
 
@@ -390,7 +456,7 @@ export class GeminiAdapter implements IAIService {
         try {
           let hasToolCalls = true;
           let loopCount = 0;
-          const maxLoops = 10;
+          const maxLoops = 5;
 
           while (hasToolCalls && loopCount < maxLoops) {
             loopCount++;
@@ -453,11 +519,11 @@ export class GeminiAdapter implements IAIService {
                 accumulatedParts.length > 0
                   ? accumulatedParts
                   : activeFunctionCalls.map((f) => ({
-                      functionCall: {
-                        name: f.name,
-                        args: f.args,
-                      },
-                    })),
+                    functionCall: {
+                      name: f.name,
+                      args: f.args,
+                    },
+                  })),
             } as any);
 
             const responseParts = [];
@@ -477,16 +543,20 @@ export class GeminiAdapter implements IAIService {
                 );
                 yield `\n\n✅ *Tool \`${f.name}\` completed.* \n\n`;
 
+                let resultString = typeof result === "string" ? result : JSON.stringify(result);
+                if (resultString.length > 10000) {
+                  resultString = resultString.substring(0, 10000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
+                }
+
                 responseParts.push({
                   functionResponse: {
                     name: f.name,
-                    response: { result },
+                    response: { result: resultString },
                   },
                 });
               } catch (err: any) {
-                yield `\n\n❌ *Tool \`${f.name}\` failed: ${
-                  err.message || err
-                }*\n\n`;
+                yield `\n\n❌ *Tool \`${f.name}\` failed: ${err.message || err
+                  }*\n\n`;
 
                 const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseParts.push({
@@ -502,6 +572,34 @@ export class GeminiAdapter implements IAIService {
               role: "user",
               parts: responseParts,
             } as any);
+          }
+          
+          if (loopCount >= maxLoops && hasToolCalls) {
+            contents.push({
+              role: "user",
+              parts: [
+                {
+                  text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
+                },
+              ],
+            } as any);
+
+            const finalConfig: any = {
+              systemInstruction:
+                adapter.getSystemInstruction(combinedSystemPrompt, false),
+            };
+
+            const finalRes = await adapter.ai.models.generateContentStream({
+              model: adapter.model,
+              contents,
+              config: finalConfig,
+            } as any);
+
+            for await (const chunk of finalRes) {
+              if (signal?.aborted) return;
+              const text = chunk.text;
+              if (text) yield text;
+            }
           }
         } catch (error: any) {
           if (signal?.aborted) {
@@ -519,13 +617,13 @@ export class GeminiAdapter implements IAIService {
                   adapter.getSystemInstruction(combinedSystemPrompt, !!(tools && tools.length > 0)),
               },
             });
-              const fallbackUsage = normalizeGeminiUsageMetadata(
-                (fallbackResponse as any).usageMetadata ??
-                  (fallbackResponse as any).usage_metadata,
-              );
-              if (fallbackUsage) {
-                totalUsage = fallbackUsage;
-              }
+            const fallbackUsage = normalizeGeminiUsageMetadata(
+              (fallbackResponse as any).usageMetadata ??
+              (fallbackResponse as any).usage_metadata,
+            );
+            if (fallbackUsage) {
+              totalUsage = fallbackUsage;
+            }
             const text =
               fallbackResponse?.candidates?.[0]?.content?.parts?.[0]?.text ||
               fallbackResponse?.text ||

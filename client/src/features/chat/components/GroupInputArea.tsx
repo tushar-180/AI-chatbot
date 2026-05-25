@@ -83,6 +83,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const [isUploading, setIsUploading] = useState(false);
   const { groupId } = useParams<{ groupId?: string }>();
     const [isFocused, setIsFocused] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   // Clear typed input, attachments, and reset web search when switching group chats
   useEffect(() => {
@@ -281,6 +289,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     }
 
     setIsSending(true);
+    if (attachments.length > 0 || attachedFile) {
+      setCooldown(30);
+    }
     try {
       await onSubmit(input, webSearchEnabled, attachments, attachedFile);
       setInput("");
@@ -300,8 +311,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    // "application/vnd.ms-powerpoint",
+    // "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/csv",
   ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -339,9 +351,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     formData.append("image", file);
 
     try {
-      const res = await api.post("/upload/image", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await api.post("/upload/image", formData);
 
       const newAttachment: Attachment = {
         url: res.data.url,
@@ -583,7 +593,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.csv"
                 />
                 <button
                   type="button"
@@ -686,7 +696,11 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     }
                   }}
                 rows={1}
-                placeholder="Message group..."
+                placeholder={
+                  cooldown > 0
+                    ? `Cooling down... Please wait ${cooldown}s`
+                    : "Message group..."
+                }
                 className={`${ isFocused ? "" : "selection:bg-transparent select-none" } not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent`}
                 style={sharedTextStyles}
               />
@@ -744,9 +758,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             ) : (
               <button
                 type="submit"
-                disabled={isSending || isUploading || (!input.trim() && attachments.length === 0)}
+                disabled={isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)}
                 className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  isSending || isUploading || (!input.trim() && attachments.length === 0)
+                  isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)
                     ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                     : "bg-white text-slate-900 hover:bg-slate-200"
                 }`}
