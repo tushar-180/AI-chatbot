@@ -102,9 +102,11 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           {attachment.mimeType?.startsWith("image/") ||
             attachment.url?.startsWith("data:image") ? (
             <img
-              src={attachment.url || ""}
+              src={optimizeImageUrl(attachment.url || "", 600, 338)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-100"
+              className="h-auto w-full object-contain max-h-100 bg-slate-950/40"
+              style={{ aspectRatio: "auto 16 / 9" }}
+              fetchPriority="high"
             />
           ) : (
             <div className="flex items-center gap-3 p-4">
