@@ -123,15 +123,12 @@ export async function parseFile(
 /*                                   PDF                                      */
 /* -------------------------------------------------------------------------- */
 
-const { PDFParse } = require('pdf-parse');
+const pdf = require('pdf-parse');
 
 async function parsePDF(
   buffer: Buffer
 ): Promise<string> {
-  const p = new PDFParse(new Uint8Array(buffer));
-  await p.load();
-  const result = await p.getText();
-
+  const result = await pdf(buffer);
   return result.text || '';
 }
 

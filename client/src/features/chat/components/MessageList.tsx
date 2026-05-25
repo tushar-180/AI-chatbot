@@ -5,6 +5,8 @@ import {
   memo,
   useState,
   useLayoutEffect,
+  forwardRef,
+  useImperativeHandle,
 } from "react";
 import {
   ChevronDown,
@@ -69,7 +71,7 @@ interface MessageListProps {
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
 }
 
-const MessageList = ({
+const MessageList = forwardRef<{ instantScrollToBottom: () => void }, MessageListProps>(({
   messages,
   loading,
   messagesLoading,
@@ -85,12 +87,16 @@ const MessageList = ({
   onFeedback,
   onCitationClick,
   onSourcesClick,
-}: MessageListProps) => {
+}, ref) => {
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
   );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useImperativeHandle(ref, () => ({
+    instantScrollToBottom,
+  }));
   const highlight = searchParams.get("highlight");
   const showSuggestions = !currentChatId && messages.length === 0;
 
@@ -144,7 +150,9 @@ const MessageList = ({
   const instantScrollToBottom = useCallback(() => {
     const container = getScrollContainer();
     if (!container) return;
+    shouldAutoScrollRef.current = true;
     container.scrollTop = container.scrollHeight;
+
   }, [getScrollContainer]);
 
   // HANDLE SCROLL
@@ -358,9 +366,11 @@ const MessageList = ({
                   )}
                 </div>
 
-              <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
-                {isTemporaryChatActive ? "Temporary Chat Mode" : `Hello ${dbUser?.firstName || ""}, how can I help you today?`}
-              </h2>
+                <h2 className="mb-3 font-display text-[1.85rem] font-bold tracking-tight text-white md:text-[2rem]">
+                  {isTemporaryChatActive
+                    ? "Temporary Chat Mode"
+                    : `Hello ${dbUser?.firstName || ""}, how can I help you today?`}
+                </h2>
 
                 <p className="max-w-md text-base leading-relaxed tracking-[0.01em] text-slate-400">
                   {isTemporaryChatActive
@@ -434,21 +444,19 @@ const MessageList = ({
           ) : (
             <>
               {messages.map((msg, i) => {
-                
                 return (
-                 
                   <MessageItem
-                  key={msg.id}
-                  message={msg}
-                  isStreaming={isStreaming && i === messages.length - 1}
-                  onEdit={(content) => onEditMessage?.(msg.id, content)}
-                  onEditStart={onEditStart}
-                  onRetry={() => onRetryMessage?.(msg.id)}
-                  onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
-                  highlight={highlight || undefined}
-                  onCitationClick={onCitationClick}
-                  onSourcesClick={onSourcesClick}
-                />
+                    key={msg.id}
+                    message={msg}
+                    isStreaming={isStreaming && i === messages.length - 1}
+                    onEdit={(content) => onEditMessage?.(msg.id, content)}
+                    onEditStart={onEditStart}
+                    onRetry={() => onRetryMessage?.(msg.id)}
+                    onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                    highlight={highlight || undefined}
+                    onCitationClick={onCitationClick}
+                    onSourcesClick={onSourcesClick}
+                  />
                 );
               })}
 
@@ -482,6 +490,8 @@ const MessageList = ({
       </div>
     </div>
   );
-};
+});
+
+MessageList.displayName = "MessageList";
 
 export default memo(MessageList);

@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import GroupChatHeader from "@/features/chat/components/GroupChatHeader";
 import GroupMessageList from "@/features/chat/components/GroupMessageList";
 import GroupInputArea from "@/features/chat/components/GroupInputArea";
@@ -24,6 +24,18 @@ const GroupChat = () => {
     updateMessageFeedback,
   } = useGroupChat();
   const { setCurrentGroup } = useGroupStore();
+
+  const groupMessageListRef = useRef<{ instantScrollToBottom: () => void } | null>(null);
+
+  const handleSubmit = async (
+    content: string,
+    webSearchEnabled?: boolean,
+    attachments?: any[],
+    attachedFile?: File | null,
+  ) => {
+    groupMessageListRef.current?.instantScrollToBottom();
+    await sendMessage(content, webSearchEnabled, attachments, attachedFile);
+  };
 
   // Sources sidebar state
   const [selectedSources, setSelectedSources] = useState<WebSource[]>([]);
@@ -74,6 +86,7 @@ const GroupChat = () => {
 
           <div className="relative flex-1">
             <GroupMessageList
+              ref={groupMessageListRef}
               onCitationClick={handleCitationClick}
               onSourcesClick={handleSourcesOpen}
               onEditMessage={editMessage}
@@ -101,7 +114,7 @@ const GroupChat = () => {
           )}
           <div className="pointer-events-auto">
             <GroupInputArea
-              onSubmit={sendMessage}
+              onSubmit={handleSubmit}
               isStreaming={isStreaming}
               onStop={stopStream}
               onTyping={sendTypingStatus}

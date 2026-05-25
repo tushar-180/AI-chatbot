@@ -191,6 +191,16 @@ const Chat = () => {
     };
   }, []);
 
+
+// auto-scroll chat to bottom on new message send
+
+  const messageListRef = useRef<{ instantScrollToBottom: () => void } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    messageListRef.current?.instantScrollToBottom();
+    await handleFormSubmit(e);
+  };
+
   // 4. Manage Input & Form Submission
   const {
     input,
@@ -278,6 +288,7 @@ const Chat = () => {
   const handleDocumentSubmit = (file: File) => {
     const selectionContext = useComposerStore.getState().selectionContext;
     useComposerStore.getState().clearSelectionContext();
+    messageListRef.current?.instantScrollToBottom();
     streamMessage(input, selectedProvider, attachments, {
       forceNewChat: isTemporaryChatActive
         ? false
@@ -318,6 +329,7 @@ const Chat = () => {
               const isTransitioning = (chatId || null) !== currentChatId;
               return (
                 <MessageList
+                  ref={messageListRef}
                   messages={isTransitioning ? [] : displayMessages}
                   loading={isTransitioning ? false : isCurrentChatLoading}
                   messagesLoading={
@@ -377,7 +389,7 @@ const Chat = () => {
             <InputArea
               input={input}
               onInputChange={setInput}
-              onSubmit={handleFormSubmit}
+              onSubmit={handleSubmit}
               onSubmitDocument={handleDocumentSubmit}
               loading={isCurrentChatLoading}
               isStreaming={isStreaming}
