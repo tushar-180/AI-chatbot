@@ -72,10 +72,13 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: smooth ? "smooth" : "auto",
+      const offset = 1015;
+      
+      requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight - offset,
+          behavior: smooth ? "smooth" : "auto",
+        });
       });
     },
     [getScrollContainer],
@@ -86,19 +89,9 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
     const container = getScrollContainer();
     if (!container) return;
     shouldAutoScrollRef.current = true;
-    container.scrollTop = container.scrollHeight;
-
-    // Use requestAnimationFrame and small timeouts to guarantee we scroll
-    // to the absolute bottom after any layout updates or optimistic state renders.
     requestAnimationFrame(() => {
       container.scrollTop = container.scrollHeight;
     });
-    setTimeout(() => {
-      container.scrollTop = container.scrollHeight;
-    }, 50);
-    setTimeout(() => {
-      container.scrollTop = container.scrollHeight;
-    }, 150);
   }, [getScrollContainer]);
 
   useImperativeHandle(ref, () => ({

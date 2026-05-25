@@ -1,6 +1,8 @@
 import { memo, useState, useRef, useEffect, type ComponentType } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   User,
   Globe,
@@ -147,7 +149,7 @@ const MessageAvatar = ({
   >
     {isUser ? (
       imageUrl ? (
-        <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
+        <img src={optimizeImageUrl(imageUrl, 64)} alt="User" className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-white/5 text-slate-500">
           <User size={16} />
@@ -236,6 +238,21 @@ const MessageMetadata = ({
     </div>
   );
 };
+
+const ALLOWED_HTML_TAGS = new Set([
+  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
+  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
+  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+]);
+
+function escapeUnrecognizedHtmlTags(text: string): string {
+  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
+    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+      return match;
+    }
+    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+  });
+}
 
 const MessageItem = ({
   message: msg,
@@ -547,10 +564,14 @@ const MessageItem = ({
     }
   };
 
-  const processedContent =
+  let processedContent =
     !isUser && msg.content
       ? msg.content.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>')
       : msg.content;
+
+  if (processedContent) {
+    processedContent = escapeUnrecognizedHtmlTags(processedContent);
+  }
 
   const citationComponents = !isUser
     ? {

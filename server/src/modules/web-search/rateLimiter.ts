@@ -30,8 +30,48 @@ const k = {
 };
 
 // ─────────────────────────────
-// Tavily usage helper
-// ─────────────────────────────
+const triggerTavilyUsageFetch = (apiKey: string) => {
+    const cacheKey = "web_search:tavily:usage_cache";
+    const lockKey = "web_search:tavily:usage_fetch_lock";
+    
+    (async () => {
+        try {
+            const acquired = await redis.set(lockKey, "1", { nx: true, ex: 10 });
+            if (!acquired) return;
+
+            console.log("[web-search] Fetching Tavily usage asynchronously in background...");
+            const response = await fetch("https://api.tavily.com/usage", {
+                method: "GET",
+                headers: {
+                    "Authorization": `Bearer ${apiKey}`,
+                    "Content-Type": "application/json",
+                },
+            });
+            if (!response.ok) {
+                await redis.del(lockKey);
+                return;
+            }
+            const data = await response.json() as any;
+            const keyData = data?.key;
+            if (keyData && typeof keyData.usage === "number" && typeof keyData.limit === "number") {
+                const usageLimit = {
+                    usage: keyData.usage,
+                    limit: keyData.limit,
+                };
+                // Cache for 5 minutes (300 seconds)
+                await redis.set(cacheKey, usageLimit, { ex: 300 });
+                console.log("[web-search] Tavily usage successfully updated in background:", usageLimit);
+            }
+            await redis.del(lockKey);
+        } catch (err) {
+            console.error("[web-search] Asynchronous Tavily fetch failed:", err);
+            try {
+                await redis.del(lockKey);
+            } catch (e) {}
+        }
+    })();
+};
+
 const getTavilyUsage = async (apiKey: string): Promise<{ usage: number; limit: number } | null> => {
     const cacheKey = "web_search:tavily:usage_cache";
     try {
@@ -41,30 +81,11 @@ const getTavilyUsage = async (apiKey: string): Promise<{ usage: number; limit: n
         console.warn("[web-search] Failed to read Tavily usage cache from Redis:", err);
     }
 
-    try {
-        const response = await fetch("https://api.tavily.com/usage", {
-            method: "GET",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
-        });
-        if (!response.ok) return null;
-        const data = await response.json() as any;
-        const keyData = data?.key;
-        if (keyData && typeof keyData.usage === "number" && typeof keyData.limit === "number") {
-            const usageLimit = {
-                usage: keyData.usage,
-                limit: keyData.limit,
-            };
-            await redis.set(cacheKey, usageLimit, { ex: 60 });
-            return usageLimit;
-        }
-        return null;
-    } catch (err) {
-        console.error("[web-search] Failed to fetch Tavily usage:", err);
-        return null;
-    }
+    // Trigger an asynchronous background fetch to populate the cache
+    triggerTavilyUsageFetch(apiKey);
+
+    // Return a standard placeholder immediately to avoid blocking the HTTP thread
+    return { usage: 0, limit: 1000 };
 };
 
 export const checkQuota = async (userId?: string) => {

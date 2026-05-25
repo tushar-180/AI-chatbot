@@ -42,6 +42,7 @@ export type GroupChat = {
   creatorId: string;
   members: GroupMember[];
   inviteCode: string;
+  createdAt?: string;
   updatedAt: string;
   isPinned?: boolean;
 };

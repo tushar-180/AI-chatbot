@@ -2,9 +2,33 @@ import { useState, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { Copy, Check, Eye, X, Code as CodeIcon } from "lucide-react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+import { PrismAsyncLight as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { toast } from "sonner";
+
+// Import Prism light languages to reduce bundle size and main-thread block time
+import js from "react-syntax-highlighter/dist/esm/languages/prism/javascript";
+import ts from "react-syntax-highlighter/dist/esm/languages/prism/typescript";
+import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
+import bash from "react-syntax-highlighter/dist/esm/languages/prism/bash";
+import json from "react-syntax-highlighter/dist/esm/languages/prism/json";
+import sql from "react-syntax-highlighter/dist/esm/languages/prism/sql";
+import html from "react-syntax-highlighter/dist/esm/languages/prism/markup"; // prism html uses markup
+import css from "react-syntax-highlighter/dist/esm/languages/prism/css";
+
+SyntaxHighlighter.registerLanguage("javascript", js);
+SyntaxHighlighter.registerLanguage("js", js);
+SyntaxHighlighter.registerLanguage("typescript", ts);
+SyntaxHighlighter.registerLanguage("ts", ts);
+SyntaxHighlighter.registerLanguage("python", python);
+SyntaxHighlighter.registerLanguage("py", python);
+SyntaxHighlighter.registerLanguage("bash", bash);
+SyntaxHighlighter.registerLanguage("sh", bash);
+SyntaxHighlighter.registerLanguage("json", json);
+SyntaxHighlighter.registerLanguage("sql", sql);
+SyntaxHighlighter.registerLanguage("html", html);
+SyntaxHighlighter.registerLanguage("css", css);
+
 
 /** Simple hash function to identify code blocks in the URL */
 const getCodeHash = (code: string) => {

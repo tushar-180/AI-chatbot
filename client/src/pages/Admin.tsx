@@ -653,50 +653,54 @@ const Admin: React.FC = () => {
         </div>
 
         {/* Dashboard Section Tab Navigation Bar */}
-        <div className="flex border-b border-white/5 gap-6 mb-2 pt-2">
+        <div className="flex border-b border-white/5 gap-4 sm:gap-6 mb-2 pt-2 w-full overflow-x-auto scrollbar-hide whitespace-nowrap justify-start sm:justify-start">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`pb-4 text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "overview"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-slate-500 border-transparent hover:text-slate-300"
             }`}
           >
-            <BarChart3 size={14} />
-            <span>Overview Hub</span>
+            <BarChart3 size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">Overview Hub</span>
+            <span className="sm:hidden">Overview</span>
           </button>
           <button
             onClick={() => setActiveTab("users")}
-            className={`pb-4 text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "users"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-slate-500 border-transparent hover:text-slate-300"
             }`}
           >
-            <UserCheck size={14} />
-            <span>User Directory</span>
+            <UserCheck size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">User Directory</span>
+            <span className="sm:hidden">Users</span>
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`pb-4 text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "performance"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-slate-500 border-transparent hover:text-slate-300"
             }`}
           >
-            <Zap size={14} />
-            <span>Model Performance</span>
+            <Zap size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">Model Performance</span>
+            <span className="sm:hidden">Performance</span>
           </button>
           <button
             onClick={() => setActiveTab("mcp")}
-            className={`pb-4 text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "mcp"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-slate-500 border-transparent hover:text-slate-300"
             }`}
           >
-            <Sliders size={14} />
-            <span>MCP Servers</span>
+            <Sliders size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">MCP Servers</span>
+            <span className="sm:hidden">MCP</span>
           </button>
         </div>
 
@@ -806,7 +810,7 @@ const Admin: React.FC = () => {
             </div>
 
             {/* Redesigned User Directory Table */}
-            <div className="overflow-x-auto min-h-0 flex-1">
+            <div className="hidden md:block overflow-x-auto min-h-0 flex-1">
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="border-b border-white/5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 pb-4">
@@ -966,6 +970,145 @@ const Admin: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Card Layout */}
+            <div className="md:hidden flex flex-col gap-4">
+              {filteredAndSortedUsers.length === 0 ? (
+                <div className="py-12 text-center text-slate-600 text-xs font-semibold uppercase tracking-widest border border-dashed border-white/5 rounded-2xl">
+                  No matches found inside database
+                </div>
+              ) : (
+                filteredAndSortedUsers.map((u) => {
+                  const joinedDate = new Date(u.createdAt).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric"
+                  });
+
+                  const totalContribution =
+                    stats.totalChatsCount > 0
+                      ? Math.round((u.totalChats / stats.totalChatsCount) * 100)
+                      : 0;
+
+                  const relativeProgress = Math.round((u.totalChats / maxChats) * 100);
+
+                  return (
+                    <div
+                      key={u.clerkId}
+                      className="p-4 bg-slate-900/20 border border-white/5 rounded-2xl flex flex-col gap-3.5"
+                    >
+                      {/* Header: User Profile and Role */}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-10 w-10 rounded-2xl overflow-hidden border border-white/5 shadow-inner shrink-0 relative">
+                            {u.imageUrl ? (
+                              <img
+                                src={u.imageUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-slate-800 flex items-center justify-center">
+                                <UserIcon size={14} className="text-slate-500" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white truncate leading-tight">
+                              {`${u.firstName || ""} ${u.lastName || ""}`.trim() || "User"}
+                            </p>
+                            <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.email}</p>
+                          </div>
+                        </div>
+
+                        <select
+                          value={u.role}
+                          disabled={u.clerkId === currentUser?.id}
+                          onChange={(e) =>
+                            handleRoleChange(u.clerkId, e.target.value as "user" | "admin")
+                          }
+                          className={`bg-slate-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
+                            u.role === "admin" ? "text-emerald-400" : "text-slate-400"
+                          }`}
+                        >
+                          <option value="user" className="bg-slate-950 text-slate-400 text-[9px] font-bold">
+                            User
+                          </option>
+                          <option value="admin" className="bg-slate-950 text-emerald-400 text-[9px] font-bold">
+                            Admin
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* Divider */}
+                      <div className="h-[1px] bg-white/5 w-full" />
+
+                      {/* Details Section */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Chats / Share</p>
+                          <p className="text-xs font-mono font-bold text-white leading-none mt-1">
+                            {u.totalChats}{" "}
+                            <span className="text-[9px] font-sans font-medium text-slate-500">
+                              ({totalContribution}% share)
+                            </span>
+                          </p>
+                          {/* Relative contribution progress bar */}
+                          <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden mt-1 border border-white/5">
+                            <div
+                              style={{ width: `${relativeProgress}%` }}
+                              className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 rounded-full transition-all duration-1000"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Favorite Model</p>
+                          <div className="mt-1">
+                            <span
+                              className={`inline-block px-2.5 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${getModelBadgeClass(
+                                u.favoriteModel
+                              )}`}
+                            >
+                              {getModelShortName(u.favoriteModel)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tokens Section */}
+                      <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-3">
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Total Tokens</p>
+                          <p className="text-xs font-mono font-bold text-white mt-1">
+                            {u.totalTokens?.toLocaleString() || 0}
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Token Mix</p>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-[9px] text-sky-400/80 font-mono font-semibold flex items-center gap-1" title="Input tokens">
+                              <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0"/>
+                              {((u.promptTokens || 0) / 1000).toFixed(1)}k
+                            </span>
+                            <span className="text-[9px] text-emerald-400/80 font-mono font-semibold flex items-center gap-1" title="Output tokens">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                              {((u.completionTokens || 0) / 1000).toFixed(1)}k
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer metadata (Joined) */}
+                      <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] font-medium text-slate-500">
+                        <span>Joined: {joinedDate}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}

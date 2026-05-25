@@ -1,6 +1,8 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   AlertCircle,
   ChevronDown,
@@ -116,7 +118,7 @@ const MessageAvatar = ({
   >
     {isUser ? (
       imageUrl ? (
-        <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
+        <img src={optimizeImageUrl(imageUrl, (size || 18) * 2)} alt="User" className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-emerald-500/10 text-emerald-500 font-bold text-[8px]">
           {username.substring(0, 1).toUpperCase()}
@@ -177,6 +179,21 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
     </div>
   );
 };
+
+const ALLOWED_HTML_TAGS = new Set([
+  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
+  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
+  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+]);
+
+function escapeUnrecognizedHtmlTags(text: string): string {
+  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
+    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+      return match;
+    }
+    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+  });
+}
 
 const GroupMessageItem = ({
   message: msg,
@@ -732,6 +749,9 @@ const GroupMessageItem = ({
       },
     );
   }
+
+  // Escape any unrecognized HTML tags to prevent custom element warning in React & preserve plain text display
+  processedContent = escapeUnrecognizedHtmlTags(processedContent);
 
   const citationComponents = isAssistant
     ? {
