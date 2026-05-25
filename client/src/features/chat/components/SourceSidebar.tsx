@@ -22,7 +22,7 @@ const SourcesSidebar = memo(({ sources, activeId, onSelect, onClose }: SourcesSi
   }, [activeId]);
 
   return (
-    <aside className="hidden lg:flex flex-col w-80 xl:w-96 border-l border-white/10 bg-slate-950/80 backdrop-blur-xl overflow-y-auto">
+    <aside className="fixed inset-y-0 left-0 z-40 flex flex-col w-full sm:w-80 xl:w-96 border-l border-white/10 bg-slate-950/80 backdrop-blur-xl overflow-y-auto lg:relative lg:translate-x-0">
       <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-950/90">
         <h3 className="text-sm font-semibold tracking-wide text-slate-200">
           Sources

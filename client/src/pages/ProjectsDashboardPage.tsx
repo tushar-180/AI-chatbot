@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Edit2, Folder, Plus, Search, Sparkles, Trash2, X, MoreVertical, LogOut } from "lucide-react";
+import { ArrowLeft, Edit2, Folder, Plus, Search, Sparkles, Trash2, X, MoreVertical, LogOut, Menu } from "lucide-react";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 
@@ -66,11 +66,14 @@ function ProjectRow({ project, onSelect, onRename, onDelete }: ProjectRowProps) 
       </div>
 
       <div className="ml-4 flex shrink-0 items-center gap-5">
-        <div className="flex items-center gap-1.5 opacity-0 transition-all duration-150 group-hover:opacity-100">
+        <div className="flex items-center gap-1.5 opacity-100 lg:opacity-0 transition-all duration-150 lg:group-hover:opacity-100">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-all">
-                <MoreVertical size={14} />
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-all lg:h-7 lg:w-7"
+              >
+                <MoreVertical size={16} />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
@@ -163,26 +166,6 @@ function NewProjectButton({ onClick }: NewProjectButtonProps) {
   );
 }
 
-interface SearchBarProps {
-  value: string;
-  onChange: (value: string) => void;
-}
-
-function SearchBar({ value, onChange }: SearchBarProps) {
-  return (
-    <div className="relative flex min-w-[140px] w-full max-w-[240px] items-center">
-      <Search size={14} className="pointer-events-none absolute left-3 text-slate-500" />
-      <input
-        type="text"
-        placeholder="Search projects..."
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-white/5 bg-slate-900 py-2 pl-9 pr-3.5 text-xs font-medium text-white outline-none transition-all placeholder:text-slate-500 focus:border-white/10"
-      />
-    </div>
-  );
-}
-
 interface ProjectsHeaderProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -197,8 +180,15 @@ function ProjectsHeader({
   onBack,
 }: ProjectsHeaderProps) {
   return (
-    <div className="flex w-full flex-col gap-5 md:flex-row md:items-center md:justify-between">
+    <div className="flex w-full flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex items-center gap-3">
+        <button
+          onClick={() => useChatStore.getState().setSidebarOpen(true)}
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/5 bg-white/5 text-slate-400 transition-all hover:bg-white/10 hover:text-white lg:hidden"
+          title="Open sidebar"
+        >
+          <Menu size={16} />
+        </button>
         <button
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/5 bg-white/5 text-slate-400 transition-all hover:bg-white/10 hover:text-white"
@@ -211,8 +201,17 @@ function ProjectsHeader({
         </h1>
       </div>
 
-      <div className="flex items-center gap-3">
-        <SearchBar value={searchValue} onChange={onSearchChange} />
+      <div className="flex items-center gap-3 w-full lg:w-auto justify-between lg:justify-end">
+        <div className="relative flex-1 lg:flex-initial flex items-center">
+          <Search size={14} className="pointer-events-none absolute left-3 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            value={searchValue}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="w-full lg:w-[240px] rounded-xl border border-white/5 bg-slate-900 py-2 pl-9 pr-3.5 text-xs font-medium text-white outline-none transition-all placeholder:text-slate-500 focus:border-white/10"
+          />
+        </div>
         <NewProjectButton onClick={onNewProjectClick} />
       </div>
     </div>
@@ -381,8 +380,8 @@ export default function ProjectsPage() {
 
 
   return (
-    <div className="min-h-screen flex-1 overflow-y-auto bg-slate-950 p-6 text-slate-100 md:p-10">
-      <div className="mx-auto flex max-w-[1100px] flex-col px-4 pb-20 pt-10 md:px-8">
+    <div className="min-h-screen flex-1 overflow-y-auto bg-slate-950 p-4 lg:p-10 text-slate-100">
+      <div className="mx-auto flex max-w-[1100px] flex-col px-2 pb-16 pt-6 lg:px-8 lg:pb-20 lg:pt-10">
         <div className="flex flex-col gap-10">
           {!projectId && (
             <ProjectsHeader
@@ -396,6 +395,13 @@ export default function ProjectsPage() {
           {projectId ? (
             <div className="mx-auto flex w-full max-w-[780px] flex-col gap-8 pt-4">
               <div className="flex items-center gap-3 text-white">
+                <button
+                  onClick={() => useChatStore.getState().setSidebarOpen(true)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300 transition-all hover:bg-white/10 hover:text-white lg:hidden"
+                  title="Open sidebar"
+                >
+                  <Menu size={18} />
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -411,7 +417,7 @@ export default function ProjectsPage() {
                   <ArrowLeft size={18} />
                 </button>
                 <Folder size={28} strokeWidth={1.8} className="text-slate-200" />
-                <h2 className="text-4xl font-medium tracking-tight text-white capitalize">
+                <h2 className="text-2xl md:text-4xl font-medium tracking-tight text-white capitalize truncate flex-1">
                   {selectedProject?.name || "Loading project"}
                 </h2>
               </div>
@@ -455,7 +461,7 @@ export default function ProjectsPage() {
                     <div
                       key={chat._id}
                       onClick={() => openProjectChat(chat._id)}
-                      className="group relative flex w-full cursor-pointer items-start justify-between border-b border-white/10 py-4 px-2 transition-all duration-200 hover:bg-white/[0.03] hover:px-4 rounded-xl"
+                      className="group relative flex w-full cursor-pointer items-start justify-between border-b border-white/10 py-4 px-3 transition-all duration-200 hover:bg-white/[0.03] rounded-xl"
                     >
                       <div className="flex-1 min-w-0 pr-6 text-left">
                         <p className="truncate text-[15px] font-semibold text-white">
@@ -466,14 +472,14 @@ export default function ProjectsPage() {
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 pt-1">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="opacity-100 lg:opacity-0 transition-opacity lg:group-hover:opacity-100">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button 
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-all"
+                                className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-all lg:h-7 lg:w-7"
                               >
-                                <MoreVertical size={14} />
+                                <MoreVertical size={16} />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
@@ -504,7 +510,7 @@ export default function ProjectsPage() {
 
                         <span className="text-sm text-slate-400">
                           {chat.updatedAt
-                            ? new Date(chat.updatedAt).toLocaleDateString(undefined, {
+                             ? new Date(chat.updatedAt).toLocaleDateString(undefined, {
                                 month: "short",
                                 day: "numeric",
                               })
@@ -535,7 +541,7 @@ export default function ProjectsPage() {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200 p-4">
           <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-white/5 bg-slate-900 p-6 shadow-2xl shadow-black/80 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-emerald-400">
@@ -593,7 +599,7 @@ export default function ProjectsPage() {
       )}
 
       {isRenameModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200 p-4">
           <div className="flex w-full max-w-md flex-col gap-5 rounded-3xl border border-white/5 bg-slate-900 p-6 shadow-2xl shadow-black/80 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-widest text-slate-400">

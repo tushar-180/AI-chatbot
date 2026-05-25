@@ -31,7 +31,7 @@ const Landing = () => {
       </div>
 
       {/* 4. Minimalist Navbar */}
-      <nav className="fixed top-0 z-50 flex w-full items-center justify-between px-12 py-10">
+      <nav className="fixed top-0 z-50 flex w-full items-center justify-between px-6 py-6 md:px-12 md:py-10">
         <div className="flex items-center gap-3 animate-in fade-in duration-700 ease-out">
           <img src="/logo.png" alt="Velora Logo" className="h-6 w-6 object-contain" />
           <span className="font-display text-lg font-bold tracking-tight">
@@ -82,14 +82,14 @@ const Landing = () => {
         </div>
 
         {/* 6. Elegant Status Indicator (Fixed bottom) */}
-        <div className="absolute bottom-12 left-12 flex items-center gap-4 opacity-0 animate-fade-in-up" style={{ animationDelay: "1.2s" }}>
+        <div className="absolute bottom-12 left-12 hidden md:flex items-center gap-4 opacity-0 animate-fade-in-up" style={{ animationDelay: "1.2s" }}>
           <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_#10b981]" />
           <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-700">
             Velora Core v2.4
           </span>
         </div>
 
-        <div className="absolute bottom-12 right-12 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: "1.2s" }}>
+        <div className="absolute bottom-12 right-12 hidden md:block text-[10px] font-bold uppercase tracking-[0.3em] text-slate-700 opacity-0 animate-fade-in-up" style={{ animationDelay: "1.2s" }}>
           Ready for deployment
         </div>
       </main>

@@ -119,6 +119,21 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
   );
 };
 
+const ALLOWED_HTML_TAGS = new Set([
+  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
+  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
+  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+]);
+
+function escapeUnrecognizedHtmlTags(text: string): string {
+  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
+    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+      return match;
+    }
+    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+  });
+}
+
 const GroupMessageItem = ({
   message: msg,
   onCitationClick,
@@ -316,6 +331,9 @@ const GroupMessageItem = ({
       },
     );
   }
+
+  // Escape any unrecognized HTML tags to prevent custom element warning in React & preserve plain text display
+  processedContent = escapeUnrecognizedHtmlTags(processedContent);
 
   const citationComponents = isAssistant
     ? {

@@ -55,7 +55,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white md:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white lg:hidden"
           >
             <Menu size={16} />
           </button>
@@ -73,7 +73,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
                   navigate("/chat");
                 }
               }}
-              className="hidden md:flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
               title={activeProjectId ? "Back to project" : "Back to new chat"}
             >
               <ChevronLeft size={16} />

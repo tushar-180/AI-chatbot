@@ -5,7 +5,7 @@ import { useGroupStore } from "../store/useGroupStore";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { UserButton, useUser } from "@clerk/react";
+import { useUser } from "@clerk/react";
 
 import DeleteConfirmModal from "./DeleteConfirmModal";
 
@@ -58,7 +58,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white md:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white lg:hidden"
           >
             <Menu size={16} />
           </button>
@@ -70,8 +70,8 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
                 {group.title}
               </h1>
             </div>
-            <div className="h-1 w-1 rounded-full bg-white/20" />
-            <span className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
+            <div className="h-1 hidden md:flex w-1 rounded-full bg-white/20" />
+            <span className="hidden md:flex text-[10px] font-medium uppercase tracking-widest text-slate-500">
               {group.members.length} Members
             </span>
           </div>
@@ -95,14 +95,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
             <LogOut size={16} />
           </button>
 
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonAvatarBox: "h-7 w-7",
-                userButtonTrigger: "h-8 w-8",
-              },
-            }}
-          />
+          
         </div>
       </div>
 

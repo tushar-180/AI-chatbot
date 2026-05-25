@@ -127,11 +127,11 @@ const WebSearchToggle = ({
       }}
       aria-pressed={enabled}
       className={`
-                flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all
+                flex items-center gap-1.5 lg:gap-2 rounded-lg border px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest transition-all cursor-pointer
                 ${
                   enabled
                     ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
-                    : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                    : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
                 }
                 ${disabled ? "opacity-40 cursor-not-allowed" : ""}
             `}
@@ -183,18 +183,20 @@ const ModelSelector = ({
     selectedProvider;
 
   return (
-    <div className="flex items-center gap-2 px-4 pt-3 ">
+    <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-slate-400 lg:text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white cursor-pointer"
           >
             {getProviderIcon(selectedProvider, 12)}
-            <span>{getModelOnlyName(currentProviderName)}</span>
+            <span className="max-w-[100px] lg:max-w-none truncate">
+              {getModelOnlyName(currentProviderName)}
+            </span>
             <ChevronDown
               size={10}
-              className="ml-0.5 text-slate-600 transition-colors"
+              className="ml-0.5 text-slate-500 transition-colors"
             />
           </button>
         </DropdownMenuTrigger>
@@ -469,10 +471,10 @@ const InputArea = ({
   };
 
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 not-selectable">
+    <div className="sticky bottom-0 z-30 pb-8 px-4 lg:px-10 not-selectable">
       {isArchived ? (
-        <div className="mx-auto max-w-4xl  px-4 md:px-0">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 md:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
+        <div className="mx-auto max-w-4xl  px-4 lg:px-0">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 lg:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
             <div className="flex items-center gap-4">
               <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
                 <Archive size={20} />
@@ -488,7 +490,7 @@ const InputArea = ({
             </div>
             <button
               onClick={onUnarchive}
-              className="w-full md:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
+              className="w-full lg:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
             >
               <ArrowUp size={14} className="rotate-180" />
               <span>Restore to continue</span>
@@ -575,7 +577,7 @@ const InputArea = ({
                 </div>
               )}
 
-              <div className="flex items-end gap-2 pr-2">
+              <div className="flex items-end gap-1.5 lg:gap-2 pr-2 pb-1.5 lg:pb-2 pl-2 lg:pl-0">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -589,7 +591,7 @@ const InputArea = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50"
+                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full mb-1 lg:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
                     aria-label="Upload image"
                   >
                     {isUploading ? (
@@ -630,84 +632,90 @@ const InputArea = ({
                       });
                     }
                   }}
-                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent px-2 lg:px-1 py-2 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
                 />
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isListening) {
-                      stop();
-                    } else {
-                      start();
-                    }
-                  }}
-                  className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                    isListening
-                      ? "bg-rose-500/20 text-rose-400"
-                      : "text-slate-500 hover:bg-white/5 hover:text-white"
-                  }`}
-                  aria-label="Voice input"
-                >
-                  {isListening && !isSpeaking && (
-                    <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
-                  )}
 
-                  {isSpeaking && (
-                    <>
-                      <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
-                      <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
-                    </>
-                  )}
-
-                  <span className="relative z-10 flex items-center justify-center">
-                    {isListening ? (
-                      <Square size={14} fill="currentColor" />
-                    ) : (
-                      <Mic size={18} />
-                    )}
-                  </span>
-                </button>
-                {isStreaming ? (
+                <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
+                  {/* Mic button */}
                   <button
                     type="button"
-                    onClick={onStop}
-                    className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
-                    aria-label="Stop generation"
-                  >
-                    <Square
-                      size={14}
-                      fill="currentColor"
-                      className="transition-colors group-hover:text-rose-600"
-                    />
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={
-                      loading ||
-                      isUploading ||
-                      (!input.trim() &&
-                        attachments.length === 0 &&
-                        !selectionContext &&
-                        !attachedFile)
-                    }
-                    className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                      loading ||
-                      isUploading ||
-                      (!input.trim() &&
-                        attachments.length === 0 &&
-                        !selectionContext)
-                        ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                        : "bg-white text-slate-900 hover:bg-slate-200"
+                    onClick={() => {
+                      if (isListening) {
+                        stop();
+                      } else {
+                        start();
+                      }
+                    }}
+                    className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
+                      isListening
+                        ? "bg-rose-500/20 text-rose-400"
+                        : "text-slate-500 hover:bg-white/5 hover:text-white"
                     }`}
+                    aria-label="Voice input"
                   >
-                    {loading ? (
-                      <Loader2 size={18} className="animate-spin" />
-                    ) : (
-                      <ArrowUp size={18} strokeWidth={2.5} />
+                    {isListening && !isSpeaking && (
+                      <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
                     )}
+
+                    {isSpeaking && (
+                      <>
+                        <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
+                        <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
+                      </>
+                    )}
+
+                    <span className="relative z-10 flex items-center justify-center">
+                      {isListening ? (
+                        <Square size={14} fill="currentColor" />
+                      ) : (
+                        <Mic size={18} />
+                      )}
+                    </span>
                   </button>
-                )}
+
+                  {/* Send / Stop button */}
+                  {isStreaming ? (
+                    <button
+                      type="button"
+                      onClick={onStop}
+                      className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
+                      aria-label="Stop generation"
+                    >
+                      <Square
+                        size={14}
+                        fill="currentColor"
+                        className="transition-colors group-hover:text-rose-600"
+                      />
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={
+                        loading ||
+                        isUploading ||
+                        (!input.trim() &&
+                          attachments.length === 0 &&
+                          !selectionContext &&
+                          !attachedFile)
+                      }
+                      className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 cursor-pointer ${
+                        loading ||
+                        isUploading ||
+                        (!input.trim() &&
+                          attachments.length === 0 &&
+                          !selectionContext)
+                          ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                          : "bg-white text-slate-900 hover:bg-slate-200"
+                      }`}
+                    >
+                      {loading ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <ArrowUp size={18} strokeWidth={2.5} />
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </form>

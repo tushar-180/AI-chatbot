@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   Activity,
   ChevronDown,
@@ -75,16 +76,16 @@ const ParameterBadge = ({
   required: boolean;
 }) => (
   <span
-    className={`rounded-md border px-2 py-1 font-mono text-[10px] ${
+    className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 font-mono text-[10px] ${
       required
         ? "border-sky-400/20 bg-sky-400/10 text-sky-300"
         : "border-white/5 bg-slate-950/70 text-slate-400"
     }`}
     title={`${name}: ${property.type || "any"}${required ? " (required)" : ""}${property.description ? ` - ${property.description}` : ""}`}
   >
-    {name}
+    <span className="truncate">{name}</span>
     {required ? "*" : ""}
-    <span className="ml-1 text-slate-500">({property.type || "any"})</span>
+    <span className="ml-1 shrink-0 text-slate-500">({property.type || "any"})</span>
   </span>
 );
 
@@ -94,7 +95,7 @@ const ToolCard = ({ tool }: { tool: McpTool }) => {
   const parameterEntries = Object.entries(properties);
 
   return (
-    <div className="rounded-lg border border-white/5 bg-slate-900/40 p-3 transition hover:border-sky-400/20">
+    <div className="min-w-0 w-full rounded-lg border border-white/5 bg-slate-900/40 p-3 transition hover:border-sky-400/20">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-300">
           <Wrench size={14} />
@@ -109,11 +110,11 @@ const ToolCard = ({ tool }: { tool: McpTool }) => {
       )}
 
       {parameterEntries.length > 0 && (
-        <div className="mt-3 border-t border-white/5 pt-3">
+        <div className="mt-3 border-t border-white/5 pt-3 min-w-0">
           <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
             Parameters
           </span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 min-w-0">
             {parameterEntries.map(([name, property]) => (
               <ParameterBadge
                 key={name}
@@ -146,9 +147,22 @@ const McpServerCard = ({
   const args = Array.isArray(server.args) ? server.args : [];
   const envEntries = server.env ? Object.entries(server.env) : [];
   const TransportIcon = server.type === "stdio" ? Terminal : Globe;
+  const cardRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (isExpanded && cardRef.current) {
+      const timer = setTimeout(() => {
+        cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpanded]);
 
   return (
-    <article className="rounded-lg border border-white/5 bg-slate-950/70 shadow-xl shadow-black/10 transition hover:border-white/10">
+    <article
+      ref={cardRef}
+      className="rounded-lg border border-white/5 bg-slate-950/70 shadow-xl shadow-black/10 transition hover:border-white/10"
+    >
       <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -320,6 +334,20 @@ const McpServerCard = ({
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="mt-5 flex justify-end border-t border-white/5 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                onToggleExpand(server.name);
+                cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }}
+              className="flex h-9 items-center gap-2 rounded-lg border border-white/5 bg-slate-900/50 hover:bg-slate-900/80 px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition hover:border-indigo-500/20 w-full justify-center sm:w-auto cursor-pointer"
+            >
+              <span>Collapse Details</span>
+              <ChevronDown size={14} className="rotate-180" />
+            </button>
           </div>
         </div>
       )}
