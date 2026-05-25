@@ -12,14 +12,28 @@ import {
   RotateCcw,
   ThumbsUp,
   ThumbsDown,
+  Globe,
+  Sparkles,
+  Paperclip,
+  Loader2,
+  FileText,
 } from "lucide-react";
+
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
+import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 
 import { assistantMarkdownComponents } from "./MarkdownConfig";
+import { supportsVision } from "@/features/chat/constants/chat.constants";
 
+import type { Attachment } from "../types/chat.types";
 import type { GroupMessage } from "../store/useGroupStore";
 
 interface GroupMessageItemProps {
@@ -28,13 +42,58 @@ interface GroupMessageItemProps {
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: any[], activeId?: number) => void;
 
-  onEdit?: (content: string) => void;
+  onEdit?: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[], attachedFile?: File | null) => void;
   onEditStart?: () => void;
 
   onRetry?: () => void;
 
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
 }
+
+interface Provider {
+  id: string;
+  name: string;
+}
+
+const getProviderIcon = (providerId: string, size = 14) => {
+  const p = providerId.split(":")[0].toLowerCase();
+  const mapping: Record<string, React.ComponentType<{ size?: number }>> = {
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
+  };
+  const Icon = mapping[p];
+  return Icon ? <Icon size={size} /> : null;
+};
+
+const getCleanModelName = (id: string) => {
+  const afterColon = id.includes(":") ? id.split(":")[1] : id;
+  return afterColon.includes("/") ? afterColon.split("/").pop() || afterColon : afterColon;
+};
+
+const WebSearchToggle = ({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: (enabled: boolean) => void;
+}) => {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(!enabled)}
+      className={`flex items-center gap-2 rounded-lg border transition-all px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+        enabled
+          ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200 shadow-[0_0_10px_rgba(52,211,153,0.15)]"
+          : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+      }`}
+    >
+      <Globe size={12} className="shrink-0" />
+      <span>Web Search</span>
+    </button>
+  );
+};
 
 const MessageAvatar = ({
   isUser,
@@ -137,14 +196,31 @@ const GroupMessageItem = ({
   const isUser = msg.role === "user";
 
   const isFailed = msg.status === "failed";
+  const isEdited = Boolean(msg.role === "user" && msg.updatedAt && msg.createdAt && new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() > 2000);
 
   const [isExpanded, setIsExpanded] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(msg.content);
 
-  const [copied, setCopied] = useState(false);
+  const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [filterText, setFilterText] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const activeItemRef = useRef<HTMLButtonElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  const [copied, setCopied] = useState(false);
 
   const CHAR_LIMIT = 500;
   const needsToggle = msg.content.length > CHAR_LIMIT;
@@ -154,15 +230,161 @@ const GroupMessageItem = ({
       textareaRef.current.focus();
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      
+      const fetchProviders = async () => {
+        try {
+          const res = await api.get("/ai/providers");
+          const rawProviders: Provider[] = res.data.providers || [];
+          const defaultModelId = "gemini:gemini-3.1-flash-lite-preview";
+          const defaultModel = rawProviders.find(p => p.id === defaultModelId);
+          let sortedProviders = [...rawProviders];
+          if (defaultModel) {
+            sortedProviders = [defaultModel, ...rawProviders.filter(p => p.id !== defaultModelId)];
+          }
+          setAvailableProviders(sortedProviders);
+        } catch (err) {
+          console.error("Error fetching providers", err);
+        }
+      };
+      fetchProviders();
     }
   }, [isEditing]);
-  const messageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowModelDropdown(false);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+    if (backdropRef.current && textareaRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, [editContent]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [filterText]);
+
+  useEffect(() => {
+    if (activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeIndex]);
+
+  const hasAiMention = (text: string): boolean => {
+    const mentions: string[] = text.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+    return mentions.some((m) => {
+      const mentionText = m.substring(1).toLowerCase();
+      return (
+        mentionText === "velora" ||
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+        })
+      );
+    });
+  };
+
+  const hasMention = hasAiMention(editContent);
+
+  const getMentionedModelId = () => {
+    const mentions: string[] = editContent.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+    for (const m of mentions) {
+      const mentionText = m.substring(1).toLowerCase();
+      if (mentionText === "velora") return "velora";
+      const provider = availableProviders.find((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      });
+      if (provider) return provider.id;
+    }
+    return null;
+  };
+
+  const mentionedModelId = getMentionedModelId();
+  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : true;
+
+  useEffect(() => {
+    if (!hasMention) {
+      setWebSearchEnabled(false);
+    }
+    if (!canUpload) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  }, [hasMention, canUpload]);
+
+  const highlightMentions = (text: string) => {
+    if (!text) return null;
+    const parts: React.ReactNode[] = [];
+    // Capture @word tokens, including an optional trailing space to detect "completed" mentions
+    const regex = /(@[a-zA-Z0-9-:_/.]+)(\s?)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Push text before this match
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
+      }
+
+      const fullToken = match[1]; // e.g. "@gemini-2.0-flash"
+      const trailingSpace = match[2]; // "" or " "
+      const mentionText = fullToken.substring(1).toLowerCase();
+
+      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      });
+
+      // Check if user is still typing (partial prefix, no trailing space)
+      const isPartialMatch = !trailingSpace && !isValidModel && availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
+      });
+
+      if (isValidModel) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isPartialMatch) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400/60 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else {
+        parts.push(fullToken + trailingSpace);
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    // Push remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts;
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content);
-
     setCopied(true);
-
     setTimeout(() => {
       setCopied(false);
     }, 2000);
@@ -171,14 +393,14 @@ const GroupMessageItem = ({
   const handleEditStart = () => {
     setIsEditing(true);
     setEditContent(msg.content);
-
+    setAttachments(msg.attachments || []);
+    setAttachedFile(null);
     onEditStart?.();
   };
 
   const handleExpantion = () => {
     if (isExpanded) {
       setIsExpanded(false);
-
       requestAnimationFrame(() => {
         setTimeout(() => {
           messageRef.current?.scrollIntoView({
@@ -195,23 +417,199 @@ const GroupMessageItem = ({
   const handleEditCancel = () => {
     setIsEditing(false);
     setEditContent(msg.content);
+    setShowModelDropdown(false);
+    setFilterText("");
+    setAttachedFile(null);
   };
 
   const handleEditSave = () => {
-    if (editContent.trim() && editContent !== msg.content) {
-      onEdit?.(editContent);
+    const contentChanged = editContent.trim() !== msg.content;
+    const attachmentsChanged =
+      JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
+    const hasNewFile = Boolean(attachedFile);
+
+    if (!editContent.trim()) {
+      setIsEditing(false);
+      setShowModelDropdown(false);
+      return;
     }
 
+    if (contentChanged || attachmentsChanged || hasNewFile) {
+      onEdit?.(editContent, webSearchEnabled, attachments, attachedFile);
+    }
     setIsEditing(false);
+    setShowModelDropdown(false);
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type.startsWith("image/")) {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      setIsUploading(true);
+      try {
+        const res = await api.post("/upload/image", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        const newAttachment: Attachment = {
+          url: res.data.url,
+          name: file.name,
+          mimeType: file.type,
+          size: file.size,
+        };
+
+        setAttachments((prev) => [...prev, newAttachment]);
+      } catch (err) {
+        console.error("Failed to upload image:", err);
+      } finally {
+        setIsUploading(false);
+      }
+    } else {
+      setAttachedFile(file);
+      const newDocAttachment: Attachment = {
+        url: "",
+        name: file.name,
+        mimeType: file.type,
+        size: file.size,
+      };
+      setAttachments((prev) => [...prev, newDocAttachment]);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => {
+      const updated = [...prev];
+      const removed = updated.splice(index, 1)[0];
+      if (attachedFile && removed.name === attachedFile.name) {
+        setAttachedFile(null);
+      }
+      return updated;
+    });
+  };
+
+  const handleSelectModel = (cleanModelName: string) => {
+    if (!textareaRef.current) return;
+    const selectionStart = textareaRef.current.selectionStart;
+    const textBeforeCursor = editContent.substring(0, selectionStart);
+    const textAfterCursor = editContent.substring(selectionStart);
+    const lastAtPos = textBeforeCursor.lastIndexOf("@");
+    if (lastAtPos !== -1) {
+      const textBeforeAt = editContent.substring(0, lastAtPos);
+      const textAfterAt = editContent.substring(selectionStart);
+      const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
+      const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+      const hasAnotherModel = otherMentions.some((m) => {
+        const mentionText = m.substring(1).toLowerCase();
+        return mentionText === "velora" || availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+        });
+      });
+      if (hasAnotherModel) {
+        toast.error("Multiple AI model mentions are not allowed");
+        setShowModelDropdown(false);
+        return;
+      }
+      const insertText = `@${cleanModelName} `;
+      const newInput = editContent.substring(0, lastAtPos) + insertText + textAfterCursor;
+      setEditContent(newInput);
+      setShowModelDropdown(false);
+      setFilterText("");
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const newCursorPos = lastAtPos + insertText.length;
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }, 50);
+    }
+  };
+
+  const filteredProviders = availableProviders.filter((p) => {
+    const cleanModelName = getCleanModelName(p.id).toLowerCase();
+    const searchString = `${cleanModelName} ${p.name}`.toLowerCase();
+    return searchString.includes(filterText);
+  });
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showModelDropdown && filteredProviders.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev + 1) % filteredProviders.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev - 1 + filteredProviders.length) % filteredProviders.length);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        setActiveIndex((prev) => e.shiftKey ? (prev - 1 + filteredProviders.length) % filteredProviders.length : (prev + 1) % filteredProviders.length);
+        return;
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const selectedModel = filteredProviders[activeIndex];
+        if (selectedModel) {
+          handleSelectModel(getCleanModelName(selectedModel.id));
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowModelDropdown(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleEditSave();
     } else if (e.key === "Escape") {
       handleEditCancel();
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setEditContent(value);
+    const selectionStart = e.target.selectionStart;
+    const textBeforeCursor = value.substring(0, selectionStart);
+    const words = textBeforeCursor.split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    if (lastWord.startsWith("@")) {
+      setShowModelDropdown(true);
+      setFilterText(lastWord.substring(1).toLowerCase());
+    } else {
+      setShowModelDropdown(false);
+      setFilterText("");
+    }
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    if (backdropRef.current) {
+      backdropRef.current.scrollTop = e.currentTarget.scrollTop;
+      backdropRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  };
+
+  const sharedTextStyles: React.CSSProperties = {
+    lineHeight: "1.5rem",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    fontWeight: "inherit",
+    letterSpacing: "inherit",
+    boxSizing: "border-box",
+    margin: 0,
   };
 
   if (isSystem) {
@@ -247,7 +645,12 @@ const GroupMessageItem = ({
 
   const renderUsername = () => {
     if (isMe) {
-      return <span className="text-emerald-400 ">You</span>;
+      return (
+        <span className="flex items-center gap-1">
+          {isEdited && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
+          <span className="text-emerald-400">You</span>
+        </span>
+      );
     }
 
     const name = msg.username || "Velora";
@@ -277,16 +680,19 @@ const GroupMessageItem = ({
     }
 
     return (
-      <span
-        className={
-          isAssistant
-            ? isFailed
-              ? "text-red-400"
-              : "text-slate-500"
-            : "text-slate-400"
-        }
-      >
-        {name}
+      <span className="flex items-center gap-1">
+        <span
+          className={
+            isAssistant
+              ? isFailed
+                ? "text-red-400"
+                : "text-slate-500"
+              : "text-slate-400"
+          }
+        >
+          {name}
+        </span>
+        {isEdited && !isAssistant && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
       </span>
     );
   };
@@ -308,11 +714,21 @@ const GroupMessageItem = ({
           match.startsWith("\r");
 
         const mentionText = match.trim();
+        const modelName = mentionText.substring(1).toLowerCase();
 
-        return (
-          (hasLeadingSpace ? " " : "") +
-          `<span class="text-emerald-400 font-medium">${mentionText}</span>`
-        );
+        const isValidModel = modelName === "velora" || availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return cleanName === modelName || p.id.toLowerCase() === modelName;
+        });
+
+        if (isValidModel) {
+          return (
+            (hasLeadingSpace ? " " : "") +
+            `<span class="text-emerald-400 font-medium">${mentionText}</span>`
+          );
+        }
+
+        return match;
       },
     );
   }
@@ -385,46 +801,181 @@ const GroupMessageItem = ({
             ref={messageRef}
             className={`transition-opacity duration-150 ease-out ${
               isMe
-                ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
+                ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
                 : isFailed
-                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
+                  ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm`
                   : isAssistant
-                    ? "w-full max-w-full min-w-0 overflow-hidden py-1 text-base leading-[1.8] text-slate-200"
-                    : "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm"
+                    ? `w-full max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} py-1 text-base leading-[1.8] text-slate-200`
+                    : `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
             }`}
           >
             {isEditing ? (
-              <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
-                <textarea
-                  ref={textareaRef}
-                  value={editContent}
-                  onChange={(e) => {
-                    setEditContent(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
-                  }}
-                  onKeyDown={handleKeyDown}
-                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
-                  rows={1}
-                />
-
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleEditCancel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+              <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px] relative">
+                {showModelDropdown && filteredProviders.length > 0 && (
+                  <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
+                    <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={10} className="text-emerald-400" />
+                        Choose AI Model
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowModelDropdown(false)}
+                        className="text-slate-600 hover:text-white transition-colors text-[10px]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="space-y-0.5">
+                      {filteredProviders.map((p, index) => {
+                        const cleanModelName = getCleanModelName(p.id);
+                        const isActive = index === activeIndex;
+                        return (
+                          <button
+                            key={p.id}
+                            ref={isActive ? activeItemRef : undefined}
+                            type="button"
+                            onClick={() => handleSelectModel(cleanModelName)}
+                            data-active={isActive}
+                            className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
+                              isActive 
+                                ? "bg-white text-black font-semibold shadow-md shadow-white/5" 
+                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                            }`}
+                          >
+                            {getProviderIcon(p.id, 12)}
+                            <span className="truncate capitalize">
+                              @{cleanModelName}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {attachments.map((attachment, index) => (
+                      <div key={index} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(index)}
+                          className="absolute -right-2 -top-2 z-10 hidden h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-slate-400 hover:text-white group-hover:flex border border-white/10"
+                        >
+                          <X size={12} />
+                        </button>
+                        {attachment.mimeType?.startsWith("image/") ? (
+                          <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10">
+                            <img
+                              src={attachment.url || (attachedFile ? URL.createObjectURL(attachedFile) : "")}
+                              alt={attachment.name}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-16 w-48 items-center gap-3 rounded-lg border border-white/10 bg-white/5 p-2">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-indigo-500/20 text-indigo-400">
+                              <FileText size={20} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-white">
+                                {attachment.name}
+                              </p>
+                              {attachment.size && (
+                                <p className="text-[10px] text-slate-400">
+                                  {(attachment.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="relative w-full rounded-2xl border border-white/20 bg-white/5 ring-1 ring-white/5">
+                  <div
+                    ref={backdropRef}
+                    className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-4 py-3.5 text-[0.95rem] md:text-base text-slate-100 bg-transparent"
+                    style={sharedTextStyles}
                   >
-                    <X size={14} />
-                    Cancel
-                  </button>
+                    {highlightMentions(editContent)}
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    value={editContent}
+                    onFocus={() => setIsFocused(true)}
+                    onBlur={() => setIsFocused(false)}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    onScroll={handleScroll}
+                    onCopy={(e) => {
+                      if (!isFocused) e.preventDefault();
+                    }}
+                    onSelect={(e) => {
+                      if (!isFocused) {
+                        const el = e.currentTarget;
+                        requestAnimationFrame(() => el.selectionStart = el.selectionEnd);
+                      }
+                    }}
+                    className={`${ isFocused ? "" : "selection:bg-transparent select-none" } not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-base text-transparent caret-white placeholder-slate-500 outline-none focus:ring-0 overflow-y-auto block min-h-[1.5em] border-none`}
+                    rows={1}
+                    style={sharedTextStyles}
+                  />
+                </div>
 
-                  <button
-                    onClick={handleEditSave}
-                    disabled={!editContent.trim()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
-                  >
-                    <Check size={14} />
-                    Save
-                  </button>
+                <div className="flex justify-between items-center mt-1">
+                  <div className="flex items-center gap-2">
+                    {hasMention && (
+                      <WebSearchToggle
+                        enabled={webSearchEnabled}
+                        onToggle={setWebSearchEnabled}
+                      />
+                    )}
+                    {canUpload && (
+                      <>
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                          className="hidden"
+                          accept="image/*,.pdf,.doc,.docx,.txt"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isUploading}
+                          className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                        >
+                          {isUploading ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Paperclip size={14} />
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={handleEditCancel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
+
+                    <button
+                      onClick={handleEditSave}
+                      disabled={!editContent.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                    >
+                      <Check size={14} />
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : isFailed ? (

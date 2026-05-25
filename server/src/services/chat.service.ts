@@ -1215,6 +1215,8 @@ export const chatService = {
     content,
     provider,
     webSearchEnabled,
+    attachments,
+    attachedFile,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const chat = await requireChat(chatId);
@@ -1222,11 +1224,21 @@ export const chatService = {
     // Delete all messages after this one
     await chatRepository.deleteMessagesAfter(chatId, messageId);
 
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+
     // Update the message itself
     await chatRepository.updateMessage(messageId, {
       content: trimmedMessage,
+      attachments: allAttachments as any,
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
+        fileText,
       },
     });
 
@@ -1298,6 +1310,8 @@ export const chatService = {
     provider,
     requestId,
     webSearchEnabled,
+    attachments,
+    attachedFile,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const resolvedRequestId = requireRequestId(requestId);
@@ -1306,11 +1320,21 @@ export const chatService = {
     // Delete all messages after this one
     await chatRepository.deleteMessagesAfter(chatId, messageId);
 
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+
     // Update the message itself
     await chatRepository.updateMessage(messageId, {
       content: trimmedMessage,
+      attachments: allAttachments as any,
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
+        fileText,
       },
     });
 

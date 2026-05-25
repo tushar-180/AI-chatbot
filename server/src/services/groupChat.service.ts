@@ -48,6 +48,7 @@ export class GroupChatService {
       status: message.status,
       type: message.type,
       createdAt: message.createdAt.toISOString(),
+      updatedAt: message.updatedAt ? message.updatedAt.toISOString() : message.createdAt.toISOString(),
       metadata: message.metadata,
       sources: message.metadata?.sources || undefined,
       attachments: message.attachments || [],
@@ -754,18 +755,54 @@ export class GroupChatService {
     content: string,
     targetProvider?: string,
     webSearchEnabled = false,
+    attachments: any[] = [],
+    attachedFile: Express.Multer.File | null = null,
   ) {
     const message = await GroupMessage.findById(messageId);
     if (!message) throw new Error("Message not found");
 
-    // Delete all messages after this one
-    await GroupMessage.deleteMany({
-      groupId,
-      createdAt: { $gt: message.createdAt },
-    });
+    // Check if it's an AI mention
+    const match = content.match(/@([a-zA-Z0-9-:_/.]+)/);
+    let isAiMention = false;
+    if (match) {
+      const mention = match[1].toLowerCase();
+      const allProviders = aiService.getAvailableProviders();
+      isAiMention =
+        mention === "velora" ||
+        allProviders.some((p) => {
+          const cleanName = p.id
+            .split(":")
+            .pop()
+            ?.split("/")
+            .pop()
+            ?.toLowerCase();
+          return cleanName === mention || p.id.toLowerCase() === mention;
+        });
+    }
+
+    if (isAiMention) {
+      // Delete all messages after this one
+      await GroupMessage.deleteMany({
+        groupId,
+        createdAt: { $gt: message.createdAt },
+      });
+    }
+
+    // Handle attachments
+    let messageAttachments = [...attachments];
+
+    if (attachedFile) {
+      try {
+        const result = await processAttachedFile(attachedFile, message.userId, messageAttachments);
+        messageAttachments = result.attachments;
+      } catch (err: any) {
+        console.error("Failed to process attached file for edited group message:", err);
+      }
+    }
 
     // Update the message itself
     message.content = content;
+    message.attachments = messageAttachments as any;
     message.metadata = {
       ...message.metadata,
       webSearchEnabled: Boolean(webSearchEnabled),
@@ -778,23 +815,24 @@ export class GroupChatService {
       message: this.serializeGroupMessage(message),
     });
 
-    // Delete subsequent messages locally on all clients
-    groupSocketManager.broadcast(groupId, {
-      type: "messages_deleted_after",
-      messageId,
-      createdAt: message.createdAt.toISOString(),
-    });
+    if (isAiMention) {
+      // Delete subsequent messages locally on all clients
+      groupSocketManager.broadcast(groupId, {
+        type: "messages_deleted_after",
+        messageId,
+        createdAt: message.createdAt.toISOString(),
+      });
 
-    // Trigger AI response regeneration
-    groupSocketManager.broadcast(groupId, {
-      type: "ai_thinking",
-      isThinking: true,
-      webSearchEnabled,
-    });
+      groupSocketManager.broadcast(groupId, {
+        type: "ai_thinking",
+        isThinking: true,
+        webSearchEnabled,
+      });
 
-    this.handleAiResponse(groupId, content, webSearchEnabled, message.userId).catch(
-      console.error,
-    );
+      this.handleAiResponse(groupId, content, webSearchEnabled, message.userId).catch(
+        console.error,
+      );
+    }
 
     return message;
   }

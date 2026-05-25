@@ -50,8 +50,8 @@ router.post("/:id/pin", ChatController.pinChat);
 router.post("/:id/unpin", ChatController.unpinChat);
 
 // Edit message
-router.patch("/:id/messages/:messageId", ChatController.editMessage);
-router.patch("/:id/messages/:messageId/stream", ChatController.streamEditMessage);
+router.patch("/:id/messages/:messageId", upload.single('file'), ChatController.editMessage);
+router.patch("/:id/messages/:messageId/stream", upload.single('file'), ChatController.streamEditMessage);
 
 // Retry message
 router.post("/:id/messages/:messageId/retry", ChatController.retryMessage);

@@ -16,7 +16,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 interface GroupMessageListProps {
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: any[], activeId?: number) => void;
-  onEditMessage?: (messageId: string, content: string) => void;
+  onEditMessage?: (messageId: string, content: string, webSearchEnabled?: boolean, attachments?: any[], attachedFile?: File | null) => void;
   onEditStart?: () => void;
   onRetryMessage?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
@@ -115,9 +115,24 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
   useEffect(() => {
     const container = getScrollContainer();
     if (!container) return;
+    
     container.addEventListener("scroll", handleScroll);
+    
+    const observer = new ResizeObserver(() => {
+      handleScroll();
+    });
+    
+    observer.observe(container);
+    if (container.firstElementChild) {
+      observer.observe(container.firstElementChild);
+    }
+    
     handleScroll();
-    return () => container.removeEventListener("scroll", handleScroll);
+    
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      observer.disconnect();
+    };
   }, [getScrollContainer, handleScroll]);
 
   // CLEAR HIGHLIGHT ON CLICK OR AFTER 3s
@@ -271,7 +286,7 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                   message={msg}
                   onCitationClick={onCitationClick}
                   onSourcesClick={onSourcesClick}
-                  onEdit={(content) => onEditMessage?.(msg._id, content)}
+                  onEdit={(content, webSearchEnabled, attachments, attachedFile) => onEditMessage?.(msg._id, content, webSearchEnabled, attachments, attachedFile)}
                   onEditStart={onEditStart}
                   onRetry={() => onRetryMessage?.(msg._id)}
                   onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}

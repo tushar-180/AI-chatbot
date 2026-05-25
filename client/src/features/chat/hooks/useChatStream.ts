@@ -9,7 +9,7 @@ import {
 } from "@/features/chat/services/chat.service";
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
-import type { WebSource } from "../types/chat.types";
+import type { Attachment, WebSource } from "../types/chat.types";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
 
@@ -1122,6 +1122,8 @@ export const useChatStream = (hookOptions?: {
     provider: string,
     options?: {
       webSearchEnabled?: boolean;
+      attachments?: Attachment[];
+      attachedFile?: File | null;
     },
   ) => {
     if (!newContent.trim()) return;
@@ -1154,7 +1156,14 @@ export const useChatStream = (hookOptions?: {
     const editedUserMessage: Message = {
       ...currentMessages[messageIndex],
       content: newContent,
+      attachments: options?.attachments,
       status: "completed",
+      updatedAt: new Date(
+        Math.max(
+          Date.now(),
+          new Date(currentMessages[messageIndex].createdAt || 0).getTime() + 3000
+        )
+      ).toISOString(),
     };
 
     const assistantPlaceholder: Message = {
@@ -1187,21 +1196,41 @@ export const useChatStream = (hookOptions?: {
         }
       }, 35000);
 
-      const response = await fetch(url, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-          "Cache-Control": "no-cache",
-          Authorization: `Bearer ${await getToken()}`,
-        },
-        signal: abortController.signal,
-        body: JSON.stringify({
+      let body: any;
+      const headers: any = {
+        Accept: "text/event-stream",
+        "Cache-Control": "no-cache",
+        Authorization: `Bearer ${await getToken()}`,
+      };
+
+      if (options?.attachedFile) {
+        body = new FormData();
+        body.append("content", newContent);
+        body.append("provider", provider);
+        body.append("requestId", requestId);
+        if (webSearchEnabled) {
+          body.append("webSearchEnabled", "true");
+        }
+        if (options?.attachments) {
+          body.append("attachments", JSON.stringify(options.attachments));
+        }
+        body.append("file", options.attachedFile);
+      } else {
+        headers["Content-Type"] = "application/json";
+        body = JSON.stringify({
           content: newContent,
           provider,
           requestId,
           webSearchEnabled,
-        }),
+          attachments: options?.attachments,
+        });
+      }
+
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers,
+        signal: abortController.signal,
+        body,
       });
 
       if (connectionTimeoutsRef.current[activeKey]) {

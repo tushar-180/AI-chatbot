@@ -537,13 +537,48 @@ export const useGroupChat = () => {
     }
   };
 
-  const editMessage = async (messageId: string, content: string) => {
+  const editMessage = async (
+    messageId: string,
+    content: string,
+    webSearchEnabled = false,
+    attachments: any[] = [],
+    attachedFile: File | null = null
+  ) => {
     if (!groupId || !content.trim()) return;
+
+    // Optimistic update for immediate UI feedback
+    setGroupMessages((prev) =>
+      prev.map((m) =>
+        m._id === messageId
+          ? {
+              ...m,
+              content,
+              updatedAt: new Date(
+                Math.max(Date.now(), new Date(m.createdAt).getTime() + 3000)
+              ).toISOString(),
+            }
+          : m
+      )
+    );
+
     try {
-      await api.patch(`/group/${groupId}/messages/${messageId}`, {
-        content,
-        webSearchEnabled: false,
-      });
+      if (attachedFile) {
+        const formData = new FormData();
+        formData.append("content", content);
+        formData.append("webSearchEnabled", String(webSearchEnabled));
+        formData.append("attachments", JSON.stringify(attachments));
+        formData.append("file", attachedFile);
+
+        await api.patch(`/group/${groupId}/messages/${messageId}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await api.patch(`/group/${groupId}/messages/${messageId}`, {
+          content,
+          webSearchEnabled: !!webSearchEnabled,
+          attachments,
+        });
+      }
     } catch (err) {
       console.error("Error editing group message:", err);
     }

@@ -63,7 +63,11 @@ interface MessageListProps {
   currentChatId: string | null;
   isNewChat: boolean;
   onSuggestionClick?: (text: string) => void;
-  onEditMessage?: (messageId: string, content: string) => void;
+  onEditMessage?: (
+    messageId: string,
+    content: string,
+    options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }
+  ) => void;
   onEditStart?: () => void;
   onRetryMessage?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
@@ -171,13 +175,28 @@ const MessageList = forwardRef<
       setShowScrollToBottom(!atBottom);
     }, [isAtBottom]);
 
-    // ATTACH SCROLL LISTENER
+    // ATTACH SCROLL LISTENER AND WATCH SIZE CHANGES SO THE FAB STATE STAYS CORRECT
     useEffect(() => {
       const container = getScrollContainer();
       if (!container) return;
+
       container.addEventListener("scroll", handleScroll);
+
+      const observer = new ResizeObserver(() => {
+        handleScroll();
+      });
+
+      observer.observe(container);
+      if (container.firstElementChild) {
+        observer.observe(container.firstElementChild);
+      }
+
       handleScroll();
-      return () => container.removeEventListener("scroll", handleScroll);
+
+      return () => {
+        container.removeEventListener("scroll", handleScroll);
+        observer.disconnect();
+      };
     }, [getScrollContainer, handleScroll]);
 
     // LOCK SCROLL OVERFLOW WHEN SUGGESTIONS ARE ACTIVE
@@ -348,7 +367,6 @@ const MessageList = forwardRef<
               </div>
             </div>
           ) : null}
-
           <div
             style={{
               opacity: showLoader ? 0 : 1,
@@ -461,7 +479,9 @@ const MessageList = forwardRef<
                       key={msg.id}
                       message={msg}
                       isStreaming={isStreaming && i === messages.length - 1}
-                      onEdit={(content) => onEditMessage?.(msg.id, content)}
+                      onEdit={(content, options) =>
+                        onEditMessage?.(msg.id, content, options)
+                      }
                       onEditStart={onEditStart}
                       onRetry={() => onRetryMessage?.(msg.id)}
                       onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
