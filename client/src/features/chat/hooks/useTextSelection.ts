@@ -47,18 +47,32 @@ export const useTextSelection = () => {
         }
         return null;
       };
+      const anchorBubble = getMessageBubble(selection.anchorNode);
+      const focusBubble = getMessageBubble(selection.focusNode);
 
-      const messageBubble =
-        getMessageBubble(selection.anchorNode) ||
-        getMessageBubble(selection.focusNode);
-
-      if (!messageBubble) {
+      // No valid assistant message
+      if (!anchorBubble || !focusBubble) {
         clearSelection();
         return;
       }
 
+      // Prevent selection across multiple messages
+      const anchorMessageId = anchorBubble.getAttribute("data-message-id");
+
+      const focusMessageId = focusBubble.getAttribute("data-message-id");
+
+      // Different message selection → reject
+      if (anchorMessageId !== focusMessageId) {
+        clearSelection();
+        return;
+      }
+
+      // Final valid bubble
+      const messageBubble = anchorBubble;
+
       const messageId = messageBubble.getAttribute("data-message-id") || "";
-      const originalContent = messageBubble.getAttribute("data-message-content") || "";
+      const originalContent =
+        messageBubble.getAttribute("data-message-content") || "";
 
       try {
         const range = selection.getRangeAt(0);

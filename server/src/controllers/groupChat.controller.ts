@@ -245,12 +245,19 @@ export class GroupChatController {
       const messageId = req.params.messageId as string;
       const { content, provider, webSearchEnabled } = req.body;
 
+      const attachments = typeof req.body.attachments === 'string'
+        ? JSON.parse(req.body.attachments)
+        : (req.body.attachments || []);
+      const attachedFile = req.file || null;
+
       const message = await GroupChatService.editGroupMessage(
         groupId,
         messageId,
         content,
         provider,
         Boolean(webSearchEnabled),
+        attachments,
+        attachedFile
       );
       res.json(message);
     } catch (error: any) {

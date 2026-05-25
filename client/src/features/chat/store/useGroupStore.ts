@@ -20,6 +20,7 @@ export type GroupMessage = {
   status?: "streaming" | "stopped" | "completed" | "failed";
   type: "text" | "image" | "file" | "action" | "event";
   createdAt: string;
+  updatedAt?: string;
   metadata?: {
     webSearchEnabled?: boolean;
     [key: string]: any;

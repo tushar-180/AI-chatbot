@@ -409,10 +409,16 @@ export const getStreamUpdates = async (req: Request, res: Response) => {
 
 export const editMessage = asyncHandler(async (req: Request, res: Response) => {
   try {
+    const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+
     const chat = await chatService.editMessage({
       chatId: String(req.params.id),
       messageId: String(req.params.messageId),
       ...req.body,
+      attachments,
+      attachedFile: (req as any).file || null,
     });
 
     return res.json(chat);
@@ -423,6 +429,10 @@ export const editMessage = asyncHandler(async (req: Request, res: Response) => {
 
 export const streamEditMessage = async (req: Request, res: Response) => {
   try {
+    const attachments = typeof req.body.attachments === 'string'
+      ? JSON.parse(req.body.attachments)
+      : (req.body.attachments || []);
+
     await pipeStreamResponse(
       req,
       res,
@@ -430,6 +440,8 @@ export const streamEditMessage = async (req: Request, res: Response) => {
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
         ...req.body,
+        attachments,
+        attachedFile: (req as any).file || null,
       }),
     );
   } catch (error) {

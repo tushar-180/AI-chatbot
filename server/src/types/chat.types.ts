@@ -93,7 +93,9 @@ export type EditMessageInput = {
   content: string;
   provider?: string;
   requestId?: string;
+  attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  attachedFile?: Express.Multer.File | null;
 };
 
 export type RetryMessageInput = {
