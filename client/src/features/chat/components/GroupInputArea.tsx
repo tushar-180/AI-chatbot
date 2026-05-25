@@ -194,17 +194,20 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
   // Sync scroll positions and size height
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        200,
-      )}px`;
-    }
-    if (backdropRef.current && textareaRef.current) {
-      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
-      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
-    }
+    const handle = requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(
+          textareaRef.current.scrollHeight,
+          200,
+        )}px`;
+      }
+      if (backdropRef.current && textareaRef.current) {
+        backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+        backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+      }
+    });
+    return () => cancelAnimationFrame(handle);
   }, [input]);
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -752,6 +755,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                       ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                       : "bg-white text-slate-900 hover:bg-slate-200 cursor-pointer"
                   }`}
+                  aria-label={isSending || isUploading ? "Sending..." : "Send message"}
+                  title={isSending || isUploading ? "Sending..." : "Send message"}
                 >
                   {isSending || isUploading ? (
                     <Loader2 size={18} className="animate-spin" />

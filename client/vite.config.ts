@@ -13,8 +13,10 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['hoist-non-react-statics'],
+    exclude: ['react-syntax-highlighter'],
   },
   build: {
+    sourcemap: true,
     chunkSizeWarningLimit: 1000,
     rolldownOptions: {
       output: {

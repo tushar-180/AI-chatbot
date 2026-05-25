@@ -131,9 +131,12 @@ const MessageList = ({
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: smooth ? "smooth" : "auto",
+      
+      requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: smooth ? "smooth" : "auto",
+        });
       });
     },
     [getScrollContainer],
@@ -144,7 +147,10 @@ const MessageList = ({
   const instantScrollToBottom = useCallback(() => {
     const container = getScrollContainer();
     if (!container) return;
-    container.scrollTop = container.scrollHeight;
+    
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
   }, [getScrollContainer]);
 
   // HANDLE SCROLL

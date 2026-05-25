@@ -6,7 +6,6 @@ import {
   useEffect,
   memo,
   useState,
-  useLayoutEffect,
 } from "react";
 import {
   ArrowUp,
@@ -292,12 +291,15 @@ const InputArea = ({
   const canUpload = supportsVision(selectedProvider);
 
   // Auto-resize logic
-  useLayoutEffect(() => {
+  useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
 
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    const handle = requestAnimationFrame(() => {
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    });
+    return () => cancelAnimationFrame(handle);
   }, [input]);
 
   // Quote insertion listener with focus and cursor placement
@@ -707,6 +709,8 @@ const InputArea = ({
                           ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                           : "bg-white text-slate-900 hover:bg-slate-200"
                       }`}
+                      aria-label={loading ? "Sending..." : "Send message"}
+                      title={loading ? "Sending..." : "Send message"}
                     >
                       {loading ? (
                         <Loader2 size={18} className="animate-spin" />

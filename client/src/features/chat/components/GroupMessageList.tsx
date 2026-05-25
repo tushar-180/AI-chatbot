@@ -70,10 +70,13 @@ const GroupMessageList = ({
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-      const offset = 1015
-      container.scrollTo({
-        top: container.scrollHeight - offset,
-        behavior: smooth ? "smooth" : "auto",
+      const offset = 1015;
+      
+      requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight - offset,
+          behavior: smooth ? "smooth" : "auto",
+        });
       });
     },
     [getScrollContainer],
@@ -83,7 +86,10 @@ const GroupMessageList = ({
   const instantScrollToBottom = useCallback(() => {
     const container = getScrollContainer();
     if (!container) return;
-    container.scrollTop = container.scrollHeight;
+    
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+    });
   }, [getScrollContainer]);
 
   const handleScroll = useCallback(() => {

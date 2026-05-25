@@ -8,6 +8,8 @@ import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   Plus,
   X,
@@ -252,7 +254,7 @@ const SidebarItem = memo(
                   >
                     {member.userImage && (
                       <AvatarImage
-                        src={member.userImage}
+                        src={optimizeImageUrl(member.userImage, 40)}
                         alt={member.username}
                         className="object-cover"
                       />
@@ -311,6 +313,7 @@ const SidebarItem = memo(
                       : "text-slate-300 hover:bg-white/10"
                   }`}
                   title="Save"
+                  aria-label="Save rename"
                 >
                   <Check size={14} strokeWidth={3} />
                 </button>
@@ -325,6 +328,7 @@ const SidebarItem = memo(
                       : "text-slate-500 hover:bg-white/10"
                   }`}
                   title="Cancel"
+                  aria-label="Cancel rename"
                 >
                   <X size={14} strokeWidth={3} />
                 </button>
@@ -341,6 +345,8 @@ const SidebarItem = memo(
                       ? "text-black/40 hover:text-black"
                       : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
                   }`}
+                  aria-label="Session options"
+                  title="Session options"
                 >
                   <MoreVertical size={14} />
                 </button>
@@ -1159,6 +1165,8 @@ const Sidebar = () => {
             <button
               onClick={() => setSidebarOpen(false)}
               className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white lg:hidden"
+              aria-label="Close sidebar"
+              title="Close sidebar"
             >
               <X size={16} />
             </button>
@@ -1215,9 +1223,9 @@ const Sidebar = () => {
           <div className="px-2">
             <button
               onClick={() => setSearchModalOpen(true)}
-              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
+              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-400 transition-all hover:bg-white/5 hover:text-slate-200"
             >
-              <Search size={14} className="mr-3" />
+              <Search size={14} className="mr-3 text-slate-400 group-hover:text-slate-200 transition-colors" />
               <span>Search conversations...</span>
               <div className="ml-auto flex items-center gap-1 opacity-40">
                 <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
@@ -1243,7 +1251,7 @@ const Sidebar = () => {
                 className="flex items-center gap-2 cursor-pointer group focus:outline-none h-6 min-w-[120px]"
                 aria-label="Toggle session history"
               >
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 group-hover:text-slate-200 transition-colors">
                   {viewingArchived ? "Archived Chats" : "Session History"}
                 </span>
                 <span className="text-slate-700 text-xs group-hover:text-white transition">
@@ -1263,9 +1271,10 @@ const Sidebar = () => {
                         className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
                           hasActiveHistoryFilter
                             ? "bg-emerald-500/10 text-emerald-400"
-                            : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
+                            : "text-slate-400 hover:bg-white/5 hover:text-white"
                         }`}
                         title="Filter history"
+                        aria-label="Filter history"
                       >
                         <Filter size={14} />
                       </button>
@@ -1274,7 +1283,7 @@ const Sidebar = () => {
                       align="end"
                       className="w-56 rounded-2xl border border-white/10 bg-slate-950 p-2 text-slate-200 shadow-2xl shadow-black/40"
                     >
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                         Show
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1299,7 +1308,7 @@ const Sidebar = () => {
 
                       <DropdownMenuSeparator className="bg-white/10" />
 
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                         Sort by
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1330,7 +1339,7 @@ const Sidebar = () => {
 
                       <DropdownMenuSeparator className="bg-white/10" />
 
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                         Order
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1383,9 +1392,16 @@ const Sidebar = () => {
                         ? "bg-emerald-500/10 text-emerald-400"
                         : visibleSelectableIds.length === 0
                           ? "text-slate-800 cursor-not-allowed"
-                          : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
+                          : "text-slate-400 hover:bg-white/5 hover:text-white"
                     }`}
                     disabled={visibleSelectableIds.length === 0}
+                    aria-label={
+                      visibleSelectableIds.length === 0
+                        ? "Bulk actions are available for chats"
+                        : isSelectionMode
+                          ? "Exit Selection"
+                          : "Bulk Actions"
+                    }
                     title={
                       visibleSelectableIds.length === 0
                         ? "Bulk actions are available for chats"
@@ -1442,7 +1458,7 @@ const Sidebar = () => {
                         setIsSelectionMode(false);
                         setSelectedIds(new Set());
                       }}
-                      className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
+                      className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
                     >
                       Cancel
                     </button>
@@ -1551,7 +1567,7 @@ const Sidebar = () => {
                 >
                   {dbUser?.imageUrl || user?.imageUrl ? (
                     <img
-                      src={dbUser?.imageUrl || user?.imageUrl}
+                      src={optimizeImageUrl(dbUser?.imageUrl || user?.imageUrl, 80)}
                       alt={
                         dbUser?.firstName
                           ? `${dbUser.firstName} ${dbUser.lastName || ""}`
@@ -1584,7 +1600,7 @@ const Sidebar = () => {
                 </div>
                 <MoreVertical
                   size={16}
-                  className="text-slate-600 group-hover:text-white transition-colors group-data-[state=open]:text-white"
+                  className="text-slate-400 group-hover:text-white transition-colors group-data-[state=open]:text-white"
                 />
               </button>
             </DropdownMenuTrigger>
@@ -1701,60 +1717,70 @@ const Sidebar = () => {
           }
         />
 
-        <GalleryModal
-          isOpen={galleryOpen}
-          onClose={() => setGalleryOpen(false)}
-        />
+        {galleryOpen && (
+          <GalleryModal
+            isOpen={galleryOpen}
+            onClose={() => setGalleryOpen(false)}
+          />
+        )}
 
-        <SettingsModal
-          isOpen={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          initialTab={settingsTab}
-        />
+        {settingsOpen && (
+          <SettingsModal
+            isOpen={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            initialTab={settingsTab}
+          />
+        )}
 
-        <SearchModal
-          isOpen={searchModalOpen}
-          onClose={() => setSearchModalOpen(false)}
-        />
+        {searchModalOpen && (
+          <SearchModal
+            isOpen={searchModalOpen}
+            onClose={() => setSearchModalOpen(false)}
+          />
+        )}
 
-        <MoveToProjectModal
-          isOpen={!!moveProjectChatId}
-          onClose={() => setMoveProjectChatId(null)}
-          onMove={async (projectId) => {
-            if (!moveProjectChatId) return;
+        {!!moveProjectChatId && (
+          <MoveToProjectModal
+            isOpen={!!moveProjectChatId}
+            onClose={() => setMoveProjectChatId(null)}
+            onMove={async (projectId) => {
+              if (!moveProjectChatId) return;
 
-            try {
-              const chatId = moveProjectChatId;
-              await api.patch(`/chat/${chatId}/move`, {
-                projectId,
-              });
+              try {
+                const chatId = moveProjectChatId;
+                await api.patch(`/chat/${chatId}/move`, {
+                  projectId,
+                });
 
-              // Instantly remove it from the sidebar
-              useChatStore.getState().removeChat(chatId);
+                // Instantly remove it from the sidebar
+                useChatStore.getState().removeChat(chatId);
 
-              if (currentChatId === chatId) {
-                useChatStore.getState().setCurrentChat(null);
-                useChatStore.getState().setMessages([]);
+                if (currentChatId === chatId) {
+                  useChatStore.getState().setCurrentChat(null);
+                  useChatStore.getState().setMessages([]);
+                }
+
+                toast.success("Chat moved to project");
+
+                // remove modal
+                setMoveProjectChatId(null);
+
+                // navigate to project chat route
+                navigate(`/projects/${projectId}/chat/${chatId}`);
+              } catch (error) {
+                console.error(error);
+                toast.error("Failed to move chat");
               }
+            }}
+          />
+        )}
 
-              toast.success("Chat moved to project");
-
-              // remove modal
-              setMoveProjectChatId(null);
-
-              // navigate to project chat route
-              navigate(`/projects/${projectId}/chat/${chatId}`);
-            } catch (error) {
-              console.error(error);
-              toast.error("Failed to move chat");
-            }
-          }}
-        />
-
-        <ShortcutsCheatsheetModal
-          isOpen={shortcutsOpen}
-          onClose={() => setShortcutsOpen(false)}
-        />
+        {shortcutsOpen && (
+          <ShortcutsCheatsheetModal
+            isOpen={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+        )}
       </Suspense>
     </>
   );

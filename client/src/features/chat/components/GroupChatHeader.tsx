@@ -6,6 +6,8 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@clerk/react";
+import { optimizeImageUrl } from "@/lib/utils";
+
 
 import DeleteConfirmModal from "./DeleteConfirmModal";
 
@@ -129,7 +131,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
                 <div key={member.userId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all group">
                   <div className="h-9 w-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-500 group-hover:border-emerald-500/30 transition-colors overflow-hidden flex-shrink-0">
                     {member.userImage ? (
-                      <img src={member.userImage} alt={member.username} className="h-full w-full object-cover" />
+                      <img src={optimizeImageUrl(member.userImage, 72)} alt={member.username} className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-xs font-bold uppercase">{member.username.substring(0, 2)}</span>
                     )}

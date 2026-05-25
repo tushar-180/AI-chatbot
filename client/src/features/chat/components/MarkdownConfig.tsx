@@ -3,25 +3,25 @@ import CodeBlock from "./CodeBlock";
 
 export const assistantMarkdownComponents = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
-    <h1
+    <h2
       className="mt-10 mb-4 font-display text-[2rem] font-extrabold leading-[1.2] tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h2: (props: React.ComponentPropsWithoutRef<"h2">) => (
-    <h2
+    <h3
       className="mt-9 mb-3 font-display text-[1.6rem] font-bold leading-[1.25] tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h3: (props: React.ComponentPropsWithoutRef<"h3">) => (
-    <h3
+    <h4
       className="mt-7 mb-2 font-display text-[1.3rem] font-semibold leading-snug tracking-tight text-slate-100 first:mt-0"
       {...props}
     />
   ),
   h4: (props: React.ComponentPropsWithoutRef<"h4">) => (
-    <h4
+    <h5
       className="mt-6 mb-2 text-[1.1rem] font-semibold leading-snug text-slate-200 first:mt-0"
       {...props}
     />

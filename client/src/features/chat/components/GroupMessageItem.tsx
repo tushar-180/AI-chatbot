@@ -1,6 +1,8 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   AlertCircle,
   ChevronDown,
@@ -57,7 +59,7 @@ const MessageAvatar = ({
   >
     {isUser ? (
       imageUrl ? (
-        <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
+        <img src={optimizeImageUrl(imageUrl, (size || 18) * 2)} alt="User" className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-emerald-500/10 text-emerald-500 font-bold text-[8px]">
           {username.substring(0, 1).toUpperCase()}
