@@ -1,21 +1,5 @@
 .
 ├── components.json
-├── dist
-│   ├── assets
-│   │   ├── index-BfM0SUfB.css
-│   │   ├── index-uMa0uC-J.js
-│   │   ├── inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2
-│   │   ├── inter-cyrillic-wght-normal-DqGufNeO.woff2
-│   │   ├── inter-greek-ext-wght-normal-DlzME5K_.woff2
-│   │   ├── inter-greek-wght-normal-CkhJZR-_.woff2
-│   │   ├── inter-latin-ext-wght-normal-DO1Apj_S.woff2
-│   │   ├── inter-latin-wght-normal-Dx4kXJAl.woff2
-│   │   └── inter-vietnamese-wght-normal-CBcvBZtf.woff2
-│   ├── favicon.png
-│   ├── favicon.svg
-│   ├── icons.svg
-│   ├── index.html
-│   └── logo.png
 ├── eslint.config.js
 ├── file_structure.txt
 ├── index.html
@@ -42,7 +26,8 @@
 │   │       ├── ServerDownBanner.tsx
 │   │       ├── sonner.tsx
 │   │       ├── spotlight-demo.tsx
-│   │       └── spotlight.tsx
+│   │       ├── spotlight.tsx
+│   │       └── tooltip.tsx
 │   ├── contexts
 │   │   └── ServerStatusContext.tsx
 │   ├── features
@@ -61,6 +46,9 @@
 │   │       │   ├── MemoryModal.tsx
 │   │       │   ├── MessageItem.tsx
 │   │       │   ├── MessageList.tsx
+│   │       │   ├── PersonalizationModal.tsx
+│   │       │   ├── SettingsModal.tsx
+│   │       │   ├── ShareModal.tsx
 │   │       │   └── Sidebar.tsx
 │   │       ├── constants
 │   │       │   └── chat.constants.ts
@@ -71,7 +59,8 @@
 │   │       │   ├── useChatMessages.ts
 │   │       │   ├── useChatStream.ts
 │   │       │   ├── useGallery.ts
-│   │       │   └── useVoiceInput.ts
+│   │       │   ├── useVoiceInput.ts
+│   │       │   └── useWebSearchQuota.ts
 │   │       ├── services
 │   │       │   ├── chat.service.ts
 │   │       │   └── voiceInput
@@ -90,10 +79,11 @@
 │   └── pages
 │       ├── Auth.tsx
 │       ├── Chat.tsx
-│       └── Landing.tsx
+│       ├── Landing.tsx
+│       └── SharedChatPage.tsx
 ├── tsconfig.app.json
 ├── tsconfig.json
 ├── tsconfig.node.json
 └── vite.config.ts
 
-21 directories, 75 files
+19 directories, 67 files

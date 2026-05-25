@@ -1,14 +1,30 @@
 import { Chat, Message } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
+import mongoose from "mongoose";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
-    return await Chat.findByIdAndUpdate(chatId, {
-      $set: { updatedAt: new Date() },
-    });
+    const chat = await Chat.findByIdAndUpdate(
+      chatId,
+      {
+        $set: { updatedAt: new Date() },
+      },
+      { new: true },
+    );
+
+    if (chat && chat.projectId) {
+      const { projectRepository } = require("./project.repository");
+      await projectRepository.touchProject(chat.projectId.toString());
+    }
+    return chat;
   },
 
-  create(data: { userId: string; title: string }) {
+  create(data: {
+    userId: string;
+    title: string;
+    projectId?: string;
+    isSidebarVisible?: boolean;
+  }) {
     return new Chat(data);
   },
 
@@ -40,13 +56,105 @@ export const chatRepository = {
     };
   },
 
-  findAllByUserId(userId: string, page: number = 1, limit: number = 20) {
+  findAllByUserId(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    isArchived: boolean = false,
+  ) {
     const skip = (page - 1) * limit;
-    return Chat.find({ userId })
+    const query = isArchived
+      ? {
+          userId,
+          isArchived: true,
+          isSidebarVisible: { $ne: false },
+          $or: [{ projectId: null }, { projectId: { $exists: false } }],
+        }
+      : {
+          userId,
+          isArchived: { $ne: true },
+          isSidebarVisible: { $ne: false },
+          $or: [{ projectId: null }, { projectId: { $exists: false } }],
+        };
+
+    return Chat.find(query)
       .select("-messages -legacyMessages")
-      .sort({ updatedAt: -1 })
+      .sort({ isPinned: -1, updatedAt: -1 })
       .skip(skip)
       .limit(limit);
+  },
+
+  async searchChats(userId: string, query: string) {
+    try {
+      // First, try searching for chats by title
+      const chatResults = await Chat.find({
+        userId,
+        title: { $regex: query, $options: "i" },
+      })
+        .select("-messages -legacyMessages")
+        .limit(10)
+        .lean();
+
+      // Second, search in messages content
+      const messageResults = await Message.find({
+        userId,
+        content: { $regex: query, $options: "i" },
+      })
+        .limit(20)
+        .lean();
+
+      const resultsMap = new Map<string, any>();
+
+      // Add chat results
+      chatResults.forEach((chat) => {
+        resultsMap.set(String(chat._id), {
+          ...chat,
+          matchType: "title",
+          snippet: "",
+        });
+      });
+
+      // Add message results (overwriting or adding snippet)
+      for (const msg of messageResults) {
+        const chatId = String(msg.chatId);
+        const existing = resultsMap.get(chatId);
+
+        const content = msg.content || "";
+        const index = content.toLowerCase().indexOf(query.toLowerCase());
+        const start = Math.max(0, index - 40);
+        const end = Math.min(content.length, index + 60);
+        const snippet =
+          (start > 0 ? "..." : "") +
+          content.substring(start, end) +
+          (end < content.length ? "..." : "");
+
+        if (existing) {
+          existing.matchType = "content";
+          existing.snippet = snippet;
+        } else {
+          const chat = await Chat.findById(chatId)
+            .select("-messages -legacyMessages")
+            .lean();
+          if (chat && String(chat.userId) === userId) {
+            resultsMap.set(chatId, {
+              ...chat,
+              matchType: "content",
+              snippet: snippet,
+            });
+          }
+        }
+      }
+
+      const finalResults = Array.from(resultsMap.values()).sort(
+        (a, b) =>
+          new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf(),
+      );
+
+      return finalResults;
+    } catch (err) {
+      console.error("Search failed:", err);
+      return [];
+    }
   },
 
   async deleteById(chatId: string) {
@@ -63,15 +171,85 @@ export const chatRepository = {
       userId: messageData.userId,
       ...messageData,
     });
-    await this.touchChat(chatId);
+
+    if (messageData.tokens) {
+      const chat = await Chat.findByIdAndUpdate(
+        chatId,
+        {
+          $inc: {
+            "tokens.promptTokens": messageData.tokens.promptTokens || 0,
+            "tokens.completionTokens": messageData.tokens.completionTokens || 0,
+            "tokens.totalTokens": messageData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
+        },
+        { new: true },
+      );
+
+      if (chat && chat.projectId) {
+        const { projectRepository } = require("./project.repository");
+        await projectRepository.touchProject(chat.projectId.toString());
+      }
+    } else {
+      await this.touchChat(chatId);
+    }
+
     return message;
   },
 
   async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    const message = await Message.findByIdAndUpdate(messageId, updateData, {
+    // Read the existing message first to get old token values for proper delta calculation
+    let existingMessage = await Message.findById(messageId);
+    if (!existingMessage) {
+      existingMessage = await Message.findOne({ requestId: messageId });
+    }
+
+    // Perform the update
+    let message = await Message.findByIdAndUpdate(messageId, updateData, {
       returnDocument: "after",
     });
-    if (message?.chatId) {
+
+    if (!message) {
+      message = await Message.findOneAndUpdate(
+        { requestId: messageId },
+        updateData,
+        { returnDocument: "after" },
+      );
+    }
+
+    if (message?.chatId && updateData.tokens) {
+      // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
+      const oldTokens = existingMessage?.tokens;
+      const deltaPrompt =
+        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion =
+        (updateData.tokens.completionTokens || 0) -
+        (oldTokens?.completionTokens || 0);
+      const deltaTotal =
+        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+
+      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
+        const chat = await Chat.findByIdAndUpdate(
+          String(message.chatId),
+          {
+            $inc: {
+              "tokens.promptTokens": deltaPrompt,
+              "tokens.completionTokens": deltaCompletion,
+              "tokens.totalTokens": deltaTotal,
+            },
+            $set: { updatedAt: new Date() },
+          },
+          { new: true },
+        );
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
+    } else if (message?.chatId) {
       await this.touchChat(String(message.chatId));
     }
     return message;
@@ -87,26 +265,194 @@ export const chatRepository = {
   },
 
   async updateMessageByRequestId(
-    chatId: string,
+    chatId: string | null | undefined,
     requestId: string,
     updateData: Partial<ChatMessage>,
   ) {
-    const message = await Message.findOneAndUpdate(
-      { chatId, requestId },
-      updateData,
-      {
+    const query =
+      chatId && chatId !== "null" ? { chatId, requestId } : { requestId };
+    // Read existing message to get old token values for delta calculation
+    const existingMessage = await Message.findOne(query);
+
+    const message = await Message.findOneAndUpdate(query, updateData, {
       returnDocument: "after",
-      },
-    );
-    await this.touchChat(chatId);
+    });
+    if (message?.chatId && updateData.tokens) {
+      // Calculate delta: new tokens minus old tokens
+      const oldTokens = existingMessage?.tokens;
+      const deltaPrompt =
+        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion =
+        (updateData.tokens.completionTokens || 0) -
+        (oldTokens?.completionTokens || 0);
+      const deltaTotal =
+        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+
+      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
+        const chat = await Chat.findByIdAndUpdate(
+          String(message.chatId),
+          {
+            $inc: {
+              "tokens.promptTokens": deltaPrompt,
+              "tokens.completionTokens": deltaCompletion,
+              "tokens.totalTokens": deltaTotal,
+            },
+            $set: { updatedAt: new Date() },
+          },
+          { new: true },
+        );
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
+    } else if (message?.chatId) {
+      await this.touchChat(String(message.chatId));
+    }
     return message;
+  },
+
+  async deleteMessagesAfter(chatId: string, messageId: string) {
+    const message = await Message.findById(messageId);
+    if (!message) return;
+
+    await Message.deleteMany({
+      chatId,
+      createdAt: { $gt: message.createdAt },
+    });
+    await this.touchChat(chatId);
+  },
+
+  async update(chatId: string, data: any) {
+    return await Chat.findByIdAndUpdate(chatId, data, { new: true });
   },
 
   async updateTitle(chatId: string, title: string) {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { title } },
-      { new: true }
+      { new: true },
     );
+  },
+
+  async findByShareId(shareId: string) {
+    const chat = await Chat.findOne({ shareId });
+    if (!chat) return null;
+
+    const messages = await Message.find({ chatId: chat._id }).sort({
+      createdAt: 1,
+    });
+
+    const formattedMessages = messages.map((msg) => ({
+      ...msg.toObject(),
+      id: msg._id.toString(),
+    }));
+
+    return {
+      ...chat.toObject(),
+      messages: formattedMessages,
+    };
+  },
+  async archiveChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isArchived: true } },
+      { new: true },
+    );
+  },
+
+  async unarchiveChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isArchived: false } },
+      { new: true },
+    );
+  },
+
+  async pinChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isPinned: true, updatedAt: new Date() } },
+      { new: true },
+    );
+  },
+
+  async unpinChat(chatId: string) {
+    return await Chat.findByIdAndUpdate(
+      chatId,
+      { $set: { isPinned: false, updatedAt: new Date() } },
+      { new: true },
+    );
+  },
+
+  async findAttachmentByHash(
+    userId: string,
+    fileHash: string,
+  ): Promise<string | null> {
+    // return the storagePath directly or null
+    const message = await Message.findOne(
+      {
+        userId,
+        "attachments.fileHash": fileHash,
+        "attachments.storagePath": { $exists: true, $ne: "" },
+      },
+      { "attachments.$": 1 },
+    )
+      .lean()
+      .exec();
+
+    if (!message) return null;
+
+    // message.attachments is an array with exactly one matching element
+    const matchedAtt = (message as any).attachments?.[0];
+    if (!matchedAtt || !matchedAtt.storagePath) return null;
+
+    return matchedAtt.storagePath as string;
+  },
+
+  /**
+   * Return an array of unique storage paths for all attachments in messages of a chat.
+   */
+  async getStoragePathsForChat(chatId: string): Promise<string[]> {
+    const messages = await Message.find(
+      {
+        chatId,
+        "attachments.storagePath": { $exists: true, $ne: "" },
+      },
+      { "attachments.storagePath": 1 },
+    )
+      .lean()
+      .exec();
+
+    const paths = new Set<string>();
+    for (const msg of messages) {
+      for (const att of (msg as any).attachments || []) {
+        if (att.storagePath) paths.add(att.storagePath);
+      }
+    }
+    return Array.from(paths);
+  },
+
+  /**
+   * Check if a storage path is used in any other chat.
+   */
+  async countStoragePathUsages(
+    chatIdToExclude: string,
+    storagePath: string,
+  ): Promise<number> {
+    return await Message.countDocuments({
+      chatId: { $ne: chatIdToExclude },
+      "attachments.storagePath": storagePath,
+    });
+  },
+
+  /**
+   * Delete all messages belonging to a chat.
+   */
+  async deleteMessagesByChatId(chatId: string): Promise<void> {
+    await Message.deleteMany({ chatId });
   },
 };

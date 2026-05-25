@@ -1,83 +1,118 @@
 import type {
-  ConfidenceEstimate,
-  SearchSource,
-  WebGroundingContext,
+    ConfidenceEstimate,
+    SearchSource,
+    WebGroundingContext,
 } from "./webSearch.types";
 
-const clamp = (value: number, min = 0, max = 1) =>
-  Math.min(Math.max(value, min), max);
+const clamp = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, value));
+
+const average = (values: number[]) =>
+    values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
 
 export const estimateConfidence = (params: {
-  sources: SearchSource[];
-  liveDataQuery: boolean;
-  cacheHit: boolean;
-  usedSnippetFallback: boolean;
+    sources: SearchSource[];
 }): ConfidenceEstimate => {
-  const { sources, liveDataQuery, cacheHit, usedSnippetFallback } = params;
+    const { sources } = params;
 
-  if (!sources.length) {
-    return {
-      score: 0.18,
-      label: "low",
-      reasons: ["No high-quality sources were available."],
+    if (!sources.length) {
+        return {
+            score: 0.15,
+            label: "low",
+            reasons: ["No relevant search results were found."],
+        };
+    }
+
+    // Use the snippetFallback flag directly from the service
+    const snippetFallbackSources = sources.filter((s) => s.snippetFallback);
+    const fullExtractionSources = sources.filter((s) => !s.snippetFallback);
+
+    const percentFullExtraction =
+        sources.length > 0 ? fullExtractionSources.length / sources.length : 0;
+
+    // Freshness and relevance scores come from the reranker (no authority metric)
+    const avgFreshness = average(sources.map((s) => s.freshnessScore ?? 0.5));
+    const avgRerankScore = average(sources.map((s) => s.score ?? 0));
+
+    // Revised weights (no hardcoded authority)
+    const WEIGHTS = {
+        freshness: 0.3,
+        relevance: 0.5,
+        extraction: 0.2,
     };
-  }
 
-  const averageScore =
-    sources.reduce((sum, source) => sum + Math.max(source.score, 0), 0) /
-    sources.length;
-  const averageFreshness =
-    sources.reduce((sum, source) => sum + (source.freshnessScore || 0), 0) /
-    sources.length;
-  const averageStructured =
-    sources.reduce((sum, source) => sum + (source.structuredScore || 0), 0) /
-    sources.length;
+    let score =
+        WEIGHTS.freshness * avgFreshness + WEIGHTS.relevance * avgRerankScore;
 
-  let score =
-    0.25 +
-    Math.min(averageScore / 2.5, 0.3) +
-    averageFreshness * 0.2 +
-    averageStructured * 0.15 +
-    Math.min(sources.length / 5, 0.1);
+    // Adjust for extraction quality
+    if (percentFullExtraction >= 0.8) {
+        score += WEIGHTS.extraction * 0.15;
+    } else if (percentFullExtraction >= 0.5) {
+        score += WEIGHTS.extraction * 0.05;
+    } else {
+        score -= WEIGHTS.extraction * 0.15;
+    }
 
-  if (cacheHit && !liveDataQuery) score += 0.05;
-  if (usedSnippetFallback) score -= 0.18;
-  if (liveDataQuery && averageFreshness < 0.45) score -= 0.1;
+    // Source count bonus (multiple sources increase confidence)
+    const sourceCountBonus = Math.min(0.1, (sources.length - 1) * 0.04);
+    score += sourceCountBonus;
 
-  score = clamp(score);
+    if (sources.length === 1) {
+        score -= 0.1;
+    }
 
-  const reasons: string[] = [];
-  if (averageStructured >= 0.7) {
-    reasons.push("Structured or official-looking sources ranked near the top.");
-  }
-  if (averageFreshness >= 0.65) {
-    reasons.push("Source freshness signals are strong.");
-  }
-  if (usedSnippetFallback) {
-    reasons.push("Some evidence came from snippets instead of extracted pages.");
-  }
-  if (liveDataQuery && averageFreshness < 0.45) {
-    reasons.push("This looks like a live-data query, but freshness signals are mixed.");
-  }
-  if (!reasons.length) {
-    reasons.push("Confidence is based on source relevance, diversity, and freshness.");
-  }
+    score = clamp(score, 0.05, 0.95);
 
-  return {
-    score: Number(score.toFixed(2)),
-    label: score >= 0.75 ? "high" : score >= 0.45 ? "medium" : "low",
-    reasons,
-  };
+    let label: ConfidenceEstimate["label"];
+    if (score >= 0.75) label = "high";
+    else if (score >= 0.45) label = "medium";
+    else label = "low";
+
+    const reasons: string[] = [];
+
+    if (fullExtractionSources.length === sources.length) {
+        reasons.push(
+            "All sources provided full‑page content, allowing deep verification.",
+        );
+    } else if (fullExtractionSources.length > 0) {
+        reasons.push(
+            `${snippetFallbackSources.length} out of ${sources.length} sources relied on short snippets.`,
+        );
+    } else {
+        reasons.push(
+            "Confidence limited – only search snippets were available.",
+        );
+    }
+
+    // Replace authority reasons with ranking score insights
+    if (avgRerankScore >= 0.7) {
+        reasons.push("Search engine ranking confidence is high.");
+    }
+
+    if (avgFreshness >= 0.75) {
+        reasons.push("Information is recent, improving trustworthiness.");
+    }
+
+    if (sources.length >= 2) {
+        reasons.push(
+            "Multiple independent sources corroborate the information.",
+        );
+    }
+
+    if (avgFreshness < 0.4 && avgRerankScore < 0.4) {
+        reasons.push("Sources are limited in both relevance and freshness.");
+    }
+
+    return {
+        score: Number(score.toFixed(2)),
+        label,
+        reasons,
+    };
 };
 
 export const withEstimatedConfidence = (
-  context: Omit<WebGroundingContext, "confidence">,
+    context: Omit<WebGroundingContext, "confidence">,
 ): WebGroundingContext => ({
-  ...context,
-  confidence: estimateConfidence({
-    sources: context.sources,
-    liveDataQuery: context.liveDataQuery,
-    cacheHit: context.debug.cacheHit,
-    usedSnippetFallback: context.debug.sourceStrategy === "snippet-fallback",
-  }),
+    ...context,
+    confidence: estimateConfidence({ sources: context.sources }),
 });

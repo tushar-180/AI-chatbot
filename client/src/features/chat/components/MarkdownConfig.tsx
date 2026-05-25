@@ -3,25 +3,25 @@ import CodeBlock from "./CodeBlock";
 
 export const assistantMarkdownComponents = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
-    <h1
+    <h2
       className="mt-10 mb-4 font-display text-[2rem] font-extrabold leading-[1.2] tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h2: (props: React.ComponentPropsWithoutRef<"h2">) => (
-    <h2
+    <h3
       className="mt-9 mb-3 font-display text-[1.6rem] font-bold leading-[1.25] tracking-tight text-white first:mt-0"
       {...props}
     />
   ),
   h3: (props: React.ComponentPropsWithoutRef<"h3">) => (
-    <h3
+    <h4
       className="mt-7 mb-2 font-display text-[1.3rem] font-semibold leading-snug tracking-tight text-slate-100 first:mt-0"
       {...props}
     />
   ),
   h4: (props: React.ComponentPropsWithoutRef<"h4">) => (
-    <h4
+    <h5
       className="mt-6 mb-2 text-[1.1rem] font-semibold leading-snug text-slate-200 first:mt-0"
       {...props}
     />
@@ -48,9 +48,7 @@ export const assistantMarkdownComponents = {
   ),
   li: (props: React.ComponentPropsWithoutRef<"li">) => {
     // Check if parent is ol by looking for counter style
-    const isOrdered =
-      typeof props.className === "string" &&
-      props.className.includes("ordered");
+    
     return (
       <li
         className="relative pl-6 text-base leading-[1.85] tracking-[0.01em] before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-400/60 [ol_&]:before:content-[counter(item)'._'] [ol_&]:before:bg-transparent [ol_&]:before:text-indigo-400/80 [ol_&]:before:font-semibold [ol_&]:before:text-[0.9em] [ol_&]:before:top-0 [ol_&]:[counter-increment:item]"
@@ -158,7 +156,8 @@ export const assistantMarkdownComponents = {
   img: (props: React.ComponentPropsWithoutRef<"img">) => (
     <span className="my-6 block">
       <img
-        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20"
+        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20 bg-slate-950/40"
+        style={{ aspectRatio: "auto 16 / 9" }}
         {...props}
         loading="lazy"
         onError={(e) => {
@@ -176,21 +175,9 @@ export const assistantMarkdownComponents = {
       )}
     </span>
   ),
+  string: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  number: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  boolean: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  any: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
 };
 
-export const userMarkdownComponents = {
-  p: (props: React.ComponentPropsWithoutRef<"p">) => (
-    <p
-      className="text-base leading-[1.8] tracking-[0.01em] text-white"
-      {...props}
-    />
-  ),
-  code: (props: React.ComponentPropsWithoutRef<"code">) => (
-    <code className="rounded-md border border-indigo-400/10 bg-indigo-950/30 px-[0.4em] py-[0.2em] text-[0.9em] font-medium text-indigo-100">
-      {props.children}
-    </code>
-  ),
-  strong: (props: React.ComponentPropsWithoutRef<"strong">) => (
-    <strong className="font-semibold text-white" {...props} />
-  ),
-};

@@ -1,5 +1,8 @@
 import { User } from "../models/User.model";
+import { UserMemory } from "../models/UserMemory.model";
+import { aiService } from "./ai.service";
 import { Personalization, UserProfile } from "../types/chat.types";
+import { EXPORT_DATA_PROMPT } from "../constants/prompt.constants";
 
 export const userService = {
   async syncUser(data: Partial<UserProfile>) {
@@ -17,6 +20,14 @@ export const userService = {
     );
 
     return user;
+  },
+
+  async updateProfile(clerkId: string, data: { firstName?: string; lastName?: string; imageUrl?: string }) {
+    return await User.findOneAndUpdate(
+      { clerkId },
+      { $set: data },
+      { returnDocument: "after" }
+    );
   },
 
   async getUserByClerkId(clerkId: string) {
@@ -48,5 +59,35 @@ export const userService = {
     if (customInstructions) context += `- Custom Instructions: ${customInstructions}\n`;
 
     return context;
+  },
+
+  async exportData(clerkId: string) {
+    const user = await this.getUserByClerkId(clerkId);
+    if (!user) throw new Error("User not found");
+
+    const memories = await UserMemory.find({ userId: clerkId }).sort({ createdAt: -1 });
+    
+    // Construct context for the AI
+    let context = `USER PROFILE:
+- Name: ${`${user.firstName || ""} ${user.lastName || ""}`.trim() || "Not provided"}
+- Nickname: ${user.personalization?.nickname || "Not provided"}
+- Occupation: ${user.personalization?.occupation || "Not provided"}
+- Preferred Tone: ${user.personalization?.tone || "Default"}
+- Custom Instructions: ${user.personalization?.customInstructions || "None"}
+
+STORED MEMORIES:
+${memories.map(m => `- [${m.category}] ${m.content} (Recorded: ${m.createdAt.toISOString().split('T')[0]})`).join("\n")}
+`;
+
+    const exportPrompt = EXPORT_DATA_PROMPT(context);
+
+    const provider = aiService.getProvider("gemini");
+    provider.setModel("gemini-3.1-flash-lite-preview");
+    
+    const summary = await provider.generateResponse([
+      { role: "user", content: exportPrompt, userId: clerkId }
+    ]);
+
+    return summary.text;
   }
 };

@@ -1,0 +1,253 @@
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+export type GroupMember = {
+  userId: string;
+  username: string;
+  userImage?: string;
+  joinedAt: Date;
+};
+
+export type GroupMessage = {
+  _id: string;
+  groupId: string;
+  userId: string;
+  username: string;
+  userImage?: string;
+  role: "user" | "assistant" | "system";
+  feedback?: "like" | "dislike" | null;
+  content: string;
+  status?: "streaming" | "stopped" | "completed" | "failed";
+  type: "text" | "image" | "file" | "action" | "event";
+  createdAt: string;
+  updatedAt?: string;
+  metadata?: {
+    webSearchEnabled?: boolean;
+    [key: string]: any;
+  };
+  sources?: Array<{
+    id: number;
+    url: string;
+    title: string;
+    hostname?: string;
+    snippet?: string;
+  }>;
+  attachments?: any[];
+  isWebSearching?: boolean;
+};
+
+export type GroupChat = {
+  _id: string;
+  title: string;
+  creatorId: string;
+  members: GroupMember[];
+  inviteCode: string;
+  createdAt?: string;
+  updatedAt: string;
+  isPinned?: boolean;
+};
+
+type GroupState = {
+  groups: GroupChat[];
+  currentGroupId: string | null;
+  groupMessages: GroupMessage[];
+  loading: boolean;
+  isAiThinking: boolean;
+  isWebSearching: boolean;
+  aiThinkingGroupIds: Record<string, boolean>;
+  webSearchingGroupIds: Record<string, boolean>;
+
+  setGroups: (groups: GroupChat[]) => void;
+  addGroup: (group: GroupChat) => void;
+  setCurrentGroup: (id: string | null) => void;
+
+  setGroupMessages: (
+    messages: GroupMessage[] | ((prev: GroupMessage[]) => GroupMessage[]),
+  ) => void;
+
+  addGroupMessage: (message: GroupMessage) => void;
+
+  // 🆕 NEW
+  updateGroupMessage: (
+    messageId: string,
+    content: string,
+  ) => void;
+
+  setGroupMessageFeedback: (
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) => void;
+
+  retryAiMessage: (messageId: string) => GroupMessage | null;
+
+  setLoading: (loading: boolean) => void;
+  setIsAiThinking: (isAiThinking: boolean, groupId?: string | null) => void;
+  setIsWebSearching: (isWebSearching: boolean, groupId?: string | null) => void;
+
+  removeGroup: (id: string) => void;
+  updateGroupMembers: (groupId: string, members: GroupMember[]) => void;
+  updateGroup: (groupId: string, updates: Partial<GroupChat>) => void;
+};
+export const useGroupStore = create<GroupState>()(
+  persist(
+    (set, get) => ({
+      groups: [],
+      currentGroupId: null,
+      groupMessages: [],
+      loading: false,
+      isAiThinking: false,
+      isWebSearching: false,
+      aiThinkingGroupIds: {},
+      webSearchingGroupIds: {},
+
+      setGroups: (groups) => set({ groups }),
+
+      addGroup: (group) =>
+        set((state) => ({
+          groups: [group, ...state.groups.filter((g) => g._id !== group._id)],
+        })),
+
+      setCurrentGroup: (id) =>
+        set((state) => {
+          const isSameGroup = state.currentGroupId === id;
+          const targetId = id ?? "";
+          return {
+            currentGroupId: id,
+            groupMessages: isSameGroup ? state.groupMessages : [],
+            isAiThinking: !!state.aiThinkingGroupIds[targetId],
+            isWebSearching: !!state.webSearchingGroupIds[targetId],
+          };
+        }),
+
+      setGroupMessages: (messages) =>
+        set((state) => ({
+          groupMessages:
+            typeof messages === "function"
+              ? messages(state.groupMessages)
+              : messages,
+        })),
+
+      addGroupMessage: (message) =>
+        set((state) => {
+          const updatedGroups = state.groups.map((g) =>
+            g._id === message.groupId
+              ? { ...g, updatedAt: message.createdAt || new Date().toISOString() }
+              : g
+          );
+          return {
+            groupMessages: [...state.groupMessages, message],
+            groups: updatedGroups,
+          };
+        }),
+
+      // 🆕 EDIT MESSAGE
+      updateGroupMessage: (messageId, content) =>
+        set((state) => ({
+          groupMessages: state.groupMessages.map((m) =>
+            m._id === messageId
+              ? {
+                  ...m,
+                  content,
+                }
+              : m,
+          ),
+        })),
+
+      // 🆕 FEEDBACK
+      setGroupMessageFeedback: (messageId, feedback) =>
+        set((state) => ({
+          groupMessages: state.groupMessages.map((m) =>
+            m._id === messageId
+              ? {
+                  ...m,
+                  feedback,
+                }
+              : m,
+          ),
+        })),
+
+      // 🆕 RETRY
+      retryAiMessage: (messageId) => {
+        const state = get();
+
+        const index = state.groupMessages.findIndex(
+          (m) => m._id === messageId,
+        );
+
+        if (index === -1) return null;
+
+        for (let i = index - 1; i >= 0; i--) {
+          const msg = state.groupMessages[i];
+
+          if (msg.role === "user") {
+            return msg;
+          }
+        }
+
+        return null;
+      },
+
+      setLoading: (loading) => set({ loading }),
+
+      setIsAiThinking: (isAiThinking, groupId) =>
+        set((state) => {
+          const targetGroupId = groupId ?? state.currentGroupId ?? "";
+          const nextThinking = { ...state.aiThinkingGroupIds };
+          if (isAiThinking) {
+            nextThinking[targetGroupId] = true;
+          } else {
+            delete nextThinking[targetGroupId];
+          }
+          return {
+            aiThinkingGroupIds: nextThinking,
+            isAiThinking: targetGroupId === state.currentGroupId ? isAiThinking : state.isAiThinking,
+          };
+        }),
+
+      setIsWebSearching: (isWebSearching, groupId) =>
+        set((state) => {
+          const targetGroupId = groupId ?? state.currentGroupId ?? "";
+          const nextSearching = { ...state.webSearchingGroupIds };
+          if (isWebSearching) {
+            nextSearching[targetGroupId] = true;
+          } else {
+            delete nextSearching[targetGroupId];
+          }
+          return {
+            webSearchingGroupIds: nextSearching,
+            isWebSearching: targetGroupId === state.currentGroupId ? isWebSearching : state.isWebSearching,
+          };
+        }),
+
+      removeGroup: (id) =>
+        set((state) => ({
+          groups: state.groups.filter((g) => g._id !== id),
+          currentGroupId:
+            state.currentGroupId === id
+              ? null
+              : state.currentGroupId,
+        })),
+
+      updateGroupMembers: (groupId, members) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g._id === groupId
+              ? { ...g, members }
+              : g,
+          ),
+        })),
+
+      updateGroup: (groupId, updates) =>
+        set((state) => ({
+          groups: state.groups.map((g) =>
+            g._id === groupId
+              ? { ...g, ...updates }
+              : g,
+          ),
+        })),
+    }),
+    {
+      name: "group-storage",
+    },
+  ),
+);

@@ -1,5 +1,4 @@
 import { api, API_ORIGIN } from "@/lib/api";
-import axios from "axios";
 import type {
   Chat,
   Message,
@@ -8,13 +7,28 @@ import type {
 
 export type { Chat, Message };
 
+const normalizeMessage = (message: Message & { metadata?: { sources?: Message["sources"] } }): Message => {
+  if (message.sources?.length) {
+    return message;
+  }
+
+  if (message.metadata?.sources?.length) {
+    return {
+      ...message,
+      sources: message.metadata.sources,
+    };
+  }
+
+  return message;
+};
+
 export const chatService = {
   /**
    * Fetches all chats for a given user.
    */
-  async fetchChats(userId: string): Promise<Chat[]> {
+  async fetchChats(isArchived: boolean = false): Promise<Chat[]> {
     const res = await api.get("/chat", {
-      params: { userId },
+      params: { isArchived },
     });
     return res.data || [];
   },
@@ -22,9 +36,9 @@ export const chatService = {
   /**
    * Fetches messages for a specific chat.
    */
-  async fetchMessages(chatId: string, userId: string): Promise<Message[]> {
-    const res = await api.get(`/chat/${chatId}`, { params: { userId } });
-    return res.data.messages || [];
+  async fetchMessages(chatId: string): Promise<Message[]> {
+    const res = await api.get(`/chat/${chatId}`);
+    return (res.data.messages || []).map(normalizeMessage);
   },
 
   /**
@@ -33,6 +47,20 @@ export const chatService = {
   getStreamUrl(chatId?: string): string {
     const path = chatId ? `/api/chat/${chatId}/stream` : `/api/chat/stream`;
     return `${API_ORIGIN}${path}`;
+  },
+
+  /**
+   * Generates the streaming endpoint URL for editing a message.
+   */
+  getEditStreamUrl(chatId: string, messageId: string): string {
+    return `${API_ORIGIN}/api/chat/${chatId}/messages/${messageId}/stream`;
+  },
+
+  /**
+   * Generates the streaming endpoint URL for retrying a message.
+   */
+  getRetryStreamUrl(chatId: string, messageId: string): string {
+    return `${API_ORIGIN}/api/chat/${chatId}/messages/${messageId}/retry/stream`;
   },
 
   /**
@@ -48,6 +76,12 @@ export const chatService = {
       chatId,
     });
   },
+
+  async updateMessageFeedback(chatId: string, messageId: string, feedback: "like" | "dislike" | null) {
+    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
+  },
+
+
 
   /**
    * Parses a raw SSE event string.
@@ -75,37 +109,23 @@ export const chatService = {
   /**
    * Formats API errors for display.
    */
-  getChatErrorMessage(error: unknown): string {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const apiMessage =
-        typeof error.response?.data?.error === "string"
-          ? error.response.data.error
-          : undefined;
-      const retryAfter = error.response?.data?.retryAfter;
+  getChatErrorMessage(_error: unknown): string {
+    return `⚠️ **Failed to generate response.** The model encountered an error or is temporarily unavailable. Please try again.`;
+  },
 
-      if (apiMessage && retryAfter) {
-        return `${apiMessage} Try again in about ${retryAfter} seconds.`;
-      }
+  async archiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/archive`);
+  },
 
-      if (status === 401 || status === 403) {
-        return "Server Error: Authentication failed. Please check API configuration.";
-      }
+  async unarchiveChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unarchive`);
+  },
 
-      if (status && status >= 500) {
-        return "Server Error: AI failed to respond. Please try again later.";
-      }
+  async pinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/pin`);
+  },
 
-      return apiMessage || "Server Error: Unable to connect to AI service.";
-    }
-
-    if (error instanceof Error) {
-      if (error.name === "AbortError" || error.message.includes("timed out")) {
-        return "AI generation timed out. Please try again.";
-      }
-      return error.message;
-    }
-
-    return "Server Error: Something went wrong while sending your message.";
+  async unpinChat(chatId: string) {
+    return api.post(`/chat/${chatId}/unpin`);
   },
 };

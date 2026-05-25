@@ -1,60 +1,4 @@
 .
-├── dist
-│   ├── app.js
-│   ├── config
-│   │   └── db.js
-│   ├── constants
-│   │   ├── chat.constants.js
-│   │   └── prompt.constants.js
-│   ├── controllers
-│   │   ├── ai.controller.js
-│   │   ├── chat.controller.js
-│   │   └── user.controller.js
-│   ├── middleware
-│   │   └── error.middleware.js
-│   ├── models
-│   │   ├── Chat.model.js
-│   │   ├── UserMemory.model.js
-│   │   └── User.model.js
-│   ├── modules
-│   │   └── web-search
-│   │       ├── index.js
-│   │       ├── webSearch.prompts.js
-│   │       ├── webSearch.service.js
-│   │       └── webSearch.types.js
-│   ├── repositories
-│   │   └── chat.repository.js
-│   ├── routes
-│   │   ├── ai.routes.js
-│   │   ├── chat.routes.js
-│   │   ├── memory.routes.js
-│   │   ├── upload.routes.js
-│   │   └── user.routes.js
-│   ├── server.js
-│   ├── services
-│   │   ├── ai
-│   │   │   ├── ai.factory.js
-│   │   │   ├── ai.interface.js
-│   │   │   ├── constants.js
-│   │   │   ├── providers
-│   │   │   │   ├── claude.adapter.js
-│   │   │   │   ├── gemini.adapter.js
-│   │   │   │   ├── nvidia.adapter.js
-│   │   │   │   └── openai.adapter.js
-│   │   │   └── types.js
-│   │   ├── ai.service.js
-│   │   ├── chat.service.js
-│   │   ├── chatStreamRegistry.service.js
-│   │   ├── cloudinary.service.js
-│   │   ├── memory.service.js
-│   │   ├── user.service.js
-│   │   └── webSearch.service.js
-│   ├── types
-│   │   └── chat.types.js
-│   └── utils
-│       ├── asyncHandler.js
-│       ├── chatHistory.js
-│       └── sse.js
 ├── file_structure.txt
 ├── migrate-messages.js
 ├── package.json
@@ -69,27 +13,42 @@
 │   ├── controllers
 │   │   ├── ai.controller.ts
 │   │   ├── chat.controller.ts
+│   │   ├── groupChat.controller.ts
+│   │   ├── sharedChat.controller.ts
 │   │   └── user.controller.ts
 │   ├── middleware
+│   │   ├── auth.middleware.ts
 │   │   └── error.middleware.ts
 │   ├── models
 │   │   ├── Chat.model.ts
+│   │   ├── GroupChat.model.ts
+│   │   ├── SharedChat.model.ts
 │   │   ├── UserMemory.model.ts
 │   │   └── User.model.ts
 │   ├── modules
 │   │   └── web-search
+│   │       ├── cache.ts
+│   │       ├── confidence.ts
 │   │       ├── index.ts
+│   │       ├── queryResolver.ts
+│   │       ├── quotaStatus.ts
+│   │       ├── rateLimiter.ts
+│   │       ├── reranker.ts
 │   │       ├── webSearch.prompts.ts
 │   │       ├── webSearch.service.ts
+│   │       ├── web_search.txt
 │   │       └── webSearch.types.ts
 │   ├── repositories
 │   │   └── chat.repository.ts
 │   ├── routes
 │   │   ├── ai.routes.ts
 │   │   ├── chat.routes.ts
+│   │   ├── groupChat.routes.ts
 │   │   ├── memory.routes.ts
+│   │   ├── sharedChat.routes.ts
 │   │   ├── upload.routes.ts
-│   │   └── user.routes.ts
+│   │   ├── user.routes.ts
+│   │   └── webSearch.routes.ts
 │   ├── server.ts
 │   ├── services
 │   │   ├── ai
@@ -106,14 +65,17 @@
 │   │   ├── chat.service.ts
 │   │   ├── chatStreamRegistry.service.ts
 │   │   ├── cloudinary.service.ts
+│   │   ├── groupChat.service.ts
 │   │   ├── memory.service.ts
+│   │   ├── sharedChat.service.ts
 │   │   └── user.service.ts
 │   ├── types
 │   │   └── chat.types.ts
 │   └── utils
 │       ├── asyncHandler.ts
 │       ├── chatHistory.ts
+│       ├── groupSse.ts
 │       └── sse.ts
 └── tsconfig.json
 
-30 directories, 86 files
+15 directories, 63 files

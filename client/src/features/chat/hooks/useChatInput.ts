@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
+import { useParams } from "react-router-dom";
 import { DEFAULT_CHAT_PROVIDER } from "@/features/chat/constants/chat.constants";
 
 export interface Attachment {
@@ -8,6 +9,8 @@ export interface Attachment {
   mimeType?: string;
   size?: number;
 }
+
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
 
 interface UseChatInputProps {
   onSubmit: (
@@ -35,6 +38,14 @@ export const useChatInput = ({
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const { chatId } = useParams<{ chatId?: string }>();
+
+  // Clear typed input, attachments, and reset web search when chat switching
+  useEffect(() => {
+    setInput("");
+    setAttachments([]);
+    setWebSearchEnabled(false);
+  }, [chatId]);
 
   // Persist provider selection
   useEffect(() => {
@@ -43,7 +54,8 @@ export const useChatInput = ({
 
   const handleFormSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!input.trim() && attachments.length === 0) return;
+    const selectionContext = useComposerStore.getState().selectionContext;
+    if (!input.trim() && attachments.length === 0 && !selectionContext) return;
 
     const currentInput = input;
     const currentAttachments = [...attachments];

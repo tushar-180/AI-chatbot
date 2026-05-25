@@ -1,6 +1,7 @@
 import {
   type SyntheticEvent,
   type KeyboardEvent,
+  type ComponentType,
   useRef,
   useEffect,
   memo,
@@ -15,15 +16,30 @@ import {
   X,
   Mic,
   Globe,
+  Archive,
+  Image as ImageIcon,
+  FileText,
+  Table,
+  MonitorPlay,
+  File as FileIcon,
 } from "lucide-react";
 
-import { Gemini, Anthropic, OpenAI, Nvidia } from "@lobehub/icons";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   useAvailableProviders,
   type Provider,
@@ -33,8 +49,11 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { useVoiceInput } from "@/features/chat/hooks/useVoiceInput";
+import { ComposerQuotePreview } from "./ComposerQuotePreview";
+import { useComposerStore } from "@/features/chat/store/useComposerStore";
+import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 
-interface InputAreaProps {
+export interface InputAreaProps {
   input: string;
   onInputChange: (value: string) => void;
   onSubmit: (e: SyntheticEvent<HTMLFormElement>) => void;
@@ -47,7 +66,22 @@ interface InputAreaProps {
   attachments?: Attachment[];
   onAttachmentsChange?: (attachments: Attachment[]) => void;
   webSearchEnabled: boolean;
+  quotaStatus?: {
+    allowed: boolean;
+    scope: "ok" | "global" | "user" | "cooldown" | "monthly";
+    reason?:
+      | "global_quota_exceeded"
+      | "user_quota_exceeded"
+      | "cooldown_active"
+      | "monthly_credits_exhausted";
+    message?: string;
+    retryAfterMs?: number;
+  } | null;
+  isQuotaLoading?: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
+  isArchived?: boolean;
+  onUnarchive?: () => void;
+  onSubmitDocument?: (file: File) => void;
 }
 
 /**
@@ -55,11 +89,11 @@ interface InputAreaProps {
  */
 const getProviderIcon = (providerId: string, size = 14) => {
   const p = providerId.split(":")[0].toLowerCase();
-  const mapping: Record<string, any> = {
-    gemini: Gemini.Color,
-    claude: Anthropic,
-    openai: OpenAI,
-    nvidia: Nvidia.Color,
+  const mapping: Record<string, ComponentType<{ size?: number }>> = {
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
   };
   const Icon = mapping[p];
   return Icon ? <Icon size={size} /> : null;
@@ -75,58 +109,93 @@ const getModelOnlyName = (fullName: string) => {
 const WebSearchToggle = ({
   enabled,
   onToggle,
+  disabled,
+  reason,
 }: {
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
-}) => (
-  <button
-    type="button"
-    onClick={() => onToggle(!enabled)}
-    aria-pressed={enabled}
-    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
-      enabled
-        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-300/40 hover:bg-emerald-400/15"
-        : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-    }`}
-  >
-    <Globe size={12} />
-    <span>Web</span>
-  </button>
-);
+  disabled?: boolean;
+  reason?: string;
+}) => {
+  const button = (
+    <button
+      type="button"
+      onClick={() => {
+        if (disabled) return;
+        onToggle(!enabled);
+      }}
+      aria-pressed={enabled}
+      className={`
+                flex items-center gap-1.5 lg:gap-2 rounded-lg border px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest transition-all cursor-pointer
+                ${
+                  enabled
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
+                    : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                }
+                ${disabled ? "opacity-40 cursor-not-allowed" : ""}
+            `}
+    >
+      {disabled && reason === "Loading..." ? (
+        <Loader2 size={12} className="animate-spin" />
+      ) : (
+        <Globe size={12} />
+      )}
+      <span>Web Search</span>
+    </button>
+  );
 
-/**
- * Sub-component for selecting AI Model
- */
+  if (disabled && reason && reason !== "Loading...") {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent>
+            <p>{reason}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return button;
+};
+
 const ModelSelector = ({
   availableProviders,
   selectedProvider,
   onProviderChange,
   webSearchEnabled,
   onWebSearchToggle,
+  quotaStatus,
+  isQuotaLoading,
 }: {
   availableProviders: Provider[];
   selectedProvider: string;
   onProviderChange: (id: string) => void;
   webSearchEnabled: boolean;
   onWebSearchToggle: (enabled: boolean) => void;
+  quotaStatus?: InputAreaProps["quotaStatus"];
+  isQuotaLoading?: boolean;
 }) => {
   const currentProviderName =
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
 
   return (
-    <div className="flex items-center gap-2 px-4 pt-3">
+    <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-slate-400 lg:text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white cursor-pointer"
           >
             {getProviderIcon(selectedProvider, 12)}
-            <span>{getModelOnlyName(currentProviderName)}</span>
+            <span className="max-w-[100px] lg:max-w-none truncate">
+              {getModelOnlyName(currentProviderName)}
+            </span>
             <ChevronDown
               size={10}
-              className="ml-0.5 text-slate-600 transition-colors"
+              className="ml-0.5 text-slate-500 transition-colors"
             />
           </button>
         </DropdownMenuTrigger>
@@ -154,6 +223,21 @@ const ModelSelector = ({
       <WebSearchToggle
         enabled={webSearchEnabled}
         onToggle={onWebSearchToggle}
+        disabled={isQuotaLoading || quotaStatus?.allowed === false}
+        reason={
+          isQuotaLoading
+            ? "Loading..."
+            : quotaStatus?.allowed === false
+              ? quotaStatus.scope === "global"
+                ? "Global daily limit reached"
+                : quotaStatus.scope === "user"
+                  ? "Daily user limit reached"
+                  : quotaStatus.scope === "monthly" ||
+                      quotaStatus.reason === "monthly_credits_exhausted"
+                    ? "Monthly credits exhausted"
+                    : "Cooldown active"
+              : undefined
+        }
       />
     </div>
   );
@@ -176,16 +260,26 @@ const InputArea = ({
   onAttachmentsChange,
   webSearchEnabled,
   onWebSearchToggle,
+  isArchived = false,
+  onUnarchive,
+  quotaStatus,
+  isQuotaLoading,
+  onSubmitDocument,
 }: InputAreaProps) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const isTemporaryChatActive = useTemporaryChatStore(
+    (state) => state.isTemporaryChatActive,
+  );
   const [isUploading, setIsUploading] = useState(false);
+  const selectionContext = useComposerStore((state) => state.selectionContext);
+  const [isFocused, setIsFocused] = useState(false);
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
     onResult: (text) => {
       console.log("✍️ Injecting voice text into input:", text);
-      onInputChange(text);
+      onInputChange(input + " " + text);
     },
   });
 
@@ -198,14 +292,37 @@ const InputArea = ({
 
   // Auto-resize logic
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        200,
-      )}px`;
-    }
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const handle = requestAnimationFrame(() => {
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+    });
+    return () => cancelAnimationFrame(handle);
   }, [input]);
+
+  // Quote insertion listener with focus and cursor placement
+  useEffect(() => {
+    const handleInsertQuote = (e: Event) => {
+      const customEvent = e as CustomEvent<{ text: string }>;
+      const textToInsert = customEvent.detail.text;
+      onInputChange(textToInsert);
+
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.selectionStart = textareaRef.current.value.length;
+          textareaRef.current.selectionEnd = textareaRef.current.value.length;
+        }
+      }, 50);
+    };
+
+    window.addEventListener("insert-quote", handleInsertQuote);
+    return () => {
+      window.removeEventListener("insert-quote", handleInsertQuote);
+    };
+  }, [onInputChange]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -215,26 +332,55 @@ const InputArea = ({
         !loading &&
         !isUploading
       ) {
-        const event = {
-          preventDefault: () => {},
-        } as SyntheticEvent<HTMLFormElement>;
-        onSubmit(event);
+        handleFormSubmit(e as any);
       }
     }
   };
 
+  const ALLOWED_FILE_TYPES = [
+    "application/pdf",
+
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ];
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (!file) return;
 
-    // Basic validation
-    if (!file.type.startsWith("image/")) {
-      toast.error("Only image uploads are supported currently");
+    const isImage = file.type.startsWith("image/");
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+
+    if (attachments.length > 0 || attachedFile) {
+      toast.error("You can only upload one file per message.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size must be less than 5MB");
+    if (isDocument) {
+      setAttachedFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    // Basic validation
+    if (!isImage && !isDocument) {
+      toast.error("Unsupported file type!");
+      return;
+    }
+
+    const MAX_SIZE = isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+    const maxMB = MAX_SIZE / (1024 * 1024);
+
+    if (file.size > MAX_SIZE) {
+      toast.error(`Image size must be less than ${maxMB}MB`);
       return;
     }
 
@@ -243,7 +389,6 @@ const InputArea = ({
     formData.append("image", file);
 
     try {
-      
       const res = await api.post("/upload/image", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -266,162 +411,320 @@ const InputArea = ({
     }
   };
 
+  const getAttachmentIcon = (mimeType?: string) => {
+    if (!mimeType) return FileIcon;
+
+    const WORD = [
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+
+    const EXCEL = [
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ];
+
+    const PPT = [
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ];
+
+    if (mimeType.startsWith("image/")) {
+      return ImageIcon;
+    }
+
+    if (WORD.includes(mimeType)) return FileText;
+    if (EXCEL.includes(mimeType)) return Table;
+    if (PPT.includes(mimeType)) return MonitorPlay;
+
+    if (mimeType.includes("pdf")) {
+      return FileText;
+    }
+
+    if (mimeType.includes("sheet")) {
+      return Table;
+    }
+
+    if (mimeType.includes("presentation")) {
+      return MonitorPlay;
+    }
+
+    return FileIcon;
+  };
+
   const removeAttachment = (index: number) => {
     const next = [...attachments];
     next.splice(index, 1);
     onAttachmentsChange?.(next);
   };
 
+  const handleFormSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (loading || isUploading) return;
+
+    if (attachedFile && onSubmitDocument) {
+      onSubmitDocument(attachedFile);
+      setAttachedFile(null);
+      return;
+    }
+
+    // Normal submission (no document)
+    onSubmit(e);
+  };
+
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none">
-      <form
-        onSubmit={onSubmit}
-        className="mx-auto max-w-4xl relative pointer-events-auto"
-      >
-        <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
-          <ModelSelector
-            availableProviders={availableProviders}
-            selectedProvider={selectedProvider}
-            onProviderChange={onProviderChange}
-            webSearchEnabled={webSearchEnabled}
-            onWebSearchToggle={onWebSearchToggle}
-          />
-
-          {/* Attachment Previews */}
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 py-2">
-              {attachments.map((att, i) => (
-                <div
-                  key={att.url}
-                  className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
-                >
-                  <img
-                    src={att.url}
-                    alt={att.name}
-                    className="h-full w-full object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(i)}
-                    className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
+    <div className="sticky bottom-0 z-30 pb-8 px-4 lg:px-10 not-selectable">
+      {isArchived ? (
+        <div className="mx-auto max-w-4xl  px-4 lg:px-0">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 lg:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                <Archive size={20} />
+              </div>
+              <div className="text-left">
+                <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.15em] mb-0.5">
+                  Archived Session
+                </h4>
+                <p className="text-[10px] text-slate-500 font-medium leading-tight">
+                  This conversation is preserved in the vault.
+                </p>
+              </div>
             </div>
-          )}
-
-          <div className="flex items-end gap-2 pr-2">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              className="hidden"
-              accept="image/*"
-            />
-
-            {canUpload && (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50"
-                aria-label="Upload image"
-              >
-                {isUploading ? (
-                  <Loader2 size={18} className="animate-spin text-white" />
-                ) : (
-                  <Paperclip size={18} />
-                )}
-              </button>
-            )}
-
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => onInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              placeholder={
-                currentChatId ? "Ask anything..." : "Start a conversation..."
-              }
-              className={`max-h-50 md:max-h-75 min-h-12 md:min-h-14 flex-1 resize-none bg-transparent ${canUpload ? "px-1" : "px-4"} py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto scrollbar-hide`}
-            />
             <button
-              type="button"
-              onClick={() => {
-                if (isListening) {
-                  stop();
-                } else {
-                  start();
-                }
-              }}
-              className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                isListening
-                  ? "bg-rose-500/20 text-rose-400"
-                  : "text-slate-500 hover:bg-white/5 hover:text-white"
-              }`}
-              aria-label="Voice input"
+              onClick={onUnarchive}
+              className="w-full lg:w-auto flex items-center justify-center gap-2 bg-white text-black px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-400 transition-all shadow-xl shadow-white/5"
             >
-              {isListening && !isSpeaking && (
-                <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
-              )}
-
-              {isSpeaking && (
-                <>
-                  <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
-                  <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
-                </>
-              )}
-
-              <span className="relative z-10 flex items-center justify-center">
-                {isListening ? (
-                  <Square size={14} fill="currentColor" />
-                ) : (
-                  <Mic size={18} />
-                )}
-              </span>
+              <ArrowUp size={14} className="rotate-180" />
+              <span>Restore to continue</span>
             </button>
-            {isStreaming ? (
-              <button
-                type="button"
-                onClick={onStop}
-                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
-                aria-label="Stop generation"
-              >
-                <Square
-                  size={14}
-                  fill="currentColor"
-                  className="transition-colors group-hover:text-rose-600"
-                />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={
-                  loading ||
-                  isUploading ||
-                  (!input.trim() && attachments.length === 0)
-                }
-                className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  loading ||
-                  isUploading ||
-                  (!input.trim() && attachments.length === 0)
-                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                    : "bg-white text-slate-900 hover:bg-slate-200"
-                }`}
-              >
-                {loading ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <ArrowUp size={18} strokeWidth={2.5} />
-                )}
-              </button>
-            )}
           </div>
         </div>
-      </form>
+      ) : (
+        <>
+          <form
+            onSubmit={handleFormSubmit}
+            className="mx-auto max-w-4xl relative "
+          >
+            <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+              <ComposerQuotePreview />
+
+              <ModelSelector
+                availableProviders={availableProviders}
+                selectedProvider={selectedProvider}
+                onProviderChange={onProviderChange}
+                webSearchEnabled={webSearchEnabled}
+                onWebSearchToggle={onWebSearchToggle}
+                quotaStatus={quotaStatus}
+                isQuotaLoading={isQuotaLoading}
+              />
+
+              {/* Attachment Previews */}
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-4 py-2">
+                  {attachments.map((att, i) => {
+                    const isImage = att.mimeType?.startsWith("image/");
+                    const Icon = getAttachmentIcon(att.mimeType);
+
+                    return (
+                      <div
+                        key={`${att.url}-${i}`}
+                        className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                      >
+                        {isImage ? (
+                          <img
+                            src={att.url}
+                            alt={att.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
+                            <Icon
+                              size={20}
+                              className="text-slate-300 shrink-0"
+                            />
+
+                            <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
+                              {att.name}
+                            </span>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(i)}
+                          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {attachedFile && (
+                <div className="flex flex-wrap gap-2 px-4 py-2">
+                  <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                    <FileText size={20} className="text-slate-300 shrink-0" />
+                    <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                      {attachedFile.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAttachedFile(null)}
+                      className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-end gap-1.5 lg:gap-2 pr-2 pb-1.5 lg:pb-2 pl-2 lg:pl-0">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                />
+
+                {canUpload && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full mb-1 lg:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
+                    aria-label="Upload image"
+                  >
+                    {isUploading ? (
+                      <Loader2 size={18} className="animate-spin text-white" />
+                    ) : (
+                      <Paperclip size={18} />
+                    )}
+                  </button>
+                )}
+
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onFocus={() => setIsFocused(true)}
+                  onBlur={() => setIsFocused(false)}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  rows={1}
+                  placeholder={
+                    isTemporaryChatActive
+                      ? "Message Temporary Chat..."
+                      : currentChatId
+                        ? "Ask anything..."
+                        : "Start a conversation..."
+                  }
+                  // Prevent copy when NOT focused
+                  onCopy={(e) => {
+                    if (!isFocused) {
+                      e.preventDefault();
+                    }
+                  }}
+                  // Prevent selection when NOT focused
+                  onSelect={(e) => {
+                    if (!isFocused) {
+                      const el = e.currentTarget;
+                      requestAnimationFrame(() => {
+                        el.selectionStart = el.selectionEnd;
+                      });
+                    }
+                  }}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent px-2 lg:px-1 py-2 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                />
+
+                <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
+                  {/* Mic button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isListening) {
+                        stop();
+                      } else {
+                        start();
+                      }
+                    }}
+                    className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
+                      isListening
+                        ? "bg-rose-500/20 text-rose-400"
+                        : "text-slate-500 hover:bg-white/5 hover:text-white"
+                    }`}
+                    aria-label="Voice input"
+                  >
+                    {isListening && !isSpeaking && (
+                      <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
+                    )}
+
+                    {isSpeaking && (
+                      <>
+                        <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
+                        <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
+                      </>
+                    )}
+
+                    <span className="relative z-10 flex items-center justify-center">
+                      {isListening ? (
+                        <Square size={14} fill="currentColor" />
+                      ) : (
+                        <Mic size={18} />
+                      )}
+                    </span>
+                  </button>
+
+                  {/* Send / Stop button */}
+                  {isStreaming ? (
+                    <button
+                      type="button"
+                      onClick={onStop}
+                      className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
+                      aria-label="Stop generation"
+                    >
+                      <Square
+                        size={14}
+                        fill="currentColor"
+                        className="transition-colors group-hover:text-rose-600"
+                      />
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={
+                        loading ||
+                        isUploading ||
+                        (!input.trim() &&
+                          attachments.length === 0 &&
+                          !selectionContext &&
+                          !attachedFile)
+                      }
+                      className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 cursor-pointer ${
+                        loading ||
+                        isUploading ||
+                        (!input.trim() &&
+                          attachments.length === 0 &&
+                          !selectionContext)
+                          ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                          : "bg-white text-slate-900 hover:bg-slate-200"
+                      }`}
+                      aria-label={loading ? "Sending..." : "Send message"}
+                      title={loading ? "Sending..." : "Send message"}
+                    >
+                      {loading ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <ArrowUp size={18} strokeWidth={2.5} />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </form>
+        </>
+      )}
     </div>
   );
 };

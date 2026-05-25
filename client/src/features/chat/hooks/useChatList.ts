@@ -1,35 +1,41 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useUser } from "@clerk/react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { api } from "@/lib/api";
 import { useServerStatus } from "@/contexts/ServerStatusContext";
+import { useProjectStore } from "@/features/chat/store/useProjectStore";
 
-export const useChatList = () => {
+export const useChatList = ({ shouldFetch = false } = {}) => {
   const { user } = useUser();
   const navigate = useNavigate();
+  const location = useLocation();
   const fetchedUserIdRef = useRef<string | null>(null);
-  const {
-    chats,
-    currentChatId,
-    messages,
-    loading,
-    isStreaming,
-    isNewChat,
-    page,
-    hasMore,
-    setChats,
-    appendChats,
-    setHasMore,
-    setPage,
-    setCurrentChat,
-    setMessages,
-    setIsNewChat,
-    setSidebarOpen,
-    removeChat,
-    updateChatTitle,
-  } = useChatStore();
+  const chats = useChatStore((state) => state.chats);
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const loading = useChatStore((state) => state.loading);
+  const isStreaming = useChatStore((state) => state.isStreaming);
+  const isNewChat = useChatStore((state) => state.isNewChat);
+  const page = useChatStore((state) => state.page);
+  const hasMore = useChatStore((state) => state.hasMore);
+  const setChats = useChatStore((state) => state.setChats);
+  const appendChats = useChatStore((state) => state.appendChats);
+  const setHasMore = useChatStore((state) => state.setHasMore);
+  const setPage = useChatStore((state) => state.setPage);
+  const setCurrentChat = useChatStore((state) => state.setCurrentChat);
+  const setMessages = useChatStore((state) => state.setMessages);
+  const setIsNewChat = useChatStore((state) => state.setIsNewChat);
+  const setSidebarOpen = useChatStore((state) => state.setSidebarOpen);
+  const removeChat = useChatStore((state) => state.removeChat);
+  const updateChatTitle = useChatStore((state) => state.updateChatTitle);
+  const updateChatArchive = useChatStore((state) => state.updateChatArchive);
+  const updateChatPin = useChatStore((state) => state.updateChatPin);
+  const viewingArchived = useChatStore((state) => state.viewingArchived);
+  const setViewingArchived = useChatStore((state) => state.setViewingArchived);
+  const upsertChat = useChatStore((state) => state.upsertChat);
+  const currentChat = useChatStore((state) => state.currentChat);
+  const setLoading = useChatStore((state) => state.setLoading);
 
   const createChat = () => {
     setIsNewChat(true);
@@ -69,28 +75,148 @@ export const useChatList = () => {
       throw err; // Propagate error to handle UI state in component
     }
   };
-  const selectChat = (chatId: string) => {
+
+  const moveChatToProject = async (chatId: string, projectId: string) => {
+    try {
+      const chatToMove = chats.find(c => c._id === chatId) || (chatId === currentChatId ? currentChat : null);
+      
+      await api.patch(`/chat/${chatId}/move`, { projectId });
+      removeChat(chatId);
+      
+      if (chatToMove) {
+        const activeProjectId = useProjectStore.getState().activeProjectId;
+        if (activeProjectId === projectId) {
+          useProjectStore.getState().addChatToProjectStore({ ...chatToMove, projectId });
+        }
+      }
+      
+      if (chatId === currentChatId) {
+        setCurrentChat(null);
+        setMessages([]);
+        setIsNewChat(true);
+        navigate("/chat");
+      }
+      
+      toast.success("Chat moved to project successfully.");
+    } catch (err) {
+      console.error("Error moving chat to project", err);
+      toast.error("Could not move chat to project.");
+    }
+  };
+
+  const archiveChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/archive`);
+      updateChatArchive(chatId, true);
+      toast.success("Chat archived successfully.");
+      
+      if (chatId === currentChatId) {
+        navigate("/chat");
+      }
+    } catch (err) {
+      console.error("Error archiving chat", err);
+      toast.error("Could not archive chat.");
+    }
+  };
+
+  const unarchiveChat = async (chatId: string) => {
+    try {
+      const chat = chats.find(c => c._id === chatId) || (currentChatId === chatId ? currentChat : null);
+      await api.post(`/chat/${chatId}/unarchive`);
+      
+      // If it was pinned, also unpin it on the server
+      if (chat?.isPinned) {
+        await api.post(`/chat/${chatId}/unpin`);
+      }
+      
+      updateChatArchive(chatId, false);
+      toast.success("Chat unarchived and restored.");
+    } catch (err) {
+      console.error("Error unarchiving chat", err);
+      toast.error("Could not unarchive chat.");
+    }
+  };
+  const pinChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/pin`);
+      updateChatPin(chatId, true);
+      toast.success("Chat pinned.");
+    } catch (err) {
+      console.error("Error pinning chat", err);
+      toast.error("Could not pin chat.");
+    }
+  };
+
+  const unpinChat = async (chatId: string) => {
+    try {
+      await api.post(`/chat/${chatId}/unpin`);
+      updateChatPin(chatId, false);
+      toast.success("Chat unpinned.");
+    } catch (err) {
+      console.error("Error unpinning chat", err);
+      toast.error("Could not unpin chat.");
+    }
+  };
+  const selectChat = async (chatId: string, highlight?: string) => {
+    const queryStr = highlight ? `?highlight=${encodeURIComponent(highlight)}` : "";
+    
+    // If it's already the current chat, just navigate to handle highlight/focus
     if (chatId === currentChatId) {
       setSidebarOpen(false);
+      navigate(`/chat/${chatId}${queryStr}`, { replace: true });
       return;
     }
 
-    setIsNewChat(false);
-    setCurrentChat(chatId);
-    setMessages([]); // Clear messages immediately for smoother transition
-    setSidebarOpen(false);
-    navigate(`/chat/${chatId}`);
+    // If it's in the current sidebar list
+    const existingChat = chats.find((c) => c._id === chatId);
+
+    if (existingChat) {
+      setIsNewChat(false);
+      setCurrentChat(chatId, existingChat);
+      setMessages([]);
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}${queryStr}`);
+      return;
+    }
+
+    // If not in current list (maybe in other view or not loaded yet)
+    try {
+      const res = await api.get(`/chat/${chatId}`);
+      const chat = res.data;
+
+      // If the chat's archive status doesn't match our current view, switch views
+      if (chat && chat.isArchived !== viewingArchived) {
+        setViewingArchived(chat.isArchived);
+      }
+
+      setIsNewChat(false);
+      upsertChat(chat); // Ensure it's in the sidebar list
+      setCurrentChat(chatId, chat);
+      setMessages([]);
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}${queryStr}`);
+    } catch (err) {
+      console.error("Error selecting chat", err);
+      // Fallback for safety
+      setIsNewChat(false);
+      setCurrentChat(chatId);
+      setMessages([]);
+      setSidebarOpen(false);
+      navigate(`/chat/${chatId}${queryStr}`);
+    }
   };
 
   const { isDown } = useServerStatus();
+  const isSharedChatRoute = location.pathname.startsWith("/shared/");
 
-  const fetchMoreChats = async () => {
+  const fetchMoreChats = useCallback(async () => {
     if (!user?.id || loading || isStreaming || !hasMore) return;
 
     try {
+      setLoading(true);
       const nextPage = page + 1;
       const res = await api.get("/chat", {
-        params: { userId: user.id, page: nextPage, limit: 20 },
+        params: { page: nextPage, limit: 20, isArchived: viewingArchived },
       });
 
       const fetchedChats = res.data || [];
@@ -102,44 +228,85 @@ export const useChatList = () => {
       setPage(nextPage);
     } catch (err) {
       console.error("Error fetching more chats", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    user?.id,
+    loading,
+    isStreaming,
+    hasMore,
+    page,
+    viewingArchived,
+    setLoading,
+    setHasMore,
+    appendChats,
+    setPage,
+  ]);
+
+  const searchChats = async (query: string) => {
+    if (!query.trim()) return [];
+    try {
+      const res = await api.get("/chat/search", { params: { q: query } });
+      return res.data || [];
+    } catch (err) {
+      console.error("Error searching chats", err);
+      return [];
     }
   };
 
+  const currentChatIdRef = useRef(currentChatId);
+  currentChatIdRef.current = currentChatId;
+
+  const isNewChatRef = useRef(isNewChat);
+  isNewChatRef.current = isNewChat;
+
+  const isStreamingRef = useRef(isStreaming);
+  isStreamingRef.current = isStreaming;
+
+  const messagesLengthRef = useRef(useChatStore.getState().messages.length);
+  messagesLengthRef.current = useChatStore.getState().messages.length;
+
   useEffect(() => {
+    if (!shouldFetch) return;
+
+    const fetchKey = `${user?.id}-${viewingArchived}`;
     if (
       !user?.id ||
       loading ||
-      isStreaming ||
-      fetchedUserIdRef.current === user.id
+      isStreamingRef.current ||
+      fetchedUserIdRef.current === fetchKey
     ) {
       return;
     }
 
     const fetchChats = async () => {
       try {
+        setLoading(true);
         const res = await api.get("/chat", {
-          params: { userId: user.id, page: 1, limit: 20 },
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
         });
 
         const fetchedChats = res.data || [];
-        fetchedUserIdRef.current = user.id;
+        fetchedUserIdRef.current = fetchKey;
         setChats(fetchedChats);
         setPage(1);
         setHasMore(fetchedChats.length === 20);
 
         if (fetchedChats.length === 0) {
-          if (isNewChat || messages.length > 0) return;
+          if (isNewChatRef.current || messagesLengthRef.current > 0) return;
           setCurrentChat(null);
           setMessages([]);
           return;
         }
 
         const shouldAutoSelectFirstChat =
-          !currentChatId &&
-          !isNewChat &&
+          !isSharedChatRoute &&
+          !currentChatIdRef.current &&
+          !isNewChatRef.current &&
           !loading &&
-          !isStreaming &&
-          messages.length === 0;
+          !isStreamingRef.current &&
+          messagesLengthRef.current === 0;
 
         if (shouldAutoSelectFirstChat) {
           setCurrentChat(fetchedChats[0]._id);
@@ -150,22 +317,24 @@ export const useChatList = () => {
         if (!isDown) {
           toast.error("Could not load chats.");
         }
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchChats();
   }, [
     user?.id,
-    currentChatId,
-    isNewChat,
+    isSharedChatRoute,
     loading,
-    isStreaming,
-    messages.length,
     setChats,
     setCurrentChat,
     setMessages,
     setPage,
     setHasMore,
+    viewingArchived,
+    shouldFetch,
+    setLoading,
   ]);
 
   const deleteChats = async (chatIds: string[]) => {
@@ -187,6 +356,17 @@ export const useChatList = () => {
       }
       
       toast.success(`${chatIds.length} chats deleted successfully.`);
+
+      // If the list is now empty but there might be more on the server, re-fetch page 1
+      if (chats.length === 0 && hasMore) {
+        setPage(1);
+        const res = await api.get("/chat", {
+          params: { page: 1, limit: 20, isArchived: viewingArchived },
+        });
+        const fetchedChats = res.data || [];
+        setChats(fetchedChats);
+        setHasMore(fetchedChats.length === 20);
+      }
     } catch (err) {
       console.error("Error deleting chats", err);
       toast.error("Could not delete some chats.");
@@ -200,8 +380,19 @@ export const useChatList = () => {
     deleteChat,
     deleteChats,
     renameChat,
+    moveChatToProject,
+    archiveChat,
+    unarchiveChat,
+    pinChat,
+    unpinChat,
     selectChat,
     fetchMoreChats,
+    searchChats,
     hasMore,
+    loading,
+    viewingArchived,
+    setViewingArchived,
+    upsertChat,
+    currentChat,
   };
 };

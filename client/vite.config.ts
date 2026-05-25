@@ -11,26 +11,75 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    include: ['hoist-non-react-statics'],
+    exclude: ['react-syntax-highlighter'],
+  },
   build: {
+    sourcemap: true,
     chunkSizeWarningLimit: 1000,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) return 'vendor-react';
-            if (id.includes('@clerk')) return 'vendor-clerk';
-            if (id.includes('react-syntax-highlighter')) return 'vendor-syntax';
-            if (id.includes('react-markdown') || id.includes('remark-') || id.includes('rehype-')) return 'vendor-markdown';
-            if (id.includes('lucide-react')) return 'vendor-icons';
-            if (id.includes('radix-ui')) return 'vendor-ui';
-            if (id.includes('@lobehub/icons')) return 'vendor-lobehub-icons';
-            if (id.includes('@lobehub')) return 'vendor-lobehub';
-            if (id.includes('antd') || id.includes('@ant-design')) return 'vendor-antd';
-            if (id.includes('zod') || id.includes('axios') || id.includes('zustand')) return 'vendor-utils';
-            return 'vendor';
-          }
+        codeSplitting: {
+          groups: [
+            {
+              name: 'vendor-react',
+              test: /node_modules[\\/](react|react-dom|scheduler)([\\/]|$)/,
+              priority: 100,
+            },
+            {
+              name: 'vendor-clerk',
+              test: /node_modules[\\/]@clerk([\\/]|$)/,
+              priority: 90,
+            },
+            {
+              name: 'vendor-recharts',
+              test: /node_modules[\\/](recharts|d3-|victory-)([\\/]|$)/,
+              priority: 80,
+            },
+            {
+              name: 'vendor-syntax',
+              test: /node_modules[\\/](react-syntax-highlighter|refractor|prismjs|highlight\.js)([\\/]|$)/,
+              priority: 75,
+            },
+            {
+              name: 'vendor-markdown',
+              test: /node_modules[\\/](react-markdown|remark-|rehype-|mdast-|micromark|unist-|vfile|property-information|space-separated-tokens|comma-separated-tokens|decode-named-character-reference|trim-lines)([\\/]|$)/,
+              priority: 70,
+            },
+            {
+              name: 'vendor-icons',
+              test: /node_modules[\\/]lucide-react([\\/]|$)/,
+              priority: 60,
+            },
+            {
+              name: 'vendor-lobehub-icons',
+              test: /node_modules[\\/]@lobehub[\\/]icons([\\/]|$)/,
+              priority: 50,
+            },
+            {
+              name: 'vendor-lobehub',
+              test: /node_modules[\\/]@lobehub([\\/]|$)/,
+              priority: 45,
+            },
+            {
+              name: 'vendor-antd',
+              test: /node_modules[\\/](antd|@ant-design)([\\/]|$)/,
+              priority: 40,
+            },
+            {
+              name: 'vendor-utils',
+              test: /node_modules[\\/](zod|axios|zustand|socket.io-client)([\\/]|$)/,
+              priority: 30,
+            },
+            {
+              name: 'vendor',
+              test: /node_modules/,
+              priority: 10,
+            },
+          ],
         },
       },
     },
   },
-})
+} as any)

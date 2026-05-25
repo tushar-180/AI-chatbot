@@ -5,8 +5,14 @@ import { toast } from "sonner";
 import { useUser } from "@clerk/react";
 import axios from "axios";
 
-export const useChatMessages = () => {
-  const { currentChatId, isStreaming, streamingChatId, setMessages } =
+interface UseChatMessagesOptions {
+  skipFetch?: boolean;
+}
+
+export const useChatMessages = ({
+  skipFetch = false,
+}: UseChatMessagesOptions = {}) => {
+  const { currentChatId, streamingChatIds, setMessages } =
     useChatStore();
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
@@ -19,6 +25,14 @@ export const useChatMessages = () => {
       queueMicrotask(() => {
         setMessagesLoading(false);
         setLoadedChatId(null);
+        setMessagesError(null);
+      });
+      return;
+    }
+
+    if (skipFetch) {
+      queueMicrotask(() => {
+        setMessagesLoading(false);
         setMessagesError(null);
       });
       return;
@@ -43,10 +57,15 @@ export const useChatMessages = () => {
       return;
     }
 
+    const isChatStreaming = Boolean(
+      currentChatId && streamingChatIds[currentChatId] === true,
+    );
+
     // 2. Let the active stream drive the visible messages without forcing a refetch later.
-    if (isStreaming && streamingChatId === currentChatId) {
+    if (isChatStreaming) {
       queueMicrotask(() => {
         setMessagesLoading(false);
+        setLoadedChatId(currentChatId);
         setMessagesError(null);
       });
       return;
@@ -67,7 +86,7 @@ export const useChatMessages = () => {
       setMessagesError(null);
 
       try {
-        const messages = await chatService.fetchMessages(currentChatId, user.id);
+        const messages = await chatService.fetchMessages(currentChatId);
 
         if (!cancelled) {
           setMessages(messages);
@@ -103,8 +122,8 @@ export const useChatMessages = () => {
   }, [
     currentChatId,
     isLoaded,
-    isStreaming,
-    streamingChatId,
+    streamingChatIds,
+    skipFetch,
     loadedChatId,
     setMessages,
     user?.id,
