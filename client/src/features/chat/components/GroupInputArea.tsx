@@ -140,13 +140,17 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   const mentionedModelId = getMentionedModelId();
-  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : false;
+  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : true;
 
   useEffect(() => {
     if (!hasMention) {
       setWebSearchEnabled(false);
     }
-  }, [hasMention]);
+    if (!canUpload) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  }, [hasMention, canUpload]);
 
   // Fetch AI providers on mount
   useEffect(() => {
@@ -218,30 +222,53 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     if (!text) return null;
 
     const parts: React.ReactNode[] = [];
-    const regex = /(@[a-zA-Z0-9-:_/.]+)/g;
-    const tokens = text.split(regex);
+    const regex = /(@[a-zA-Z0-9-:_/.]+)(\s?)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
 
-    tokens.forEach((token, i) => {
-      if (token.match(regex)) {
-        const mentionText = token.substring(1).toLowerCase();
-        const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
-          const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-        });
-
-        if (isValidModel) {
-          parts.push(
-            <span key={i} className="text-emerald-400 font-medium">
-              {token}
-            </span>
-          );
-        } else {
-          parts.push(token);
-        }
-      } else {
-        parts.push(token);
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
       }
-    });
+
+      const fullToken = match[1];
+      const trailingSpace = match[2];
+      const mentionText = fullToken.substring(1).toLowerCase();
+
+      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      });
+
+      const isPartialMatch = !trailingSpace && !isValidModel && availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
+      });
+
+      if (isValidModel) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isPartialMatch) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400/60 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else {
+        parts.push(fullToken + trailingSpace);
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
 
     return parts;
   };

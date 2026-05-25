@@ -382,7 +382,7 @@ const InputArea = ({
 
     setIsUploading(true);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("image", file);
 
     try {
       const res = await api.post("/upload/image", formData, {

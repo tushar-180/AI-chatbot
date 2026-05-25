@@ -61,7 +61,11 @@ interface MessageListProps {
   currentChatId: string | null;
   isNewChat: boolean;
   onSuggestionClick?: (text: string) => void;
-  onEditMessage?: (messageId: string, content: string) => void;
+  onEditMessage?: (
+    messageId: string,
+    content: string,
+    options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }
+  ) => void;
   onEditStart?: () => void;
   onRetryMessage?: (messageId: string) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
@@ -161,9 +165,24 @@ const MessageList = ({
   useEffect(() => {
     const container = getScrollContainer();
     if (!container) return;
+    
     container.addEventListener("scroll", handleScroll);
+    
+    const observer = new ResizeObserver(() => {
+      handleScroll();
+    });
+    
+    observer.observe(container);
+    if (container.firstElementChild) {
+      observer.observe(container.firstElementChild);
+    }
+    
     handleScroll();
-    return () => container.removeEventListener("scroll", handleScroll);
+    
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      observer.disconnect();
+    };
   }, [getScrollContainer, handleScroll]);
 
   // LOCK SCROLL OVERFLOW WHEN SUGGESTIONS ARE ACTIVE
@@ -441,7 +460,11 @@ const MessageList = ({
                   key={msg.id}
                   message={msg}
                   isStreaming={isStreaming && i === messages.length - 1}
-                  onEdit={(content) => onEditMessage?.(msg.id, content)}
+                  onEdit={(content, options) => {
+                    if (onEditMessage) {
+                      onEditMessage(msg.id, content, options);
+                    }
+                  }}
                   onEditStart={onEditStart}
                   onRetry={() => onRetryMessage?.(msg.id)}
                   onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}

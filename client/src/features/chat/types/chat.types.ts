@@ -24,6 +24,8 @@ export type Message = {
             actionType: string;
         };
     };
+    createdAt?: string;
+    updatedAt?: string;
 };
 
 export type Chat = {

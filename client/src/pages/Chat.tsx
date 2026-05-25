@@ -337,9 +337,11 @@ const Chat = () => {
                   }
                   isNewChat={isTransitioning ? !chatId : isNewChat}
                   onSuggestionClick={setInput}
-                  onEditMessage={(messageId, content) =>
-                    editMessage(messageId, content, selectedProvider, {
-                      webSearchEnabled,
+                  onEditMessage={(messageId, content, options) =>
+                    editMessage(messageId, content, options?.provider || selectedProvider, {
+                      webSearchEnabled: options?.webSearchEnabled,
+                      attachments: options?.attachments,
+                      attachedFile: options?.attachedFile,
                     })
                   }
                   onEditStart={stopGeneration}
