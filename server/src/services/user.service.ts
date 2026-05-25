@@ -22,6 +22,14 @@ export const userService = {
     return user;
   },
 
+  async updateProfile(clerkId: string, data: { firstName?: string; lastName?: string; imageUrl?: string }) {
+    return await User.findOneAndUpdate(
+      { clerkId },
+      { $set: data },
+      { returnDocument: "after" }
+    );
+  },
+
   async getUserByClerkId(clerkId: string) {
     return await User.findOne({ clerkId });
   },

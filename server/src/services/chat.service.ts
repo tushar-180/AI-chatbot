@@ -466,6 +466,25 @@ async function* streamAssistantResponse(
     model: providerName,
   });
 
+  if (activeStream.status === "stopped") {
+    await chatRepository.updateMessage(messageId, {
+      status: "stopped",
+    });
+    yield (
+      includeChatId
+        ? {
+            chatId,
+            messageId,
+            requestId,
+            model: providerName,
+            status: "stopped",
+            done: true,
+          }
+        : { messageId, requestId, model: providerName, status: "stopped", done: true }
+    ) as StreamPayload;
+    return;
+  }
+
   yield (
     includeChatId
       ? {
@@ -530,6 +549,9 @@ async function* streamAssistantResponse(
           receivedFirstChunk = true;
           firstTokenTimedOut = false;
           clearTimeout(timeout);
+          chatRepository.update(chatId, { isSidebarVisible: true }).catch((err) => {
+            console.error("Failed to make chat sidebar visible on first chunk:", err);
+          });
         }
 
         fullResponse += chunk;
@@ -680,6 +702,7 @@ export const chatService = {
       userId: resolvedUserId,
       title: createTitle(trimmedMessage),
       projectId,
+      isSidebarVisible: true,
     });
 
     await chat.save();
@@ -1027,6 +1050,8 @@ export const chatService = {
         };
       }
 
+      // Keep empty/stopped chats in DB so they can be retried or edited.
+
       let tokens;
       try {
         const chatObj = await chatRepository.findById(activeStream.chatId);
@@ -1068,15 +1093,22 @@ export const chatService = {
       };
     }
 
-    if (chatId) {
-      await chatRepository.updateMessageByRequestId(chatId, resolvedRequestId, {
+    // Ensure we register this requestId in the stopped list to prevent it from starting in the future
+    chatStreamRegistry.stop(resolvedRequestId);
+
+    // Keep empty/stopped chats in DB so they can be retried or edited.
+
+    const updatedMessage = await chatRepository.updateMessageByRequestId(
+      chatId,
+      resolvedRequestId,
+      {
         status: "stopped",
-      });
-    }
+      },
+    );
 
     return {
-      stopped: false,
-      chatId,
+      stopped: !!updatedMessage,
+      chatId: updatedMessage?.chatId?.toString() || chatId,
       requestId: resolvedRequestId,
     };
   },
@@ -1215,6 +1247,8 @@ export const chatService = {
     content,
     provider,
     webSearchEnabled,
+    attachments,
+    attachedFile,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const chat = await requireChat(chatId);
@@ -1222,11 +1256,21 @@ export const chatService = {
     // Delete all messages after this one
     await chatRepository.deleteMessagesAfter(chatId, messageId);
 
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+
     // Update the message itself
     await chatRepository.updateMessage(messageId, {
       content: trimmedMessage,
+      attachments: allAttachments as any,
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
+        fileText,
       },
     });
 
@@ -1298,6 +1342,8 @@ export const chatService = {
     provider,
     requestId,
     webSearchEnabled,
+    attachments,
+    attachedFile,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const resolvedRequestId = requireRequestId(requestId);
@@ -1306,11 +1352,21 @@ export const chatService = {
     // Delete all messages after this one
     await chatRepository.deleteMessagesAfter(chatId, messageId);
 
+    let fileText: string | null = null;
+    let allAttachments = attachments || [];
+    if (attachedFile) {
+      const result = await processAttachedFile(attachedFile, String(chat.userId), allAttachments);
+      fileText = result.fileText;
+      allAttachments = result.attachments;
+    }
+
     // Update the message itself
     await chatRepository.updateMessage(messageId, {
       content: trimmedMessage,
+      attachments: allAttachments as any,
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
+        fileText,
       },
     });
 

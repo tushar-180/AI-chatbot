@@ -24,6 +24,8 @@ export type Message = {
             actionType: string;
         };
     };
+    createdAt?: string;
+    updatedAt?: string;
 };
 
 export type Chat = {
@@ -34,6 +36,7 @@ export type Chat = {
     isArchived?: boolean;
     isPinned?: boolean;
     projectId?: string | null;
+    createdAt?: string;
     updatedAt?: string;
 };
 export type StreamEventPayload = {

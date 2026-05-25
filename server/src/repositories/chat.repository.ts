@@ -4,9 +4,13 @@ import mongoose from "mongoose";
 
 export const chatRepository = {
   async touchChat(chatId: string) {
-    const chat = await Chat.findByIdAndUpdate(chatId, {
-      $set: { updatedAt: new Date() },
-    }, { new: true });
+    const chat = await Chat.findByIdAndUpdate(
+      chatId,
+      {
+        $set: { updatedAt: new Date() },
+      },
+      { new: true },
+    );
 
     if (chat && chat.projectId) {
       const { projectRepository } = require("./project.repository");
@@ -15,7 +19,12 @@ export const chatRepository = {
     return chat;
   },
 
-  create(data: { userId: string; title: string; projectId?: string }) {
+  create(data: {
+    userId: string;
+    title: string;
+    projectId?: string;
+    isSidebarVisible?: boolean;
+  }) {
     return new Chat(data);
   },
 
@@ -55,8 +64,18 @@ export const chatRepository = {
   ) {
     const skip = (page - 1) * limit;
     const query = isArchived
-      ? { userId, isArchived: true, $or: [{ projectId: null }, { projectId: { $exists: false } }] }
-      : { userId, isArchived: { $ne: true }, $or: [{ projectId: null }, { projectId: { $exists: false } }] };
+      ? {
+          userId,
+          isArchived: true,
+          isSidebarVisible: { $ne: false },
+          $or: [{ projectId: null }, { projectId: { $exists: false } }],
+        }
+      : {
+          userId,
+          isArchived: { $ne: true },
+          isSidebarVisible: { $ne: false },
+          $or: [{ projectId: null }, { projectId: { $exists: false } }],
+        };
 
     return Chat.find(query)
       .select("-messages -legacyMessages")
@@ -70,7 +89,7 @@ export const chatRepository = {
       // First, try searching for chats by title
       const chatResults = await Chat.find({
         userId,
-        title: { $regex: query, $options: "i" }
+        title: { $regex: query, $options: "i" },
       })
         .select("-messages -legacyMessages")
         .limit(10)
@@ -79,7 +98,7 @@ export const chatRepository = {
       // Second, search in messages content
       const messageResults = await Message.find({
         userId,
-        content: { $regex: query, $options: "i" }
+        content: { $regex: query, $options: "i" },
       })
         .limit(20)
         .lean();
@@ -87,11 +106,11 @@ export const chatRepository = {
       const resultsMap = new Map<string, any>();
 
       // Add chat results
-      chatResults.forEach(chat => {
+      chatResults.forEach((chat) => {
         resultsMap.set(String(chat._id), {
           ...chat,
           matchType: "title",
-          snippet: ""
+          snippet: "",
         });
       });
 
@@ -104,30 +123,34 @@ export const chatRepository = {
         const index = content.toLowerCase().indexOf(query.toLowerCase());
         const start = Math.max(0, index - 40);
         const end = Math.min(content.length, index + 60);
-        const snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "");
+        const snippet =
+          (start > 0 ? "..." : "") +
+          content.substring(start, end) +
+          (end < content.length ? "..." : "");
 
         if (existing) {
           existing.matchType = "content";
           existing.snippet = snippet;
         } else {
-          const chat = await Chat.findById(chatId).select("-messages -legacyMessages").lean();
+          const chat = await Chat.findById(chatId)
+            .select("-messages -legacyMessages")
+            .lean();
           if (chat && String(chat.userId) === userId) {
             resultsMap.set(chatId, {
               ...chat,
               matchType: "content",
-              snippet: snippet
+              snippet: snippet,
             });
           }
         }
       }
 
-      const finalResults = Array.from(resultsMap.values()).sort((a, b) =>
-        new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf()
+      const finalResults = Array.from(resultsMap.values()).sort(
+        (a, b) =>
+          new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf(),
       );
 
       return finalResults;
-
-
     } catch (err) {
       console.error("Search failed:", err);
       return [];
@@ -150,14 +173,18 @@ export const chatRepository = {
     });
 
     if (messageData.tokens) {
-      const chat = await Chat.findByIdAndUpdate(chatId, {
-        $inc: {
-          "tokens.promptTokens": messageData.tokens.promptTokens || 0,
-          "tokens.completionTokens": messageData.tokens.completionTokens || 0,
-          "tokens.totalTokens": messageData.tokens.totalTokens || 0,
+      const chat = await Chat.findByIdAndUpdate(
+        chatId,
+        {
+          $inc: {
+            "tokens.promptTokens": messageData.tokens.promptTokens || 0,
+            "tokens.completionTokens": messageData.tokens.completionTokens || 0,
+            "tokens.totalTokens": messageData.tokens.totalTokens || 0,
+          },
+          $set: { updatedAt: new Date() },
         },
-        $set: { updatedAt: new Date() },
-      }, { new: true });
+        { new: true },
+      );
 
       if (chat && chat.projectId) {
         const { projectRepository } = require("./project.repository");
@@ -193,19 +220,27 @@ export const chatRepository = {
     if (message?.chatId && updateData.tokens) {
       // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
       const oldTokens = existingMessage?.tokens;
-      const deltaPrompt = (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
-      const deltaCompletion = (updateData.tokens.completionTokens || 0) - (oldTokens?.completionTokens || 0);
-      const deltaTotal = (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+      const deltaPrompt =
+        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion =
+        (updateData.tokens.completionTokens || 0) -
+        (oldTokens?.completionTokens || 0);
+      const deltaTotal =
+        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
 
       if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
-        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
-          $inc: {
-            "tokens.promptTokens": deltaPrompt,
-            "tokens.completionTokens": deltaCompletion,
-            "tokens.totalTokens": deltaTotal,
+        const chat = await Chat.findByIdAndUpdate(
+          String(message.chatId),
+          {
+            $inc: {
+              "tokens.promptTokens": deltaPrompt,
+              "tokens.completionTokens": deltaCompletion,
+              "tokens.totalTokens": deltaTotal,
+            },
+            $set: { updatedAt: new Date() },
           },
-          $set: { updatedAt: new Date() },
-        }, { new: true });
+          { new: true },
+        );
 
         if (chat && chat.projectId) {
           const { projectRepository } = require("./project.repository");
@@ -230,36 +265,42 @@ export const chatRepository = {
   },
 
   async updateMessageByRequestId(
-    chatId: string,
+    chatId: string | null | undefined,
     requestId: string,
     updateData: Partial<ChatMessage>,
   ) {
+    const query =
+      chatId && chatId !== "null" ? { chatId, requestId } : { requestId };
     // Read existing message to get old token values for delta calculation
-    const existingMessage = await Message.findOne({ chatId, requestId });
+    const existingMessage = await Message.findOne(query);
 
-    const message = await Message.findOneAndUpdate(
-      { chatId, requestId },
-      updateData,
-      {
-        returnDocument: "after",
-      },
-    );
+    const message = await Message.findOneAndUpdate(query, updateData, {
+      returnDocument: "after",
+    });
     if (message?.chatId && updateData.tokens) {
       // Calculate delta: new tokens minus old tokens
       const oldTokens = existingMessage?.tokens;
-      const deltaPrompt = (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
-      const deltaCompletion = (updateData.tokens.completionTokens || 0) - (oldTokens?.completionTokens || 0);
-      const deltaTotal = (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+      const deltaPrompt =
+        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion =
+        (updateData.tokens.completionTokens || 0) -
+        (oldTokens?.completionTokens || 0);
+      const deltaTotal =
+        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
 
       if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
-        const chat = await Chat.findByIdAndUpdate(String(message.chatId), {
-          $inc: {
-            "tokens.promptTokens": deltaPrompt,
-            "tokens.completionTokens": deltaCompletion,
-            "tokens.totalTokens": deltaTotal,
+        const chat = await Chat.findByIdAndUpdate(
+          String(message.chatId),
+          {
+            $inc: {
+              "tokens.promptTokens": deltaPrompt,
+              "tokens.completionTokens": deltaCompletion,
+              "tokens.totalTokens": deltaTotal,
+            },
+            $set: { updatedAt: new Date() },
           },
-          $set: { updatedAt: new Date() },
-        }, { new: true });
+          { new: true },
+        );
 
         if (chat && chat.projectId) {
           const { projectRepository } = require("./project.repository");
@@ -293,7 +334,7 @@ export const chatRepository = {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { title } },
-      { new: true }
+      { new: true },
     );
   },
 
@@ -301,7 +342,9 @@ export const chatRepository = {
     const chat = await Chat.findOne({ shareId });
     if (!chat) return null;
 
-    const messages = await Message.find({ chatId: chat._id }).sort({ createdAt: 1 });
+    const messages = await Message.find({ chatId: chat._id }).sort({
+      createdAt: 1,
+    });
 
     const formattedMessages = messages.map((msg) => ({
       ...msg.toObject(),
@@ -317,7 +360,7 @@ export const chatRepository = {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { isArchived: true } },
-      { new: true }
+      { new: true },
     );
   },
 
@@ -325,7 +368,7 @@ export const chatRepository = {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { isArchived: false } },
-      { new: true }
+      { new: true },
     );
   },
 
@@ -333,7 +376,7 @@ export const chatRepository = {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { isPinned: true, updatedAt: new Date() } },
-      { new: true }
+      { new: true },
     );
   },
 
@@ -341,21 +384,22 @@ export const chatRepository = {
     return await Chat.findByIdAndUpdate(
       chatId,
       { $set: { isPinned: false, updatedAt: new Date() } },
-      { new: true }
+      { new: true },
     );
   },
 
   async findAttachmentByHash(
     userId: string,
-    fileHash: string
-  ): Promise<string | null> {   // return the storagePath directly or null
+    fileHash: string,
+  ): Promise<string | null> {
+    // return the storagePath directly or null
     const message = await Message.findOne(
       {
         userId,
-        'attachments.fileHash': fileHash,
-        'attachments.storagePath': { $exists: true, $ne: '' },
+        "attachments.fileHash": fileHash,
+        "attachments.storagePath": { $exists: true, $ne: "" },
       },
-      { 'attachments.$': 1 }
+      { "attachments.$": 1 },
     )
       .lean()
       .exec();
@@ -370,13 +414,16 @@ export const chatRepository = {
   },
 
   /**
- * Return an array of unique storage paths for all attachments in messages of a chat.
- */
+   * Return an array of unique storage paths for all attachments in messages of a chat.
+   */
   async getStoragePathsForChat(chatId: string): Promise<string[]> {
-    const messages = await Message.find({
-      chatId,
-      'attachments.storagePath': { $exists: true, $ne: '' },
-    }, { 'attachments.storagePath': 1 })
+    const messages = await Message.find(
+      {
+        chatId,
+        "attachments.storagePath": { $exists: true, $ne: "" },
+      },
+      { "attachments.storagePath": 1 },
+    )
       .lean()
       .exec();
 
@@ -392,10 +439,13 @@ export const chatRepository = {
   /**
    * Check if a storage path is used in any other chat.
    */
-  async countStoragePathUsages(chatIdToExclude: string, storagePath: string): Promise<number> {
+  async countStoragePathUsages(
+    chatIdToExclude: string,
+    storagePath: string,
+  ): Promise<number> {
     return await Message.countDocuments({
       chatId: { $ne: chatIdToExclude },
-      'attachments.storagePath': storagePath
+      "attachments.storagePath": storagePath,
     });
   },
 
@@ -406,4 +456,3 @@ export const chatRepository = {
     await Message.deleteMany({ chatId });
   },
 };
-

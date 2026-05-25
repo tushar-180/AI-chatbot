@@ -134,14 +134,10 @@ export async function parseFile(
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                   PDF                                      */
-/* -------------------------------------------------------------------------- */
-
 async function parsePDF(
   buffer: Buffer
 ): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
   try {
     const result = await parser.getText();
     return result.text || '';
@@ -149,10 +145,6 @@ async function parsePDF(
     await parser.destroy();
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                   DOCX                                     */
-/* -------------------------------------------------------------------------- */
 
 async function parseDOCX(
   buffer: Buffer
@@ -163,10 +155,6 @@ async function parseDOCX(
 
   return result.value || '';
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                   XLSX                                     */
-/* -------------------------------------------------------------------------- */
 
 async function parseXLSX(
   buffer: Buffer
@@ -188,10 +176,6 @@ async function parseXLSX(
 
   return formattedRows.join('\n');
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                   CSV                                      */
-/* -------------------------------------------------------------------------- */
 
 const { parse: parseCSVString } = require('csv-parse/sync');
 
@@ -219,10 +203,6 @@ async function parseCSV(buffer: Buffer): Promise<string> {
     return buffer.toString('utf8');
   }
 }
-
-/* -------------------------------------------------------------------------- */
-/*                                  HELPERS                                   */
-/* -------------------------------------------------------------------------- */
 
 function validateInput(
   buffer: Buffer,

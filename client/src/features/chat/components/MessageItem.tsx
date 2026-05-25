@@ -1,5 +1,8 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useState, useRef, useEffect, type ComponentType } from "react";
 import { useUser } from "@clerk/react";
+import { useChatStore } from "@/features/chat/store/useChatStore";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   User,
   Globe,
@@ -13,18 +16,68 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Paperclip,
+  Loader2,
+  Image as ImageIcon,
+  FileText,
+  Table,
+  MonitorPlay,
+  File as FileIcon,
 } from "lucide-react";
+import { toast } from "sonner";
+import { api } from "@/lib/api";
+import { DEFAULT_CHAT_PROVIDER, supportsVision } from "../constants/chat.constants";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import type { WebSource, Message, Attachment } from "../types/chat.types";
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
+import { useAvailableProviders } from "@/features/chat/hooks/useAvailableProviders";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
+import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
+import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
+import NvidiaColor from "@lobehub/icons/es/Nvidia/components/Color";
+
+const CHAT_PROVIDER_STORAGE_KEY = "selected_chat_provider";
+
+const getStoredProvider = () => {
+  if (typeof window === "undefined") {
+    return DEFAULT_CHAT_PROVIDER;
+  }
+
+  return (
+    window.localStorage.getItem(CHAT_PROVIDER_STORAGE_KEY) ||
+    DEFAULT_CHAT_PROVIDER
+  );
+};
+
+const getProviderIcon = (providerId: string, size = 14) => {
+  const p = providerId.split(":")[0].toLowerCase();
+  const mapping: Record<string, ComponentType<{ size?: number }>> = {
+    gemini: GeminiColor,
+    claude: AnthropicMono,
+    openai: OpenAIMono,
+    nvidia: NvidiaColor,
+  };
+  const Icon = mapping[p];
+  return Icon ? <Icon size={size} /> : null;
+};
+
+const getModelOnlyName = (fullName: string) => {
+  return fullName.includes(" : ") ? fullName.split(" : ")[1] : fullName;
+};
 
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  onEdit?: (content: string) => void;
+  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }) => void;
   onEditStart?: () => void;
   onRetry?: () => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
@@ -96,7 +149,7 @@ const MessageAvatar = ({
   >
     {isUser ? (
       imageUrl ? (
-        <img src={imageUrl} alt="User" className="h-full w-full object-cover" />
+        <img src={optimizeImageUrl(imageUrl, 64)} alt="User" className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-white/5 text-slate-500">
           <User size={16} />
@@ -127,6 +180,7 @@ const MessageMetadata = ({
   tokens,
   isStreaming,
   content,
+  isEdited,
 }: {
   isUser: boolean;
   model?: string;
@@ -137,6 +191,7 @@ const MessageMetadata = ({
   };
   isStreaming?: boolean;
   content?: string;
+  isEdited?: boolean;
 }) => {
   const estimatedCompletionTokens = content
     ? Math.ceil(content.length / 4)
@@ -148,10 +203,11 @@ const MessageMetadata = ({
         }`}
     >
       <span
-        className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${isUser ? "text-slate-400" : "text-slate-500"
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] flex items-center gap-1 ${isUser ? "text-slate-400" : "text-slate-500"
           } ${isUser ? "mr-0.5" : "ml-0.5"}`}
       >
-        {isUser ? "You" : "Velora"}
+        {Boolean(isEdited) && isUser && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
+        <span>{isUser ? "You" : "Velora"}</span>
       </span>
 
       {!isUser && model && (
@@ -183,6 +239,21 @@ const MessageMetadata = ({
   );
 };
 
+const ALLOWED_HTML_TAGS = new Set([
+  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
+  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
+  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+]);
+
+function escapeUnrecognizedHtmlTags(text: string): string {
+  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
+    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+      return match;
+    }
+    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+  });
+}
+
 const MessageItem = ({
   message: msg,
   isStreaming,
@@ -195,13 +266,25 @@ const MessageItem = ({
   onSourcesClick,
 }: MessageItemProps) => {
   const { user } = useUser();
-
+  const dbUser = useChatStore((state) => state.dbUser);
   const isUser = msg.role === "user";
   const isFailed = msg.status === "failed";
+  const isEdited = Boolean(msg.role === "user" && msg.updatedAt && msg.createdAt && new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() > 2000);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(msg.content);
   const [copied, setCopied] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>(msg.attachments || []);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+
+  // Edit-local provider & web search state
+  const [editProvider, setEditProvider] = useState(getStoredProvider);
+  const [editWebSearchEnabled, setEditWebSearchEnabled] = useState(false);
+  const { availableProviders } = useAvailableProviders(editProvider, setEditProvider);
+  const canUpload = supportsVision(editProvider);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -329,20 +412,122 @@ const MessageItem = ({
   const handleEditStart = () => {
     setIsEditing(true);
     setEditContent(msg.content);
+    setEditProvider(getStoredProvider());
+    setEditWebSearchEnabled(false);
     onEditStart?.();
   };
 
   const handleEditCancel = () => {
     setIsEditing(false);
     setEditContent(msg.content);
+    setAttachments(msg.attachments || []);
+    setAttachedFile(null);
   };
 
+  // Clear attachments when switching to a non-vision model
+  useEffect(() => {
+    if (isEditing && !canUpload) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  }, [isEditing, canUpload]);
+
   const handleEditSave = () => {
-    if (editContent.trim() && editContent !== msg.content) {
-      onEdit?.(editContent);
+    const contentChanged = editContent.trim() !== msg.content;
+    const attachmentsChanged =
+      JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
+    const hasNewFile = Boolean(attachedFile);
+
+    if (!editContent.trim()) {
+      setIsEditing(false);
+      return;
+    }
+
+    if (contentChanged || attachmentsChanged || hasNewFile) {
+      onEdit?.(editContent, {
+        provider: editProvider,
+        webSearchEnabled: editWebSearchEnabled,
+        attachments,
+        attachedFile,
+      });
     }
 
     setIsEditing(false);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const getAttachmentIcon = (mimeType?: string) => {
+    if (!mimeType) return FileIcon;
+    if (mimeType.startsWith("image/")) return ImageIcon;
+    if (mimeType.includes("word") || mimeType.includes("pdf")) return FileText;
+    if (mimeType.includes("excel") || mimeType.includes("sheet")) return Table;
+    if (mimeType.includes("powerpoint") || mimeType.includes("presentation")) return MonitorPlay;
+    return FileIcon;
+  };
+
+  const ALLOWED_FILE_TYPES = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ];
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+
+    if (attachments.length > 0 || attachedFile) {
+      toast.error("You can only upload one file per message.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (isDocument) {
+      setAttachedFile(file);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (!isImage) {
+      toast.error("Unsupported file type!");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await api.post("/upload/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      setAttachments((prev) => [
+        ...prev,
+        { url: res.data.url, name: file.name, mimeType: file.type, size: file.size },
+      ]);
+      toast.success("Image uploaded");
+    } catch (err) {
+      console.error("Upload failed", err);
+      toast.error("Failed to upload image");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const handleExpansion = () => {
@@ -379,10 +564,14 @@ const MessageItem = ({
     }
   };
 
-  const processedContent =
+  let processedContent =
     !isUser && msg.content
       ? msg.content.replace(/\[(\d+)\]/g, '<cite data-id="$1"></cite>')
       : msg.content;
+
+  if (processedContent) {
+    processedContent = escapeUnrecognizedHtmlTags(processedContent);
+  }
 
   const citationComponents = !isUser
     ? {
@@ -427,7 +616,7 @@ const MessageItem = ({
         <div className="hidden xs:block">
           <MessageAvatar
             isUser={isUser}
-            imageUrl={user?.imageUrl}
+            imageUrl={dbUser?.imageUrl || user?.imageUrl}
             failed={isFailed}
           />
         </div>
@@ -447,6 +636,7 @@ const MessageItem = ({
                 tokens={msg.tokens}
                 isStreaming={isStreaming}
                 content={msg.content}
+                isEdited={isEdited}
               />
             </div>
           )}
@@ -487,6 +677,55 @@ const MessageItem = ({
               )
             ) : isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                {/* Model Selector + Web Search Toggle */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+                      >
+                        {getProviderIcon(editProvider, 12)}
+                        <span>{getModelOnlyName(availableProviders.find(p => p.id === editProvider)?.name || editProvider)}</span>
+                        <ChevronDown size={10} className="ml-0.5 text-slate-600 transition-colors" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      side="top"
+                      className="w-56 rounded-xl border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl"
+                    >
+                      {availableProviders.map((p) => (
+                        <DropdownMenuItem
+                          key={p.id}
+                          onClick={() => setEditProvider(p.id)}
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                            editProvider === p.id
+                              ? "bg-white text-black"
+                              : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          }`}
+                        >
+                          {getProviderIcon(p.id, 12)}
+                          <span className="capitalize">{getModelOnlyName(p.name)}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditWebSearchEnabled(!editWebSearchEnabled)}
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      editWebSearchEnabled
+                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20"
+                        : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <Globe size={12} />
+                    <span>Web Search</span>
+                  </button>
+                </div>
+
                 <textarea
                   ref={textareaRef}
                   value={editContent}
@@ -500,7 +739,90 @@ const MessageItem = ({
                   rows={1}
                 />
 
-                <div className="flex justify-end gap-2">
+                {/* Attachment Previews */}
+                {attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {attachments.map((att, i) => {
+                      const isImage = att.mimeType?.startsWith("image/");
+                      const Icon = getAttachmentIcon(att.mimeType);
+
+                      return (
+                        <div
+                          key={`${att.url}-${i}`}
+                          className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                        >
+                          {isImage ? (
+                            <img
+                              src={att.url}
+                              alt={att.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
+                              <Icon size={20} className="text-slate-300 shrink-0" />
+                              <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
+                                {att.name}
+                              </span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(i)}
+                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Attached File Preview */}
+                {attachedFile && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
+                      <FileText size={20} className="text-slate-300 shrink-0" />
+                      <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                        {attachedFile.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAttachedFile(null)}
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                    />
+                    {canUpload && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-transparent"
+                        aria-label="Upload file"
+                      >
+                        {isUploading ? (
+                          <Loader2 size={16} className="animate-spin text-white" />
+                        ) : (
+                          <Paperclip size={16} />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex justify-end gap-2">
                   <button
                     onClick={handleEditCancel}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
@@ -519,10 +841,11 @@ const MessageItem = ({
                   </button>
                 </div>
               </div>
+            </div>
             ) : isFailed ? (
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-red-300">
-                  AI Response Failed
+                  Server Band Hai Boss 🫡
                 </span>
 
                 <ReactMarkdown

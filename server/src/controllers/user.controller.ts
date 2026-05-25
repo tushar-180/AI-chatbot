@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import { userService } from "../services/user.service";
+import { createClerkClient } from "@clerk/express";
+
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 export const userController = {
   async getProfile(req: Request, res: Response) {
@@ -14,6 +17,34 @@ export const userController = {
       res.status(200).json(user);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  },
+
+  async updateProfile(req: Request, res: Response) {
+    try {
+      const clerkId = req.clerkId!;
+      const { firstName, lastName, imageUrl } = req.body;
+
+      const user = await userService.updateProfile(clerkId, { firstName, lastName, imageUrl });
+
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Safe update to Clerk backend to sync names
+      try {
+        await clerk.users.updateUser(clerkId, {
+          firstName: firstName?.trim(),
+          lastName: lastName?.trim(),
+        });
+      } catch (clerkErr) {
+        console.error("Failed to sync profile update to Clerk:", clerkErr);
+      }
+
+      res.status(200).json(user);
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ error: "Failed to update profile" });
     }
   },
 

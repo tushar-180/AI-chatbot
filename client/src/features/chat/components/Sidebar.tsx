@@ -2,10 +2,14 @@ import { memo, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useGroupStore } from "../store/useGroupStore";
+import { cleanupGroupChatStream } from "../hooks/useGroupChat";
+import { cleanupTemporaryChatStream } from "../hooks/useTemporaryChat";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { optimizeImageUrl } from "@/lib/utils";
+
 import {
   Plus,
   X,
@@ -32,6 +36,7 @@ import {
   ListChecks,
   Shield,
   Keyboard,
+  Filter,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 import { lazy, Suspense } from "react";
@@ -39,6 +44,9 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -59,7 +67,9 @@ const GalleryModal = lazy(() => import("./GalleryModal"));
 const SettingsModal = lazy(() => import("./SettingsModal"));
 const SearchModal = lazy(() => import("./SearchModal"));
 const MoveToProjectModal = lazy(() => import("./MoveToProjectModal"));
-const ShortcutsCheatsheetModal = lazy(() => import("./ShortcutsCheatsheetModal"));
+const ShortcutsCheatsheetModal = lazy(
+  () => import("./ShortcutsCheatsheetModal"),
+);
 
 /**
  * Sidebar Component
@@ -68,10 +78,15 @@ const ShortcutsCheatsheetModal = lazy(() => import("./ShortcutsCheatsheetModal")
 interface UnifiedItem {
   _id: string;
   title: string;
+  createdAt: string;
   updatedAt: string;
   itemType: "chat" | "group";
   isPinned?: boolean;
 }
+
+type HistoryTypeFilter = "all" | "chat" | "group";
+type HistorySortBy = "updatedAt" | "createdAt" | "title";
+type HistorySortDirection = "desc" | "asc";
 
 interface ItemProps {
   item: UnifiedItem;
@@ -116,15 +131,13 @@ const SidebarItem = memo(
     const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
     const [isGroupLinkModalOpen, setIsGroupLinkModalOpen] = useState(false);
 
-    const { groups } = useGroupStore();
+    const groups = useGroupStore((state) => state.groups);
     const group = groups.find((g) => g._id === item._id);
     const inviteCode = group?.inviteCode || "";
 
     const itemRef = useRef<HTMLDivElement>(null);
     const [openUpwards, setOpenUpwards] = useState(false);
     const menuButtonRef = useRef<HTMLDivElement>(null);
-
-  
 
     const handleStartEdit = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -241,7 +254,7 @@ const SidebarItem = memo(
                   >
                     {member.userImage && (
                       <AvatarImage
-                        src={member.userImage}
+                        src={optimizeImageUrl(member.userImage, 40)}
                         alt={member.username}
                         className="object-cover"
                       />
@@ -300,6 +313,7 @@ const SidebarItem = memo(
                       : "text-slate-300 hover:bg-white/10"
                   }`}
                   title="Save"
+                  aria-label="Save rename"
                 >
                   <Check size={14} strokeWidth={3} />
                 </button>
@@ -314,6 +328,7 @@ const SidebarItem = memo(
                       : "text-slate-500 hover:bg-white/10"
                   }`}
                   title="Cancel"
+                  aria-label="Cancel rename"
                 >
                   <X size={14} strokeWidth={3} />
                 </button>
@@ -330,6 +345,8 @@ const SidebarItem = memo(
                       ? "text-black/40 hover:text-black"
                       : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
                   }`}
+                  aria-label="Session options"
+                  title="Session options"
                 >
                   <MoreVertical size={14} />
                 </button>
@@ -559,22 +576,22 @@ const Sidebar = () => {
     groupId?: string;
   }>();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, isStreaming, streamingChatId } =
-    useChatStore();
+  const sidebarOpen = useChatStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useChatStore((state) => state.setSidebarOpen);
+  const dbUser = useChatStore((state) => state.dbUser);
+  const setDbUser = useChatStore((state) => state.setDbUser);
   const isTemporaryChatActive = useTemporaryChatStore(
     (state) => state.isTemporaryChatActive,
   );
   const clearTemporaryChatStore = useTemporaryChatStore(
     (state) => state.clearStore,
   );
-  const {
-    groups,
-    setGroups,
-    currentGroupId,
-    setCurrentGroup,
-    removeGroup,
-    updateGroup,
-  } = useGroupStore();
+  const groups = useGroupStore((state) => state.groups);
+  const setGroups = useGroupStore((state) => state.setGroups);
+  const currentGroupId = useGroupStore((state) => state.currentGroupId);
+  const setCurrentGroup = useGroupStore((state) => state.setCurrentGroup);
+  const removeGroup = useGroupStore((state) => state.removeGroup);
+  const updateGroup = useGroupStore((state) => state.updateGroup);
   const { user } = useUser();
   const navigate = useNavigate();
   const {
@@ -623,9 +640,9 @@ const Sidebar = () => {
           }
         },
         {
-          root: chatListScrollRef.current,
+          root: null, // Using null targets the browser viewport/window to bypass mobile transformation bugs
           threshold: 0,
-          rootMargin: "100px",
+          rootMargin: "150px",
         },
       );
 
@@ -635,6 +652,12 @@ const Sidebar = () => {
   );
 
   const [showRecent, setShowRecent] = useState(true);
+  const [historyTypeFilter, setHistoryTypeFilter] =
+    useState<HistoryTypeFilter>("all");
+  const [historySortBy, setHistorySortBy] =
+    useState<HistorySortBy>("updatedAt");
+  const [historySortDirection, setHistorySortDirection] =
+    useState<HistorySortDirection>("desc");
   const [deleteConfig, setDeleteConfig] = useState<{
     id: string;
     type: "chat" | "group";
@@ -650,11 +673,12 @@ const Sidebar = () => {
       .get("/user/profile")
       .then(({ data }) => {
         setIsAdmin(data.role === "admin");
+        setDbUser(data);
       })
       .catch((err) => {
         console.error("Failed to fetch user role for sidebar:", err);
       });
-  }, [user]);
+  }, [user, setDbUser]);
 
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -700,15 +724,26 @@ const Sidebar = () => {
       }
 
       // 3. Toggle Sidebar: Ctrl/Cmd + \ or Ctrl/Cmd + B
-      if (settings.toggleSidebar && ((e.key === "\\" && (e.metaKey || e.ctrlKey)) || (e.key === "b" && (e.metaKey || e.ctrlKey)))) {
+      if (
+        settings.toggleSidebar &&
+        ((e.key === "\\" && (e.metaKey || e.ctrlKey)) ||
+          (e.key === "b" && (e.metaKey || e.ctrlKey)))
+      ) {
         e.preventDefault();
         setSidebarOpen(!sidebarOpen);
         return;
       }
 
       // 4. Start New Chat: Ctrl/Cmd + Shift + O
-      if (settings.newChat && e.key === "O" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      if (
+        settings.newChat &&
+        e.key === "O" &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey
+      ) {
         e.preventDefault();
+        cleanupGroupChatStream();
+        cleanupTemporaryChatStream();
         if (isTemporaryChatActive) {
           useTemporaryChatStore.getState().setTemporaryChatActive(false);
           clearTemporaryChatStore();
@@ -726,16 +761,27 @@ const Sidebar = () => {
       }
 
       // 6. Open Gallery Modal: Ctrl/Cmd + Shift + G
-      if (settings.openGallery && e.key === "G" && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      if (
+        settings.openGallery &&
+        e.key === "G" &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey
+      ) {
         e.preventDefault();
         setGalleryOpen(true);
         return;
       }
 
       // 7. Toggle Temporary Chat Mode: Ctrl/Cmd + Shift + Y
-      if (settings.toggleTempChat && (e.key === "Y" || e.key === "y") && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+      if (
+        settings.toggleTempChat &&
+        (e.key === "Y" || e.key === "y") &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey
+      ) {
         e.preventDefault();
-        const currentActive = useTemporaryChatStore.getState().isTemporaryChatActive;
+        const currentActive =
+          useTemporaryChatStore.getState().isTemporaryChatActive;
         const newActive = !currentActive;
         useTemporaryChatStore.getState().setTemporaryChatActive(newActive);
         if (newActive) {
@@ -760,8 +806,8 @@ const Sidebar = () => {
           return;
         }
         if (searchModalOpen) return; // let SearchModal close itself
-        if (settingsOpen) return;    // let SettingsModal close itself
-        if (galleryOpen) return;     // let GalleryModal close itself
+        if (settingsOpen) return; // let SettingsModal close itself
+        if (galleryOpen) return; // let GalleryModal close itself
 
         // Focus input
         if (settings.focusInput) {
@@ -784,7 +830,7 @@ const Sidebar = () => {
     clearTemporaryChatStore,
     navigate,
     setSidebarOpen,
-    getShortcutsSettings
+    getShortcutsSettings,
   ]);
 
   // Multi-select state
@@ -849,10 +895,12 @@ const Sidebar = () => {
   const isSearchNavigation = new URLSearchParams(location.search).has(
     "highlight",
   );
-  const isStreamingActiveChat = Boolean(
-    activeChatId && isStreaming && streamingChatId === activeChatId,
-  );
-  const shouldPromoteActiveChat = isSearchNavigation || isStreamingActiveChat;
+  const getTimestamp = useCallback((value?: string) => {
+    if (!value) return 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  }, []);
+
   const filteredChats = useMemo(() => {
     return chats
       .filter((c) => (c.isArchived ?? false) === viewingArchived)
@@ -861,19 +909,15 @@ const Sidebar = () => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
 
-        // 2. Search-selected or currently streaming chats sit at the top of
-        // their section, below pinned chats.
-        if (shouldPromoteActiveChat) {
-          if (a._id === activeChatId) return -1;
-          if (b._id === activeChatId) return 1;
+        // 2. Sort by update time (most recent first).
+        const dateA = getTimestamp(a.updatedAt);
+        const dateB = getTimestamp(b.updatedAt);
+        if (dateB !== dateA) {
+          return dateB - dateA;
         }
-
-        // 3. Finally, sort by update time (most recent first).
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        return dateB - dateA;
+        return a._id.localeCompare(b._id);
       });
-  }, [activeChatId, chats, shouldPromoteActiveChat, viewingArchived]);
+  }, [chats, getTimestamp, viewingArchived]);
 
   // Merge and sort chats and groups
   const unifiedList = useMemo(() => {
@@ -881,6 +925,7 @@ const Sidebar = () => {
       ...filteredChats.map((c) => ({
         _id: c._id,
         title: c.title,
+        createdAt: c.createdAt || c.updatedAt || DEFAULT_EPOCH,
         updatedAt: c.updatedAt || DEFAULT_EPOCH,
         itemType: "chat" as const,
         isPinned: c.isPinned,
@@ -889,6 +934,7 @@ const Sidebar = () => {
         ? groups.map((g) => ({
             _id: g._id,
             title: g.title,
+            createdAt: g.createdAt || g.updatedAt || DEFAULT_EPOCH,
             updatedAt: g.updatedAt || DEFAULT_EPOCH,
             itemType: "group" as const,
             isPinned: g.isPinned || false,
@@ -896,38 +942,100 @@ const Sidebar = () => {
         : []),
     ];
 
-    return combined.sort((a, b) => {
-      // 1. Pinned items stay first.
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
+    return combined
+      .filter((item) => {
+        if (historyTypeFilter === "all") return true;
+        return item.itemType === historyTypeFilter;
+      })
+      .sort((a, b) => {
+        // 1. Pinned items stay first.
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
 
-      // 2. Search-selected or currently streaming chat stays near the top.
-      if (shouldPromoteActiveChat) {
-        if (a.itemType === "chat" && a._id === activeChatId) return -1;
-        if (b.itemType === "chat" && b._id === activeChatId) return 1;
-      }
+        if (historySortBy === "title") {
+          const titleCompare = a.title.localeCompare(b.title);
+          if (titleCompare !== 0) {
+            return historySortDirection === "asc"
+              ? titleCompare
+              : -titleCompare;
+          }
+          return a._id.localeCompare(b._id);
+        }
 
-      // 3. Sort by update time (most recent first).
-      const dateA = new Date(a.updatedAt).getTime();
-      const dateB = new Date(b.updatedAt).getTime();
-      return dateB - dateA;
-    });
+        const dateA = getTimestamp(a[historySortBy]);
+        const dateB = getTimestamp(b[historySortBy]);
+        if (dateA !== dateB) {
+          return historySortDirection === "asc" ? dateA - dateB : dateB - dateA;
+        }
+
+        return a._id.localeCompare(b._id);
+      });
   }, [
-    activeChatId,
     filteredChats,
+    getTimestamp,
     groups,
-    shouldPromoteActiveChat,
+    historySortBy,
+    historySortDirection,
+    historyTypeFilter,
     viewingArchived,
   ]);
 
+  const hasActiveHistoryFilter =
+    historyTypeFilter !== "all" ||
+    historySortBy !== "updatedAt" ||
+    historySortDirection !== "desc";
+
+  const chatById = useMemo(() => {
+    return new Map(chats.map((chat) => [chat._id, chat]));
+  }, [chats]);
+
+  const groupById = useMemo(() => {
+    return new Map(groups.map((group) => [group._id, group]));
+  }, [groups]);
+
+  const visibleSelectableIds = useMemo(
+    () =>
+      unifiedList
+        .filter((item) => item.itemType === "chat")
+        .map((item) => item._id),
+    [unifiedList],
+  );
+
+  const visibleSelectedCount = useMemo(() => {
+    return visibleSelectableIds.filter((id) => selectedIds.has(id)).length;
+  }, [selectedIds, visibleSelectableIds]);
+
+  const allVisibleSelected =
+    visibleSelectableIds.length > 0 &&
+    visibleSelectedCount === visibleSelectableIds.length;
+
+  useEffect(() => {
+    if (visibleSelectableIds.length === 0 && isSelectionMode) {
+      setIsSelectionMode(false);
+    }
+
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+
+      const visibleIds = new Set(visibleSelectableIds);
+      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [isSelectionMode, visibleSelectableIds]);
+
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === filteredChats.length) {
-        return new Set();
+      const next = new Set(prev);
+
+      if (allVisibleSelected) {
+        visibleSelectableIds.forEach((id) => next.delete(id));
+      } else {
+        visibleSelectableIds.forEach((id) => next.add(id));
       }
-      return new Set(filteredChats.map((c) => c._id));
+
+      return next;
     });
-  }, [filteredChats]);
+  }, [allVisibleSelected, visibleSelectableIds]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -942,12 +1050,15 @@ const Sidebar = () => {
   }, []);
 
   const handleBulkDelete = () => {
-    if (selectedIds.size === 0) return;
+    if (visibleSelectedCount === 0) return;
     setShowBulkDeleteConfirm(true);
   };
 
   const confirmBulkDelete = async () => {
-    await deleteChats(Array.from(selectedIds));
+    const chatIds = visibleSelectableIds.filter((id) => selectedIds.has(id));
+    if (chatIds.length === 0) return;
+
+    await deleteChats(chatIds);
     setSelectedIds(new Set());
     setIsSelectionMode(false);
     setShowBulkDeleteConfirm(false);
@@ -977,14 +1088,14 @@ const Sidebar = () => {
   }, [user?.id, setGroups]);
 
   useEffect(() => {
-    if (!activeChatId || !showRecent || !shouldPromoteActiveChat) return;
+    if (!activeChatId || !showRecent || !isSearchNavigation) return;
 
     const frame = window.requestAnimationFrame(() => {
       chatListScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [activeChatId, shouldPromoteActiveChat, showRecent]);
+  }, [activeChatId, isSearchNavigation, showRecent]);
 
   // Scroll active chat into view on initial mount/reload
   useEffect(() => {
@@ -999,7 +1110,7 @@ const Sidebar = () => {
 
     // Check if element is already in the DOM to scroll synchronously
     const activeElement = chatListScrollRef.current.querySelector(
-      `[data-chat-id="${activeId}"]`
+      `[data-chat-id="${activeId}"]`,
     );
 
     if (activeElement) {
@@ -1011,7 +1122,7 @@ const Sidebar = () => {
     // Fallback: schedule a check if the element isn't in the DOM yet
     const timer = setTimeout(() => {
       const el = chatListScrollRef.current?.querySelector(
-        `[data-chat-id="${activeId}"]`
+        `[data-chat-id="${activeId}"]`,
       );
       if (el) {
         el.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -1027,15 +1138,15 @@ const Sidebar = () => {
       {/* Backdrop for mobile */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-md md:hidden animate-in fade-in duration-300"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-md lg:hidden animate-in fade-in duration-300"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       <aside
         className={`
-        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out md:relative md:w-80 md:translate-x-0 md:max-h-screen md:overflow-hidden shrink-0
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 sm:w-64 md:w-72 lg:w-80 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:max-h-screen lg:overflow-hidden shrink-0
+        ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}
       >
         <>
@@ -1053,7 +1164,9 @@ const Sidebar = () => {
 
             <button
               onClick={() => setSidebarOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white md:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white lg:hidden"
+              aria-label="Close sidebar"
+              title="Close sidebar"
             >
               <X size={16} />
             </button>
@@ -1062,6 +1175,8 @@ const Sidebar = () => {
           <div className="flex flex-col gap-3">
             <button
               onClick={() => {
+                cleanupGroupChatStream();
+                cleanupTemporaryChatStream();
                 if (isTemporaryChatActive) {
                   useTemporaryChatStore
                     .getState()
@@ -1069,6 +1184,7 @@ const Sidebar = () => {
                   clearTemporaryChatStore();
                 }
                 createChat();
+                setSidebarOpen(false);
               }}
               className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
             >
@@ -1076,7 +1192,7 @@ const Sidebar = () => {
               <span>New Chat</span>
             </button>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 onClick={() => setGalleryOpen(true)}
                 className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
@@ -1107,9 +1223,9 @@ const Sidebar = () => {
           <div className="px-2">
             <button
               onClick={() => setSearchModalOpen(true)}
-              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-500 transition-all hover:bg-white/5"
+              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-400 transition-all hover:bg-white/5 hover:text-slate-200"
             >
-              <Search size={14} className="mr-3" />
+              <Search size={14} className="mr-3 text-slate-400 group-hover:text-slate-200 transition-colors" />
               <span>Search conversations...</span>
               <div className="ml-auto flex items-center gap-1 opacity-40">
                 <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
@@ -1124,11 +1240,18 @@ const Sidebar = () => {
 
           <div className="flex min-h-0 flex-1 flex-col gap-1">
             <div className="flex items-center justify-between px-2 pb-2">
-              <div
-                onClick={() => setShowRecent((prev) => !prev)}
-                className="flex items-center gap-2 cursor-pointer group"
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowRecent((prev) => !prev);
+                }}
+                className="flex items-center gap-2 cursor-pointer group focus:outline-none h-6 min-w-[120px]"
+                aria-label="Toggle session history"
               >
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-600 group-hover:text-slate-400 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 group-hover:text-slate-200 transition-colors">
                   {viewingArchived ? "Archived Chats" : "Session History"}
                 </span>
                 <span className="text-slate-700 text-xs group-hover:text-white transition">
@@ -1138,75 +1261,210 @@ const Sidebar = () => {
                     <ChevronDown size={14} />
                   )}
                 </span>
-              </div>
+              </button>
 
-              {filteredChats.length > 0 && showRecent && (
-                <button
-                  onClick={() => {
-                    if (isSelectionMode) {
-                      setIsSelectionMode(false);
-                      setSelectedIds(new Set());
-                    } else {
-                      setIsSelectionMode(true);
-                    }
-                  }}
-                  className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
-                    isSelectionMode
-                      ? "bg-emerald-500/10 text-emerald-400"
-                      : "text-slate-600 hover:bg-white/5 hover:text-slate-300"
-                  }`}
-                  title={isSelectionMode ? "Exit Selection" : "Bulk Actions"}
-                >
-                  {isSelectionMode ? <X size={14} /> : <ListChecks size={14} />}
-                </button>
-              )}
-            </div>
-
-            {isSelectionMode && showRecent && (
-              <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
-                <button
-                  onClick={toggleSelectAll}
-                  className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
-                >
-                  <div
-                    className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
-                      selectedIds.size === filteredChats.length &&
-                      filteredChats.length > 0
-                        ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                        : "border-emerald-500/30 bg-transparent"
-                    }`}
-                  >
-                    {selectedIds.size === filteredChats.length &&
-                      filteredChats.length > 0 && (
-                        <Check size={10} strokeWidth={4} />
-                      )}
-                  </div>
-                  <span>All</span>
-                </button>
-
-                <div className="flex items-center gap-3">
-                  {selectedIds.size > 0 && (
-                    <button
-                      onClick={handleBulkDelete}
-                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
+              <div className="flex items-center gap-1">
+                {showRecent && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
+                          hasActiveHistoryFilter
+                            ? "bg-emerald-500/10 text-emerald-400"
+                            : "text-slate-400 hover:bg-white/5 hover:text-white"
+                        }`}
+                        title="Filter history"
+                        aria-label="Filter history"
+                      >
+                        <Filter size={14} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="w-56 rounded-2xl border border-white/10 bg-slate-950 p-2 text-slate-200 shadow-2xl shadow-black/40"
                     >
-                      <Trash2 size={12} />
-                      <span>Delete ({selectedIds.size})</span>
-                    </button>
-                  )}
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                        Show
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={historyTypeFilter}
+                        onValueChange={(value) =>
+                          setHistoryTypeFilter(value as HistoryTypeFilter)
+                        }
+                      >
+                        <DropdownMenuRadioItem value="all" className="text-xs">
+                          All
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="chat" className="text-xs">
+                          Chats
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem
+                          value="group"
+                          className="text-xs"
+                        >
+                          Groups
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
 
+                      <DropdownMenuSeparator className="bg-white/10" />
+
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                        Sort by
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={historySortBy}
+                        onValueChange={(value) =>
+                          setHistorySortBy(value as HistorySortBy)
+                        }
+                      >
+                        <DropdownMenuRadioItem
+                          value="updatedAt"
+                          className="text-xs"
+                        >
+                          Updated at
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem
+                          value="createdAt"
+                          className="text-xs"
+                        >
+                          Created at
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem
+                          value="title"
+                          className="text-xs"
+                        >
+                          Title
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+
+                      <DropdownMenuSeparator className="bg-white/10" />
+
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                        Order
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={historySortDirection}
+                        onValueChange={(value) =>
+                          setHistorySortDirection(value as HistorySortDirection)
+                        }
+                      >
+                        <DropdownMenuRadioItem value="desc" className="text-xs">
+                          Newest / Z-A
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="asc" className="text-xs">
+                          Oldest / A-Z
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+
+                      {hasActiveHistoryFilter && (
+                        <>
+                          <DropdownMenuSeparator className="bg-white/10" />
+                          <DropdownMenuItem
+                            className="text-xs text-slate-400 focus:bg-white/5 focus:text-white"
+                            onSelect={() => {
+                              setHistoryTypeFilter("all");
+                              setHistorySortBy("updatedAt");
+                              setHistorySortDirection("desc");
+                            }}
+                          >
+                            Reset filters
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+
+                {unifiedList.length > 0 && showRecent && (
                   <button
                     onClick={() => {
-                      setIsSelectionMode(false);
-                      setSelectedIds(new Set());
+                      if (visibleSelectableIds.length === 0) return;
+
+                      if (isSelectionMode) {
+                        setIsSelectionMode(false);
+                        setSelectedIds(new Set());
+                      } else {
+                        setIsSelectionMode(true);
+                      }
                     }}
-                    className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-all"
+                    className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
+                      isSelectionMode
+                        ? "bg-emerald-500/10 text-emerald-400"
+                        : visibleSelectableIds.length === 0
+                          ? "text-slate-800 cursor-not-allowed"
+                          : "text-slate-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                    disabled={visibleSelectableIds.length === 0}
+                    aria-label={
+                      visibleSelectableIds.length === 0
+                        ? "Bulk actions are available for chats"
+                        : isSelectionMode
+                          ? "Exit Selection"
+                          : "Bulk Actions"
+                    }
+                    title={
+                      visibleSelectableIds.length === 0
+                        ? "Bulk actions are available for chats"
+                        : isSelectionMode
+                          ? "Exit Selection"
+                          : "Bulk Actions"
+                    }
                   >
-                    Cancel
+                    {isSelectionMode ? (
+                      <X size={14} />
+                    ) : (
+                      <ListChecks size={14} />
+                    )}
                   </button>
-                </div>
+                )}
               </div>
-            )}
+            </div>
+
+            {isSelectionMode &&
+              showRecent &&
+              visibleSelectableIds.length > 0 && (
+                <div className="flex items-center justify-between px-3 py-2.5 mb-2 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-2.5 text-[10px] font-bold uppercase tracking-widest text-emerald-400/80 hover:text-emerald-400 transition-all"
+                  >
+                    <div
+                      className={`flex h-4 w-4 items-center justify-center rounded-md border transition-all ${
+                        allVisibleSelected
+                          ? "border-emerald-500 bg-emerald-500 text-white shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                          : "border-emerald-500/30 bg-transparent"
+                      }`}
+                    >
+                      {allVisibleSelected && (
+                        <Check size={10} strokeWidth={4} />
+                      )}
+                    </div>
+                    <span>All</span>
+                  </button>
+
+                  <div className="flex items-center gap-3">
+                    {visibleSelectedCount > 0 && (
+                      <button
+                        onClick={handleBulkDelete}
+                        className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-400 hover:text-rose-300 transition-all"
+                      >
+                        <Trash2 size={12} />
+                        <span>Delete ({visibleSelectedCount})</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setIsSelectionMode(false);
+                        setSelectedIds(new Set());
+                      }}
+                      className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
             {showRecent && (
               <div
@@ -1217,13 +1475,13 @@ const Sidebar = () => {
                   {unifiedList.length === 0 ? (
                     <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
-                        Empty
+                        {hasActiveHistoryFilter ? "No Matches" : "Empty"}
                       </p>
                     </div>
                   ) : (
                     unifiedList.map((item) => {
-                      const chat = chats.find((c) => c._id === item._id);
-                      const group = groups.find((g) => g._id === item._id);
+                      const chat = chatById.get(item._id);
+                      const group = groupById.get(item._id);
                       const isPinned =
                         item.itemType === "chat"
                           ? chat?.isPinned || false
@@ -1239,14 +1497,19 @@ const Sidebar = () => {
                           item={item}
                           isActive={
                             location.pathname.includes("/group/")
-                              ? item.itemType === "group" && urlGroupId === item._id
-                              : item.itemType === "chat" && currentChatId === item._id
+                              ? item.itemType === "group" &&
+                                urlGroupId === item._id
+                              : item.itemType === "chat" &&
+                                currentChatId === item._id
                           }
                           isSelectionMode={isSelectionMode}
                           isSelected={selectedIds.has(item._id)}
                           onSelect={(target) => {
+                            cleanupGroupChatStream();
+                            cleanupTemporaryChatStream();
                             if (target.itemType === "chat") {
                               selectChat(target._id);
+                              setSidebarOpen(false);
                             } else {
                               setCurrentGroup(target._id);
                               setSidebarOpen(false);
@@ -1275,11 +1538,11 @@ const Sidebar = () => {
                   )}
 
                   {/* Intersection Observer Sentinel */}
-                  {hasMore && (
+                  {hasMore && historyTypeFilter !== "group" && (
                     <div ref={observerTargetRef} className="h-4 w-full mt-2" />
                   )}
 
-                  {hasMore && loading && (
+                  {hasMore && historyTypeFilter !== "group" && loading && (
                     <div className="flex justify-center p-4">
                       <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
                     </div>
@@ -1302,10 +1565,14 @@ const Sidebar = () => {
                       : "border border-white/5"
                   }`}
                 >
-                  {user?.imageUrl ? (
+                  {dbUser?.imageUrl || user?.imageUrl ? (
                     <img
-                      src={user.imageUrl}
-                      alt={user.fullName || "User"}
+                      src={optimizeImageUrl(dbUser?.imageUrl || user?.imageUrl, 80)}
+                      alt={
+                        dbUser?.firstName
+                          ? `${dbUser.firstName} ${dbUser.lastName || ""}`
+                          : user?.fullName || "User"
+                      }
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -1316,7 +1583,9 @@ const Sidebar = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate leading-tight">
-                    {user?.fullName || "User"}
+                    {dbUser?.firstName
+                      ? `${dbUser.firstName} ${dbUser.lastName || ""}`
+                      : user?.fullName || "User"}
                   </p>
                   {isAdmin && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[7px] font-bold uppercase tracking-widest border border-amber-500/20 mt-0.5 shadow-[0_0_8px_rgba(245,158,11,0.15)]">
@@ -1331,7 +1600,7 @@ const Sidebar = () => {
                 </div>
                 <MoreVertical
                   size={16}
-                  className="text-slate-600 group-hover:text-white transition-colors group-data-[state=open]:text-white"
+                  className="text-slate-400 group-hover:text-white transition-colors group-data-[state=open]:text-white"
                 />
               </button>
             </DropdownMenuTrigger>
@@ -1387,7 +1656,7 @@ const Sidebar = () => {
 
               <DropdownMenuItem
                 onClick={() => setShortcutsOpen(true)}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                className="hidden lg:flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
                 <Keyboard size={16} className="text-slate-400" />
                 <span>Keyboard Shortcuts</span>
@@ -1427,7 +1696,7 @@ const Sidebar = () => {
           }}
           purpose={
             showBulkDeleteConfirm
-              ? `Delete ${selectedIds.size} Chats`
+              ? `Delete ${visibleSelectedCount} Chats`
               : deleteConfig?.type === "group"
                 ? "Leave"
                 : "Delete"
@@ -1441,68 +1710,77 @@ const Sidebar = () => {
           }
           message={
             showBulkDeleteConfirm
-              ? `Are you sure you want to delete ${selectedIds.size} selected chats? This action cannot be undone.`
+              ? `Are you sure you want to delete ${visibleSelectedCount} selected chats? This action cannot be undone.`
               : deleteConfig?.type === "group"
                 ? "Are you sure you want to leave this group chat?"
                 : undefined
           }
         />
 
-        <GalleryModal
-          isOpen={galleryOpen}
-          onClose={() => setGalleryOpen(false)}
-        />
+        {galleryOpen && (
+          <GalleryModal
+            isOpen={galleryOpen}
+            onClose={() => setGalleryOpen(false)}
+          />
+        )}
 
-        <SettingsModal
-          isOpen={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
-          initialTab={settingsTab}
-        />
+        {settingsOpen && (
+          <SettingsModal
+            isOpen={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+            initialTab={settingsTab}
+          />
+        )}
 
-        <SearchModal
-          isOpen={searchModalOpen}
-          onClose={() => setSearchModalOpen(false)}
-        />
+        {searchModalOpen && (
+          <SearchModal
+            isOpen={searchModalOpen}
+            onClose={() => setSearchModalOpen(false)}
+          />
+        )}
 
-        <MoveToProjectModal
-          isOpen={!!moveProjectChatId}
-          onClose={() => setMoveProjectChatId(null)}
-          onMove={async (projectId) => {
-            if (!moveProjectChatId) return;
+        {!!moveProjectChatId && (
+          <MoveToProjectModal
+            isOpen={!!moveProjectChatId}
+            onClose={() => setMoveProjectChatId(null)}
+            onMove={async (projectId) => {
+              if (!moveProjectChatId) return;
 
-            try {
-              const chatId = moveProjectChatId;
-              await api.patch(`/chat/${chatId}/move`, {
-                projectId,
-              });
+              try {
+                const chatId = moveProjectChatId;
+                await api.patch(`/chat/${chatId}/move`, {
+                  projectId,
+                });
 
-              // Instantly remove it from the sidebar
-              useChatStore.getState().removeChat(chatId);
-              
-              if (currentChatId === chatId) {
-                useChatStore.getState().setCurrentChat(null);
-                useChatStore.getState().setMessages([]);
+                // Instantly remove it from the sidebar
+                useChatStore.getState().removeChat(chatId);
+
+                if (currentChatId === chatId) {
+                  useChatStore.getState().setCurrentChat(null);
+                  useChatStore.getState().setMessages([]);
+                }
+
+                toast.success("Chat moved to project");
+
+                // remove modal
+                setMoveProjectChatId(null);
+
+                // navigate to project chat route
+                navigate(`/projects/${projectId}/chat/${chatId}`);
+              } catch (error) {
+                console.error(error);
+                toast.error("Failed to move chat");
               }
+            }}
+          />
+        )}
 
-              toast.success("Chat moved to project");
-
-              // remove modal
-              setMoveProjectChatId(null);
-
-              // navigate to project chat route
-              navigate(`/projects/${projectId}/chat/${chatId}`);
-
-            } catch (error) {
-              console.error(error);
-              toast.error("Failed to move chat");
-            }
-          }}
-        />
-
-        <ShortcutsCheatsheetModal
-          isOpen={shortcutsOpen}
-          onClose={() => setShortcutsOpen(false)}
-        />
+        {shortcutsOpen && (
+          <ShortcutsCheatsheetModal
+            isOpen={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
+        )}
       </Suspense>
     </>
   );

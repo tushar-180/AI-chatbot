@@ -9,12 +9,16 @@ type ChatState = {
   loading: boolean;
   isStreaming: boolean;
   streamingChatId: string | null;
+  loadingChatIds: Record<string, boolean>;
+  streamingChatIds: Record<string, boolean>;
   isNewChat: boolean;
   sidebarOpen: boolean;
   hasMore: boolean;
   page: number;
   viewingArchived: boolean;
   currentChat: Chat | null;
+  dbUser: any | null;
+  setDbUser: (dbUser: any) => void;
 
   setSidebarOpen: (open: boolean) => void;
   setChats: (chats: Chat[]) => void;
@@ -26,7 +30,7 @@ type ChatState = {
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
   updateLastMessage: (content: string, model?: string) => void;
-  setLoading: (loading: boolean) => void;
+  setLoading: (loading: boolean, chatId?: string | null) => void;
   setIsStreaming: (isStreaming: boolean, chatId?: string | null) => void;
   setIsNewChat: (isNew: boolean) => void;
   upsertChat: (chat: Chat) => void;
@@ -51,12 +55,17 @@ export const useChatStore = create<ChatState>()(
       loading: false,
       isStreaming: false,
       streamingChatId: null,
+      loadingChatIds: {},
+      streamingChatIds: {},
       isNewChat: false,
       sidebarOpen: false,
       hasMore: true,
       page: 1,
       viewingArchived: false,
       currentChat: null,
+      dbUser: null,
+
+      setDbUser: (dbUser) => set({ dbUser }),
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
@@ -81,11 +90,24 @@ export const useChatStore = create<ChatState>()(
           const foundChat =
             chat || state.chats.find((c) => c._id === id) || null;
           const isSameChat = state.currentChatId === id;
+
+          const nextStreamingChatIds = { ...state.streamingChatIds };
+          const nextLoadingChatIds = { ...state.loadingChatIds };
+          if (!id) {
+            // Clean up the temporary new chat stream keys to guarantee the new chat input starts fresh
+            delete nextStreamingChatIds["__new_chat_stream__"];
+            delete nextLoadingChatIds["__new_chat_stream__"];
+          }
+
           return {
             currentChatId: id,
             isNewChat: id ? false : state.isNewChat,
             currentChat: foundChat,
             messages: isSameChat ? state.messages : [],
+            streamingChatIds: nextStreamingChatIds,
+            loadingChatIds: nextLoadingChatIds,
+            isStreaming: Object.keys(nextStreamingChatIds).length > 0,
+            loading: Object.keys(nextLoadingChatIds).length > 0,
           };
         }),
 
@@ -118,13 +140,40 @@ export const useChatStore = create<ChatState>()(
           return { messages: newMessages };
         }),
 
-      setLoading: (loading) => set({ loading }),
+      setLoading: (loading, chatId) =>
+        set((state) => {
+          const key = chatId === undefined ? state.currentChatId : chatId;
+          const targetKey = key ?? "__new_chat_stream__";
+          const nextLoadingChatIds = { ...state.loadingChatIds };
+          if (loading) {
+            nextLoadingChatIds[targetKey] = true;
+          } else {
+            delete nextLoadingChatIds[targetKey];
+          }
+          const hasLoading = Object.keys(nextLoadingChatIds).length > 0;
+          return {
+            loading: hasLoading,
+            loadingChatIds: nextLoadingChatIds,
+          };
+        }),
 
       setIsStreaming: (isStreaming, chatId) =>
-        set((state) => ({
-          isStreaming,
-          streamingChatId: isStreaming ? (chatId ?? state.currentChatId) : null,
-        })),
+        set((state) => {
+          const key = chatId === undefined ? state.currentChatId : chatId;
+          const targetKey = key ?? "__new_chat_stream__";
+          const nextStreamingChatIds = { ...state.streamingChatIds };
+          if (isStreaming) {
+            nextStreamingChatIds[targetKey] = true;
+          } else {
+            delete nextStreamingChatIds[targetKey];
+          }
+          const hasStreams = Object.keys(nextStreamingChatIds).length > 0;
+          return {
+            isStreaming: hasStreams,
+            streamingChatId: hasStreams ? (key ?? state.currentChatId) : null,
+            streamingChatIds: nextStreamingChatIds,
+          };
+        }),
 
       setIsNewChat: (isNew) => set({ isNewChat: isNew }),
 
@@ -257,7 +306,7 @@ export const useChatStore = create<ChatState>()(
         Object.fromEntries(
           Object.entries(state).filter(
             ([key]) =>
-              !["loading", "isStreaming", "streamingChatId"].includes(key),
+              !["loading", "isStreaming", "streamingChatId", "loadingChatIds", "streamingChatIds"].includes(key),
           ),
         ) as ChatState,
     },

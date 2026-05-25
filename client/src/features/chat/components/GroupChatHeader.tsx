@@ -5,7 +5,9 @@ import { useGroupStore } from "../store/useGroupStore";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import { UserButton, useUser } from "@clerk/react";
+import { useUser } from "@clerk/react";
+import { optimizeImageUrl } from "@/lib/utils";
+
 
 import DeleteConfirmModal from "./DeleteConfirmModal";
 
@@ -58,7 +60,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white md:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white lg:hidden"
           >
             <Menu size={16} />
           </button>
@@ -70,8 +72,8 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
                 {group.title}
               </h1>
             </div>
-            <div className="h-1 w-1 rounded-full bg-white/20" />
-            <span className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
+            <div className="h-1 hidden md:flex w-1 rounded-full bg-white/20" />
+            <span className="hidden md:flex text-[10px] font-medium uppercase tracking-widest text-slate-500">
               {group.members.length} Members
             </span>
           </div>
@@ -95,14 +97,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
             <LogOut size={16} />
           </button>
 
-          <UserButton
-            appearance={{
-              elements: {
-                userButtonAvatarBox: "h-7 w-7",
-                userButtonTrigger: "h-8 w-8",
-              },
-            }}
-          />
+          
         </div>
       </div>
 
@@ -136,7 +131,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
                 <div key={member.userId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-all group">
                   <div className="h-9 w-9 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-emerald-500 group-hover:border-emerald-500/30 transition-colors overflow-hidden flex-shrink-0">
                     {member.userImage ? (
-                      <img src={member.userImage} alt={member.username} className="h-full w-full object-cover" />
+                      <img src={optimizeImageUrl(member.userImage, 72)} alt={member.username} className="h-full w-full object-cover" />
                     ) : (
                       <span className="text-xs font-bold uppercase">{member.username.substring(0, 2)}</span>
                     )}

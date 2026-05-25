@@ -52,10 +52,10 @@ const WebSearchToggle = ({
     <button
       type="button"
       onClick={() => onToggle(!enabled)}
-      className={`flex items-center gap-2 rounded-lg border transition-all px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${
+      className={`flex items-center gap-1.5 lg:gap-2 rounded-lg border transition-all px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest cursor-pointer ${
         enabled
           ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200 shadow-[0_0_10px_rgba(52,211,153,0.15)]"
-          : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+          : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
       }`}
     >
       <Globe size={12} className="shrink-0" />
@@ -148,13 +148,17 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   const mentionedModelId = getMentionedModelId();
-  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : false;
+  const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : true;
 
   useEffect(() => {
     if (!hasMention) {
       setWebSearchEnabled(false);
     }
-  }, [hasMention]);
+    if (!canUpload) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  }, [hasMention, canUpload]);
 
   // Fetch AI providers on mount
   useEffect(() => {
@@ -202,17 +206,20 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
   // Sync scroll positions and size height
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        200,
-      )}px`;
-    }
-    if (backdropRef.current && textareaRef.current) {
-      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
-      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
-    }
+    const handle = requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(
+          textareaRef.current.scrollHeight,
+          200,
+        )}px`;
+      }
+      if (backdropRef.current && textareaRef.current) {
+        backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+        backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+      }
+    });
+    return () => cancelAnimationFrame(handle);
   }, [input]);
 
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -226,30 +233,53 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     if (!text) return null;
 
     const parts: React.ReactNode[] = [];
-    const regex = /(@[a-zA-Z0-9-:_/.]+)/g;
-    const tokens = text.split(regex);
+    const regex = /(@[a-zA-Z0-9-:_/.]+)(\s?)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
 
-    tokens.forEach((token, i) => {
-      if (token.match(regex)) {
-        const mentionText = token.substring(1).toLowerCase();
-        const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
-          const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-        });
-
-        if (isValidModel) {
-          parts.push(
-            <span key={i} className="text-emerald-400 font-medium">
-              {token}
-            </span>
-          );
-        } else {
-          parts.push(token);
-        }
-      } else {
-        parts.push(token);
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.substring(lastIndex, match.index));
       }
-    });
+
+      const fullToken = match[1];
+      const trailingSpace = match[2];
+      const mentionText = fullToken.substring(1).toLowerCase();
+
+      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      });
+
+      const isPartialMatch = !trailingSpace && !isValidModel && availableProviders.some((p) => {
+        const cleanName = getCleanModelName(p.id).toLowerCase();
+        return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
+      });
+
+      if (isValidModel) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isPartialMatch) {
+        parts.push(
+          <span key={match.index} className="text-emerald-400/60 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else {
+        parts.push(fullToken + trailingSpace);
+      }
+
+      lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
 
     return parts;
   };
@@ -524,7 +554,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   };
 
   return (
-    <div className="sticky bottom-0 z-30 pb-8 px-4 md:px-10 pointer-events-none not-selectable ">
+    <div className="sticky bottom-0 z-30 pb-4 lg:pb-8 px-4 lg:px-10 pointer-events-none not-selectable ">
       <form
         onSubmit={handleSubmit}
         className="mx-auto max-w-4xl relative pointer-events-auto"
@@ -575,8 +605,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
         <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
           {/* Top Label */}
-          <div className="flex items-center gap-2 px-4 pt-3">
-            <div className="flex items-center gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
+          <div className="flex flex-wrap items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3">
+            <div className="flex items-center gap-1.5 lg:gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-emerald-300">
               <Users size={12} />
               <span>Group Chat</span>
             </div>
@@ -599,7 +629,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  className="flex items-center gap-1.5 lg:gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-slate-400 lg:text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
                   aria-label="Upload image"
                 >
                   {isUploading ? (
@@ -611,7 +641,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 </button>
               </>
             )}
-            <div className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">
+            <div className="hidden lg:block text-[10px] text-slate-500 font-semibold uppercase tracking-widest">
               Type @ to search & mention AI models
             </div>
           </div>
@@ -660,12 +690,12 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             </div>
           )}
 
-          <div className="flex items-end gap-2 pr-2">
+          <div className="flex items-end gap-1.5 lg:gap-2 pr-2 pb-1.5 lg:pb-2 pl-2 lg:pl-0">
             <div className="relative flex-1 min-w-0">
               {/* Backdrop highlight overlay */}
               <div
                 ref={backdropRef}
-                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-slate-100 bg-transparent border border-transparent"
+                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 lg:px-4 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 bg-transparent border border-transparent"
                 style={sharedTextStyles}
               >
                 {highlightMentions(input)}
@@ -674,104 +704,109 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               <textarea
                 ref={textareaRef}
                 value={input}
-                 onFocus={() => setIsFocused(true)}
-                  onBlur={() => setIsFocused(false)}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 onScroll={handleScroll}
-                  // Prevent copy when NOT focused
-                  onCopy={(e) => {
-                    if (!isFocused) {
-                      e.preventDefault();
-                    }
-                  }}
-                  // Prevent selection when NOT focused
-                  onSelect={(e) => {
-                    if (!isFocused) {
-                      const el = e.currentTarget;
+                // Prevent copy when NOT focused
+                onCopy={(e) => {
+                  if (!isFocused) {
+                    e.preventDefault();
+                  }
+                }}
+                // Prevent selection when NOT focused
+                onSelect={(e) => {
+                  if (!isFocused) {
+                    const el = e.currentTarget;
 
-                      requestAnimationFrame(() => {
-                        el.selectionStart = el.selectionEnd;
-                      });
-                    }
-                  }}
+                    requestAnimationFrame(() => {
+                      el.selectionStart = el.selectionEnd;
+                    });
+                  }
+                }}
                 rows={1}
                 placeholder={
                   cooldown > 0
                     ? `Cooling down... Please wait ${cooldown}s`
                     : "Message group..."
                 }
-                className={`${ isFocused ? "" : "selection:bg-transparent select-none" } not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 md:max-h-75 min-h-12 md:min-h-14 block border border-transparent`}
+                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-3 py-2 lg:px-4 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 block border border-transparent`}
                 style={sharedTextStyles}
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (isListening) {
-                  stop();
-                } else {
-                  start();
-                }
-              }}
-              className={`relative mb-1.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 md:mb-2 md:h-10 md:w-10 ${
-                isListening
-                  ? "bg-rose-500/20 text-rose-400"
-                  : "text-slate-500 hover:bg-white/5 hover:text-white"
-              }`}
-              aria-label="Voice input"
-            >
-              {isListening && !isSpeaking && (
-                <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
-              )}
-
-              {isSpeaking && (
-                <>
-                  <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
-                  <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
-                </>
-              )}
-
-              <span className="relative z-10 flex items-center justify-center">
-                {isListening ? (
-                  <Square size={14} fill="currentColor" />
-                ) : (
-                  <Mic size={18} />
-                )}
-              </span>
-            </button>
-
-            {isStreaming ? (
+            <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
+              {/* Mic button */}
               <button
                 type="button"
-                onClick={onStop}
-                className="flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group"
-                aria-label="Stop generation"
-              >
-                <Square
-                  size={14}
-                  fill="currentColor"
-                  className="transition-colors group-hover:text-rose-600"
-                />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)}
-                className={`flex h-9 w-9 md:h-10 md:w-10 shrink-0 items-center justify-center rounded-full mb-1.5 md:mb-2 transition-all duration-300 ${
-                  isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)
-                    ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                    : "bg-white text-slate-900 hover:bg-slate-200"
+                onClick={() => {
+                  if (isListening) {
+                    stop();
+                  } else {
+                    start();
+                  }
+                }}
+                className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
+                  isListening
+                    ? "bg-rose-500/20 text-rose-400"
+                    : "text-slate-500 hover:bg-white/5 hover:text-white"
                 }`}
+                aria-label="Voice input"
               >
-                {isSending || isUploading ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <ArrowUp size={18} strokeWidth={2.5} />
+                {isListening && !isSpeaking && (
+                  <span className="absolute inset-0 animate-pulse rounded-full border border-rose-400/40" />
                 )}
+
+                {isSpeaking && (
+                  <>
+                    <span className="absolute inset-0 animate-ping rounded-full bg-rose-500/20" />
+                    <span className="absolute inset-1 animate-pulse rounded-full border border-rose-300" />
+                  </>
+                )}
+
+                <span className="relative z-10 flex items-center justify-center">
+                  {isListening ? (
+                    <Square size={14} fill="currentColor" />
+                  ) : (
+                    <Mic size={18} />
+                  )}
+                </span>
               </button>
-            )}
+
+              {isStreaming ? (
+                <button
+                  type="button"
+                  onClick={onStop}
+                  className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
+                  aria-label="Stop generation"
+                >
+                  <Square
+                    size={14}
+                    fill="currentColor"
+                    className="transition-colors group-hover:text-rose-600"
+                  />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)}
+                  className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                    isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)
+                      ? "bg-slate-800 text-slate-600 cursor-not-allowed"
+                      : "bg-white text-slate-900 hover:bg-slate-200 cursor-pointer"
+                  }`}
+                  aria-label={isSending || isUploading ? "Sending..." : "Send message"}
+                  title={isSending || isUploading ? "Sending..." : "Send message"}
+                >
+                  {isSending || isUploading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <ArrowUp size={18} strokeWidth={2.5} />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </form>

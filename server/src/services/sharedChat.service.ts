@@ -85,6 +85,7 @@ export const sharedChatService = {
     const newChat = chatRepository.create({
       userId,
       title: sharedChat.title,
+      isSidebarVisible: true,
     });
     await newChat.save();
 

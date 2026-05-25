@@ -32,6 +32,8 @@ import {
   GitBranch,
   Database,
   RefreshCw,
+  Camera,
+  Pencil,
 } from "lucide-react";
 import { useUser, SignOutButton } from "@clerk/react";
 
@@ -78,6 +80,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setMessages,
     setIsNewChat,
     setSidebarOpen,
+    dbUser,
+    setDbUser,
   } = useChatStore();
   const {
     removeGroup,
@@ -85,11 +89,92 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setCurrentGroup,
   } = useGroupStore();
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [mobileView, setMobileView] = useState<"list" | "detail">("list");
 
+  // Edit Profile States
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // Initialize edit fields when edit mode is toggled or user changes
+  useEffect(() => {
+    if (user) {
+      setEditFirstName(dbUser?.firstName || user.firstName || "");
+      setEditLastName(dbUser?.lastName || user.lastName || "");
+      setPreviewUrl(dbUser?.imageUrl || user.imageUrl || "");
+      setSelectedFile(null);
+    }
+  }, [user, dbUser, isEditingProfile]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setIsSavingProfile(true);
+    try {
+      let imageUrl = dbUser?.imageUrl || user.imageUrl;
+
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("image", selectedFile);
+        
+        const uploadRes = await api.post("/upload/image", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        imageUrl = uploadRes.data.url;
+      }
+
+      const { data: updatedProfile } = await api.put("/user/profile", {
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+        imageUrl,
+      });
+
+      // Update global DB user state
+      setDbUser(updatedProfile);
+
+      // Keep Clerk's local user metadata updated too
+      await user.update({
+        firstName: editFirstName.trim(),
+        lastName: editLastName.trim(),
+      });
+
+      toast.success("Profile updated successfully");
+      setIsEditingProfile(false);
+    } catch (error: any) {
+      console.error("Save Profile Error:", error);
+      toast.error(error.response?.data?.error || error.message || "Failed to update profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab);
+      setIsEditingProfile(false); // Reset profile edit mode on modal open
+      setMobileView("list"); // Reset mobile view back to options list on modal open
     }
   }, [isOpen, initialTab]);
   const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
@@ -513,7 +598,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 not-selectable "
+      className="fixed inset-0 z-[100] flex items-center justify-center p-0 lg:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300 not-selectable "
       onMouseDown={(e) => setMouseDownOnBackdrop(e.target === e.currentTarget)}
       onMouseUp={(e) => {
         if (mouseDownOnBackdrop && e.target === e.currentTarget) onClose();
@@ -522,18 +607,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl h-[600px] bg-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300 relative"
+        className="w-full max-w-4xl h-full lg:h-[600px] max-h-[100vh] lg:max-h-[85vh] bg-slate-950 border lg:border-white/10 rounded-none lg:rounded-3xl shadow-2xl overflow-hidden flex flex-col lg:flex-row animate-in zoom-in-95 duration-300 relative"
       >
         {/* Internal Sidebar */}
-        <div className="w-full md:w-64 bg-slate-900/50 border-r border-white/5 p-4 flex flex-col">
-          <div className="mb-8 px-2">
-            <h2 className="text-lg font-bold text-white">Settings</h2>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">
-              Velora Intelligence
-            </p>
+        <div className={`w-full lg:w-64 bg-slate-900/50 border-b lg:border-b-0 lg:border-r border-white/5 p-4 flex-col shrink-0 ${mobileView === "list" ? "flex" : "hidden lg:flex"}`}>
+          <div className="mb-6 lg:mb-8 px-2 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white">Settings</h2>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">
+                Velora Intelligence
+              </p>
+            </div>
+            {/* Mobile close button on list view */}
+            <button
+              onClick={onClose}
+              className="lg:hidden p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white"
+            >
+              <X size={20} />
+            </button>
           </div>
 
-          <nav className="flex-1 space-y-1">
+          {/* Desktop Navigation */}
+          <nav className="hidden lg:flex flex-col space-y-1">
             {navItems.map((item) => (
               <button
                 key={item.id}
@@ -550,7 +645,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             ))}
           </nav>
 
-          <div className="mt-auto pt-4 border-t border-white/5">
+          {/* Mobile Navigation List (Like ChatGPT Mobile) */}
+          <div className="lg:hidden flex-1 overflow-y-auto space-y-2 py-2">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setMobileView("detail");
+                }}
+                className="flex w-full items-center justify-between rounded-2xl bg-white/2 border border-white/5 px-4 py-3.5 text-xs font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all active:scale-[0.99]"
+              >
+                <div className="flex items-center gap-3.5">
+                  <item.icon size={18} className="text-slate-400" />
+                  <span>{item.label}</span>
+                </div>
+                <ArrowLeft size={16} className="rotate-180 text-slate-500" />
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop SignOut */}
+          <div className="hidden lg:block mt-auto pt-4 border-t border-white/5">
              <SignOutButton>
                 <button className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest text-rose-500 hover:bg-rose-500/5 transition-all">
                   <LogOut size={16} />
@@ -558,56 +674,161 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
              </SignOutButton>
           </div>
+
+          {/* Mobile SignOut */}
+          <div className="lg:hidden mt-auto pt-4 border-t border-white/5">
+             <SignOutButton>
+                <button className="flex w-full items-center justify-between rounded-2xl bg-rose-500/5 border border-rose-500/10 px-4 py-3.5 text-xs font-bold uppercase tracking-widest text-rose-400 hover:bg-rose-500/10 transition-all">
+                  <div className="flex items-center gap-3.5">
+                    <LogOut size={18} />
+                    <span>Log Out</span>
+                  </div>
+                  <ArrowLeft size={16} className="rotate-180" />
+                </button>
+             </SignOutButton>
+          </div>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-950">
+        <div className={`flex-1 flex flex-col min-w-0 bg-slate-950 ${mobileView === "detail" ? "flex" : "hidden lg:flex"}`}>
           {/* Header (Mobile Close) */}
-          <div className="flex items-center justify-between px-8 py-6 border-b border-white/5">
-            <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white">
-              {navItems.find((n) => n.id === activeTab)?.label}
-            </h3>
+          <div className="flex items-center justify-between px-4 lg:px-8 py-4 lg:py-6 border-b border-white/5 gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                onClick={() => setMobileView("list")}
+                className="lg:hidden p-2 hover:bg-white/5 rounded-xl transition-all text-slate-400 hover:text-white shrink-0 animate-in slide-in-from-left-2 duration-200"
+              >
+                <ArrowLeft size={18} />
+              </button>
+              <h3 className="text-xs lg:text-sm font-bold uppercase tracking-[0.2em] text-white truncate">
+                {navItems.find((n) => n.id === activeTab)?.label}
+              </h3>
+            </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white"
+              className="p-2 hover:bg-white/5 rounded-xl transition-all text-slate-500 hover:text-white shrink-0"
             >
-              <X size={20} />
+              <X size={18} className="lg:w-5 lg:h-5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8">
-            {activeTab === "general" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center gap-6 p-6 rounded-3xl bg-white/3 border border-white/5">
-                  <div className="h-20 w-20 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl">
-                    <img src={user?.imageUrl} alt={user?.fullName || ""} className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold text-white">{user?.fullName}</h4>
-                    <p className="text-sm text-slate-500">{user?.primaryEmailAddress?.emailAddress}</p>
-                    <div className="mt-3 flex items-center gap-2">
-                       <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">Premium</span>
-                        {/* eslint-disable-next-line react-hooks/purity */}
-                        <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+            {activeTab === "general" && !isEditingProfile && (
+              <div className="space-y-6 lg:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 lg:p-6 rounded-3xl bg-white/3 border border-white/5 overflow-hidden group gap-4">
+                  <div className="flex items-center gap-4 lg:gap-6">
+                    <div className="h-16 w-16 lg:h-20 lg:w-20 rounded-2xl overflow-hidden border-2 border-white/10 shadow-2xl shrink-0">
+                      <img src={dbUser?.imageUrl || user?.imageUrl} alt={dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : (user?.fullName || "")} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-base lg:text-xl font-bold text-white truncate">{dbUser?.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}` : user?.fullName}</h4>
+                      <p className="text-xs lg:text-sm text-slate-500 truncate">{user?.primaryEmailAddress?.emailAddress}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                         <span className="px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20">Premium</span>
+                          {/* eslint-disable-next-line react-hooks/purity */}
+                          <span className="text-slate-700 text-[10px] font-medium">• Member since {new Date(user?.createdAt || Date.now()).getFullYear()}</span>
+                      </div>
                     </div>
                   </div>
+                  <button 
+                    onClick={() => setIsEditingProfile(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 text-[9px] font-bold uppercase tracking-widest transition-all shrink-0 self-start sm:self-center"
+                  >
+                    <Pencil size={12} />
+                    <span>Edit Profile</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-5 rounded-3xl border border-white/5 bg-white/2 hover:bg-white/5 transition-colors cursor-pointer group">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                   <div className="p-4 lg:p-5 rounded-3xl border border-white/5 bg-white/2 hover:bg-white/5 transition-colors cursor-pointer group">
                       <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 mb-4 group-hover:scale-110 transition-transform">
                         <User size={20} />
                       </div>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Identity</p>
                       <p className="text-sm font-medium text-white">{personalizationData.nickname || user?.firstName || "User"}</p>
                    </div>
-                   <div className="p-5 rounded-3xl border border-white/5 bg-white/2 hover:bg-white/5 transition-colors cursor-pointer group">
+                   <div className="p-4 lg:p-5 rounded-3xl border border-white/5 bg-white/2 hover:bg-white/5 transition-colors cursor-pointer group">
                       <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 mb-4 group-hover:scale-110 transition-transform">
                         <Briefcase size={20} />
                       </div>
                       <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Occupation</p>
                       <p className="text-sm font-medium text-white">{personalizationData.occupation || "Not Set"}</p>
                    </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "general" && isEditingProfile && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="flex flex-col items-center justify-center p-4 lg:p-6 rounded-3xl bg-white/3 border border-white/5 gap-4 relative">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="h-20 w-20 lg:h-24 lg:w-24 rounded-3xl overflow-hidden border-2 border-white/10 shadow-2xl relative cursor-pointer group/avatar"
+                  >
+                    <img
+                      src={previewUrl || user?.imageUrl}
+                      alt="Avatar Preview"
+                      className="w-full h-full object-cover group-hover/avatar:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                      <Camera size={16} className="text-white" />
+                      <span className="text-[8px] font-bold text-white uppercase tracking-wider">Upload</span>
+                    </div>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avatar Image</p>
+                    <p className="text-[9px] text-slate-600 mt-0.5">Click to choose a new picture</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">First Name</label>
+                    <input
+                      type="text"
+                      value={editFirstName}
+                      onChange={(e) => setEditFirstName(e.target.value)}
+                      placeholder="First Name"
+                      className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={editLastName}
+                      onChange={(e) => setEditLastName(e.target.value)}
+                      placeholder="Last Name"
+                      className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  <button
+                    onClick={() => setIsEditingProfile(false)}
+                    disabled={isSavingProfile}
+                    className="w-full sm:flex-1 py-3 lg:py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest bg-white/5 border border-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile || !editFirstName.trim()}
+                    className="w-full sm:flex-1 flex items-center justify-center gap-2 bg-white text-black py-3 lg:py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50"
+                  >
+                    {isSavingProfile ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                    <span>{isSavingProfile ? "Saving..." : "Save Changes"}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -621,7 +842,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Nickname</label>
                         <input
@@ -646,12 +867,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     <div className="space-y-3">
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Response Tone</label>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5 lg:gap-2">
                         {TONE_OPTIONS.map((tone) => (
                           <button
                             key={tone}
                             onClick={() => setPersonalizationData({...personalizationData, tone})}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border ${
+                            className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl text-[9px] lg:text-[10px] font-bold uppercase tracking-widest transition-all border ${
                               personalizationData.tone === tone
                                 ? "bg-white text-black border-white"
                                 : "bg-white/3 border-white/5 text-slate-500 hover:text-white"
@@ -666,18 +887,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Instructions</label>
                       <textarea
-                        rows={4}
+                        rows={3}
                         value={personalizationData.customInstructions}
                         onChange={(e) => setPersonalizationData({...personalizationData, customInstructions: e.target.value})}
                         placeholder="How should Velora respond to you?"
-                        className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all resize-none"
+                        className="w-full bg-white/3 border border-white/5 rounded-2xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/10 transition-all resize-none lg:rows-4"
                       />
                     </div>
 
                     <button
                       onClick={handleSavePersonalization}
                       disabled={isSavingPersonalization}
-                      className="w-full flex items-center justify-center gap-2 bg-white text-black py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-2 bg-white text-black py-3 lg:py-4 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50"
                     >
                       {isSavingPersonalization ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       <span>Save Identity</span>
@@ -689,16 +910,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === "memory" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 mb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 mb-4 gap-4">
                    <div className="flex items-center gap-3">
-                      <Brain className="text-emerald-400" size={20} />
+                      <Brain className="text-emerald-400 shrink-0" size={20} />
                       <div>
                         <p className="text-[11px] font-bold text-white uppercase tracking-widest">Neural Bank</p>
                         <p className="text-[10px] text-emerald-400/60 font-medium">Auto-sync active</p>
                       </div>
                    </div>
-                   <div className="flex items-center gap-4">
-                     <div className="text-right">
+                   <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
+                     <div className="text-left sm:text-right">
                         <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{memories.length} / 100</p>
                         <div className="h-1 w-24 bg-white/5 rounded-full mt-1 overflow-hidden">
                            <div className="h-full bg-emerald-500" style={{width: `${Math.min(memories.length, 100)}%`}} />
@@ -735,7 +956,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     {isEditMode && (
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="flex flex-wrap items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200 gap-2">
                         <button
                           onClick={() => {
                             const allIds = memories.map(m => m._id);
@@ -835,9 +1056,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
             {activeTab === "archive" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 mb-4 flex items-center justify-between">
+                <div className="p-4 rounded-2xl bg-amber-500/5 border border-amber-500/10 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                    <div className="flex items-center gap-3">
-                      <Archive className="text-amber-400" size={20} />
+                      <Archive className="text-amber-400 shrink-0" size={20} />
                       <div>
                         <p className="text-[11px] font-bold text-white uppercase tracking-widest">Archive Vault</p>
                         <p className="text-[10px] text-amber-400/60 font-medium">{localArchivedChats.length} Conversations preserved</p>
@@ -873,7 +1094,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ) : (
                   <div className="space-y-3">
                     {isEditMode && (
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="flex flex-wrap items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200 gap-2">
                         <button
                           onClick={() => {
                             const allIds = localArchivedChats.map(c => c._id);
@@ -954,10 +1175,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                   event.stopPropagation();
                                   handleUnarchive(chat._id);
                                 }}
-                                className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest"
+                                className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest"
                                >
                                  <ArrowLeft size={14} />
-                                 Restore
+                                 <span className="hidden sm:inline">Restore</span>
                                </button>
                                <button 
                                 onClick={(event) => {
@@ -981,9 +1202,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === "sharing" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex items-center justify-between">
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                    <div className="flex items-center gap-3">
-                      <Share className="text-indigo-400" size={20} />
+                      <Share className="text-indigo-400 shrink-0" size={20} />
                       <div>
                         <p className="text-[11px] font-bold text-white uppercase tracking-widest">Shared Chats</p>
                         <p className="text-[10px] text-indigo-400/60 font-medium">Manage your publicly shared conversation links</p>
@@ -1026,7 +1247,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       ) : (
                         <div className="space-y-2">
                           {isEditMode && (
-                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex flex-wrap items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200 gap-2">
                               <button
                                 onClick={() => {
                                   const allIds = sharedChats.map(c => c._id);
@@ -1114,7 +1335,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                       title="Copy Share Link"
                                     >
                                       {isShareCopied ? <Check size={12} /> : <Copy size={12} />}
-                                      {isShareCopied ? "Copied" : "Copy Link"}
+                                      <span className="hidden sm:inline">{isShareCopied ? "Copied" : "Copy Link"}</span>
                                     </button>
                                     <button 
                                       onClick={() => promptDeleteShare([share._id])}
@@ -1138,9 +1359,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === "groups" && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex items-center justify-between">
+                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/10 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                    <div className="flex items-center gap-3">
-                      <Users className="text-indigo-400" size={20} />
+                      <Users className="text-indigo-400 shrink-0" size={20} />
                       <div>
                         <p className="text-[11px] font-bold text-white uppercase tracking-widest">My Groups</p>
                         <p className="text-[10px] text-indigo-400/60 font-medium">Manage and delete collaborative groups you created</p>
@@ -1183,7 +1404,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       ) : (
                         <div className="space-y-2">
                           {isEditMode && (
-                            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <div className="flex flex-wrap items-center justify-between p-3 rounded-2xl bg-white/2 border border-white/5 mb-3 animate-in fade-in slide-in-from-top-1 duration-200 gap-2">
                               <button
                                 onClick={() => {
                                   const allIds = createdGroups.map(c => c._id);
@@ -1252,7 +1473,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                   )}
                                   <div className="min-w-0 flex-1">
                                     <p className="text-sm font-bold text-white truncate">{group.title || "Collaborative Group"}</p>
-                                    <div className="flex items-center gap-3 mt-1">
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
                                       <span className="text-[9px] text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md">Creator</span>
                                       <span className="text-[9px] text-slate-500 font-medium">{group.members?.length || 1} Members</span>
                                       <span className="text-[9px] text-slate-600 font-medium">Code: {group.inviteCode}</span>
@@ -1272,7 +1493,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                       title="Copy Invite Link"
                                     >
                                       {isInviteCopied ? <Check size={12} /> : <Copy size={12} />}
-                                      {isInviteCopied ? "Copied" : "Copy Invite"}
+                                      <span className="hidden sm:inline">{isInviteCopied ? "Copied" : "Copy Invite"}</span>
                                     </button>
                                     <button 
                                       onClick={() => promptDeleteGroup([group._id])}
@@ -1298,17 +1519,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             {activeTab === "data" && (
 
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <div className="p-6 rounded-3xl bg-blue-500/5 border border-blue-500/10 mb-4">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className="h-12 w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400">
-                      <FileText size={24} />
+                <div className="p-4 lg:p-6 rounded-3xl bg-blue-500/5 border border-blue-500/10 mb-4">
+                  <div className="flex items-center gap-3 lg:gap-4 mb-3 lg:mb-4">
+                    <div className="h-10 w-10 lg:h-12 lg:w-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0">
+                      <FileText size={20} className="lg:w-6 lg:h-6" />
                     </div>
                     <div>
-                      <h4 className="text-lg font-bold text-white">AI Identity Portability</h4>
-                      <p className="text-[10px] text-blue-400/60 font-bold uppercase tracking-widest">Context Export System</p>
+                      <h4 className="text-base lg:text-lg font-bold text-white">AI Identity Portability</h4>
+                      <p className="text-[9px] lg:text-[10px] text-blue-400/60 font-bold uppercase tracking-widest">Context Export System</p>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-400 leading-relaxed">
+                  <p className="text-xs lg:text-sm text-slate-400 leading-relaxed">
                     Generate a comprehensive summary of everything Velora has learned about you. 
                     This export is designed to help you "port" your context to other AI assistants, 
                     preserving your instructions, preferences, and key life events.
@@ -1368,7 +1589,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ) : (
                   <div className="space-y-4">
                     <div className="relative group">
-                      <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-4 right-4 flex items-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10">
                          <button 
                           onClick={() => {
                             navigator.clipboard.writeText(exportSummary);
@@ -1378,7 +1599,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           }}
                           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md"
                          >
-                            {isCopied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+                            {isCopied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
                          </button>
                          <button 
                           onClick={() => {
@@ -1392,10 +1613,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           }}
                           className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md"
                          >
-                            <Download size={16} />
+                            <Download size={14} />
                          </button>
                       </div>
-                      <pre className="w-full h-[350px] overflow-y-auto bg-black/40 border border-white/5 rounded-3xl p-8 text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-white/10">
+                      <pre className="w-full h-[300px] lg:h-[350px] overflow-y-auto bg-black/40 border border-white/5 rounded-2xl lg:rounded-3xl p-4 lg:p-8 text-[11px] lg:text-xs text-slate-300 font-mono leading-relaxed whitespace-pre-wrap selection:bg-white/10">
                         {exportSummary}
                       </pre>
                     </div>
@@ -1411,21 +1632,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
 
             {activeTab === "security" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="space-y-6 lg:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="space-y-4">
-                  <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em]">Security Controls</h4>
+                  <h4 className="text-[10px] lg:text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em]">Security Controls</h4>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-5 rounded-3xl bg-white/3 border border-white/5">
+                    <div className="flex items-center justify-between p-4 lg:p-5 rounded-2xl lg:rounded-3xl bg-white/3 border border-white/5">
                       <div>
-                        <p className="text-sm font-bold text-white">Encryption</p>
-                        <p className="text-[10px] text-slate-500 font-medium">All neural data is end-to-end encrypted</p>
+                        <p className="text-xs lg:text-sm font-bold text-white">Encryption</p>
+                        <p className="text-[9px] lg:text-[10px] text-slate-500 font-medium">All neural data is end-to-end encrypted</p>
                       </div>
                       <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
                     </div>
-                    <div className="flex items-center justify-between p-5 rounded-3xl bg-white/3 border border-white/5">
+                    <div className="flex items-center justify-between p-4 lg:p-5 rounded-2xl lg:rounded-3xl bg-white/3 border border-white/5">
                       <div>
-                        <p className="text-sm font-bold text-white">Data Privacy</p>
-                        <p className="text-[10px] text-slate-500 font-medium">Manage how your data is used for training</p>
+                        <p className="text-xs lg:text-sm font-bold text-white">Data Privacy</p>
+                        <p className="text-[9px] lg:text-[10px] text-slate-500 font-medium">Manage how your data is used for training</p>
                       </div>
                       <button className="text-[10px] font-bold uppercase tracking-widest text-emerald-400 hover:text-emerald-300 transition-colors">Manage</button>
                     </div>
@@ -1434,8 +1655,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 <div className="pt-6 border-t border-white/5">
                    <p className="text-[10px] font-bold text-rose-500/60 uppercase tracking-[0.2em] mb-4">Danger Zone</p>
-                   <button className="flex items-center gap-3 w-full p-5 rounded-3xl border border-rose-500/20 bg-rose-500/5 text-rose-500 hover:bg-rose-500/10 transition-all text-left">
-                      <Trash2 size={20} />
+                   <button className="flex items-center gap-3 w-full p-4 lg:p-5 rounded-2xl lg:rounded-3xl border border-rose-500/20 bg-rose-500/5 text-rose-500 hover:bg-rose-500/10 transition-all text-left">
+                      <Trash2 size={20} className="shrink-0" />
                       <div>
                         <p className="text-sm font-bold">Delete Account</p>
                         <p className="text-[10px] opacity-60 font-medium">Permanently wipe all neural and chat history</p>
