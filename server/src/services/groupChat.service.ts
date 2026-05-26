@@ -19,14 +19,29 @@ import { processAttachedFile } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import mongoose from "mongoose";
 
-const getEnabledMcpTools = async (userId: string) => {
+const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
   const user = await userService.getUserByClerkId(userId);
   const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
   const allTools = await mcpClientService.getActiveTools();
 
-  return allTools.filter(
-    (tool) => !disabledMcpServers.includes(tool._serverName),
-  );
+  return allTools.filter((tool) => {
+    if (disabledMcpServers.includes(tool._serverName)) return false;
+
+    if (!hasFiles) {
+      const toolName = tool.name.toLowerCase();
+      const serverName = (tool._serverName || "").toLowerCase();
+      if (
+        toolName.includes("excel") || serverName.includes("excel") ||
+        toolName.includes("csv") || serverName.includes("csv") ||
+        toolName.includes("pdf") || serverName.includes("pdf") ||
+        toolName.includes("file") || serverName.includes("file") ||
+        toolName.includes("document") || serverName.includes("document")
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 };
 
 export class GroupChatService {
@@ -424,19 +439,21 @@ export class GroupChatService {
 
     // Build prompt
     const promptMessages: AIMessage[] = orderedMessages.map((msg) => {
-      const parsed = parseMultimedia(msg.content);
-      const attachments = [
-        ...(msg.attachments || []).map((att: any) => ({
-          url: att.url,
-          name: att.name,
-          mimeType: att.mimeType,
-          size: att.size,
-        })),
-        ...(parsed.attachments || []),
-      ];
+      const attachments = (msg.attachments || []).map((att: any) => {
+        const rawAtt = att.toObject ? att.toObject() : att;
+        return {
+          ...rawAtt,
+          url: rawAtt.url,
+          name: rawAtt.name,
+          mimeType: rawAtt.mimeType,
+          size: rawAtt.size,
+          localPath: rawAtt.localPath,
+          storagePath: rawAtt.storagePath,
+        };
+      });
       return {
         role: msg.role as AIRole,
-        content: parsed.content,
+        content: msg.content,
         username: msg.username,
         attachments: attachments.length > 0 ? attachments : undefined,
       };
@@ -539,7 +556,10 @@ export class GroupChatService {
 
     try {
       const activeUserId = clerkId || group.creatorId;
-      const tools = await getEnabledMcpTools(activeUserId);
+      const hasFiles = promptMessages.some((m) =>
+        m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+      );
+      const tools = await getEnabledMcpTools(activeUserId, hasFiles);
       const aiProvider = aiService.getProvider(targetProvider);
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
@@ -604,6 +624,8 @@ export class GroupChatService {
         );
       }
 
+      const { attachments: aiAttachments } = parseMultimedia(fullResponse);
+
       // Save final message
       const aiMsg = await GroupMessage.create({
         groupId,
@@ -613,6 +635,7 @@ export class GroupChatService {
         content: fullResponse,
         status: "completed",
         metadata,
+        attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
       });
 
       groupStreamRegistry.delete(groupId);
@@ -673,6 +696,8 @@ export class GroupChatService {
       this.sanitizeAssistantResponse(rawResponse) ||
       "⚠️ Response generation stopped.";
 
+    const { attachments: aiAttachments } = parseMultimedia(fullResponse);
+
     // Save final partial message
     const aiMsg = await GroupMessage.create({
       groupId,
@@ -682,6 +707,7 @@ export class GroupChatService {
       content: fullResponse,
       status: "stopped",
       metadata: activeStream.webSearchEnabled ? { webSearchEnabled: true } : {},
+      attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
     });
 
     // Broadcast stopped message state

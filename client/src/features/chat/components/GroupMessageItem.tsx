@@ -1066,23 +1066,10 @@ const GroupMessageItem = ({
                     )}
                   </div>
                 )}
-
-                <AttachmentList attachments={msg.attachments || []} />
-
-                {isAssistant && msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        if (msg.sources?.length) {
-                          onSourcesClick?.(msg.sources, msg.sources[0]?.id);
-                        }
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                      Sources
-                    </button>
-                  </div>
+                {!isAssistant && (
+                  <AttachmentList attachments={msg.attachments || []} />
                 )}
+
               </>
             )}
           </div>
@@ -1139,10 +1126,24 @@ const GroupMessageItem = ({
               <button
                 onClick={onRetry}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                title="Retry"
+                title="Regenerate response"
               >
                 <RotateCcw size={17} />
               </button>
+
+              {!!msg.sources?.length && (
+                <button
+                  onClick={() => {
+                    if (msg.sources?.length) {
+                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                  title="View sources"
+                >
+                  Sources
+                </button>
+              )}
             </div>
           )}
 

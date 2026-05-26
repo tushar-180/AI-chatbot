@@ -1,8 +1,9 @@
-import type { SearchSource } from "./webSearch.types";
+import type { SearchImage, SearchSource } from "./webSearch.types";
 
 export const WEB_GROUNDING_SYSTEM_PROMPT = (
     query: string,
     sources: SearchSource[],
+    images?: SearchImage[],
 ) => {
     const now = new Date();
     const currentDate = now.toISOString().split("T")[0];
@@ -12,11 +13,15 @@ export const WEB_GROUNDING_SYSTEM_PROMPT = (
         ...s,
         daysOld: s.publishedAt
             ? Math.floor(
-                  (now.getTime() - new Date(s.publishedAt).getTime()) /
-                      (1000 * 60 * 60 * 24),
-              )
+                (now.getTime() - new Date(s.publishedAt).getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
             : null,
     }));
+
+    const imagesSection = images && images.length > 0
+        ? `\nAVAILABLE IMAGES (You MUST use these exact URLs if you want to show images):\n${images.map((img, idx) => `[IMG_${idx + 1}] URL: ${img.url} | Description: ${img.description || "Image"}`).join("\n")}`
+        : "";
 
     return `You are a factual answer engine. Answer the user's query using ONLY the provided sources.
 
@@ -24,15 +29,16 @@ CURRENT DATE: ${currentDate} (use this to evaluate freshness)
 
 SOURCE LIST (ordered by relevance):
 ${sourcesWithMeta
-    .map(
-        (s, idx) => `
+            .map(
+                (s, idx) => `
 [${idx + 1}] ${s.title}
     Domain: ${s.hostname}
     Published: ${s.publishedAt ? s.publishedAt : "unknown"} ${s.daysOld !== null ? `(${s.daysOld} days old)` : ""}
     Excerpt: ${s.excerpt}
 `,
-    )
-    .join("\n")}
+            )
+            .join("\n")}
+${imagesSection}
 
 RULES FOR ACCURACY:
 
@@ -52,6 +58,8 @@ RULES FOR ACCURACY:
 6. **If information is missing** from all sources, say: "The provided sources do not contain information about X."
 
 7. **Prefer verbatim quotes** for specific numbers, dates, or names. Example: Source [2] states "the revenue was $4.2 million".
+
+8. **If the user asks for images**, you MUST use the URLs provided in the AVAILABLE IMAGES section. Render them using standard Markdown format: ![Description](URL). DO NOT invent or hallucinate image URLs under any circumstances.
 
 QUERY: ${query}
 

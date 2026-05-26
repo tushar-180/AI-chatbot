@@ -198,15 +198,30 @@ function withTimeout<T>(
   ]);
 }
 
-const getEnabledMcpTools = async (userId: string) => {
+const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
   const user = await userService.getUserByClerkId(userId);
   const disabledMcpServers = (user?.get("disabledMcpServers") ||
     []) as string[];
   const allTools = await mcpClientService.getActiveTools();
 
-  return allTools.filter(
-    (tool) => !disabledMcpServers.includes(tool._serverName),
-  );
+  return allTools.filter((tool) => {
+    if (disabledMcpServers.includes(tool._serverName)) return false;
+
+    if (!hasFiles) {
+      const toolName = tool.name.toLowerCase();
+      const serverName = (tool._serverName || "").toLowerCase();
+      if (
+        toolName.includes("excel") || serverName.includes("excel") ||
+        toolName.includes("csv") || serverName.includes("csv") ||
+        toolName.includes("pdf") || serverName.includes("pdf") ||
+        toolName.includes("file") || serverName.includes("file") ||
+        toolName.includes("document") || serverName.includes("document")
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 };
 
 async function fetchYoutubeTranscript(effectiveLatestUserMessage: string, sizeLimit: number): Promise<string | null> {
@@ -275,14 +290,15 @@ const buildPromptMessages = async (
 
   let fileContext: string | null = null;
 
-  const userMessagesWithFilesAll = chatMessages
+  const recentMessages = chatMessages.slice(-10);
+  const userMessagesWithFilesAll = recentMessages
     .filter((m) => m.role === "user" && m.attachments && m.attachments.length > 0)
-    .slice(-1); // take the most recent one across all chat history
+    .slice(-1); // take the most recent one across the last 10 messages
 
   if (userMessagesWithFilesAll.length > 0) {
     const lastFileMsg = userMessagesWithFilesAll[0];
     const firstAtt = lastFileMsg.attachments?.[0];
-    
+
     if (firstAtt && firstAtt.mimeType && !firstAtt.mimeType.startsWith("image/")) {
       const storagePath = firstAtt.storagePath;
       if (storagePath) {
@@ -294,8 +310,8 @@ const buildPromptMessages = async (
     }
 
     // Check if the message with the attachment fell out of the sliding window
-    const isFileInContext = rawPromptMessages.some((m) => 
-      (m.id && m.id === lastFileMsg.id) || 
+    const isFileInContext = rawPromptMessages.some((m) =>
+      (m.id && m.id === lastFileMsg.id) ||
       (m as any)._id?.toString() === (lastFileMsg as any)._id?.toString()
     );
 
@@ -473,13 +489,13 @@ async function* streamAssistantResponse(
     yield (
       includeChatId
         ? {
-            chatId,
-            messageId,
-            requestId,
-            model: providerName,
-            status: "stopped",
-            done: true,
-          }
+          chatId,
+          messageId,
+          requestId,
+          model: providerName,
+          status: "stopped",
+          done: true,
+        }
         : { messageId, requestId, model: providerName, status: "stopped", done: true }
     ) as StreamPayload;
     return;
@@ -520,7 +536,10 @@ async function* streamAssistantResponse(
   let firstTokenTimedOut = false;
 
   try {
-    const tools = await getEnabledMcpTools(String(chat.userId));
+    const hasFiles = promptMessages.some((m) =>
+      m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+    );
+    const tools = await getEnabledMcpTools(String(chat.userId), hasFiles);
 
     const promptSizes = promptMessages.map(m => ({
       role: m.role,
@@ -754,7 +773,10 @@ export const chatService = {
       let reply = "";
       let usage: TokenUsage | undefined;
       try {
-        const tools = await getEnabledMcpTools(String(resolvedUserId));
+        const hasFiles = promptMessages.some((m) =>
+          m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+        );
+        const tools = await getEnabledMcpTools(String(resolvedUserId), hasFiles);
         const response = await aiProvider.generateResponse(
           promptMessages,
           tools,
@@ -928,7 +950,10 @@ export const chatService = {
     let reply = "";
     let usage: TokenUsage | undefined;
     try {
-      const tools = await getEnabledMcpTools(String(chat.userId));
+      const hasFiles = promptMessages.some((m) =>
+        m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+      );
+      const tools = await getEnabledMcpTools(String(chat.userId), hasFiles);
       const response = await aiProvider.generateResponse(promptMessages, tools);
       reply = response.text;
       usage = response.usage;

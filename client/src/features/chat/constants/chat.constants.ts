@@ -1,4 +1,4 @@
-export const DEFAULT_CHAT_PROVIDER = "nvidia:openai/gpt-oss-120b";
+export const DEFAULT_CHAT_PROVIDER = "gemini:gemini-3.1-flash-lite";
 export const CHAT_TITLE_MAX_LENGTH = 30;
 
 /**
@@ -15,7 +15,7 @@ export const supportsVision = (modelId: string): boolean => {
   const explicitVisionModels = [
     // Gemini
     "gemini-2.0-flash",
-    "gemini-3.1-flash-lite-preview",
+    "gemini-3.1-flash-lite",
     // OpenAI
     "gpt-5",
     "gpt-5-mini",

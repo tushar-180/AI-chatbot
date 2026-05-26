@@ -108,15 +108,24 @@ export class GeminiAdapter implements IAIService {
                       return { text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]` };
                     }
 
-                    const response = await fetch(att.url);
+                    const response = await fetch(att.url, {
+                      headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                      }
+                    });
                     if (!response.ok) {
                       throw new Error(`Fetch failed: ${response.statusText}`);
                     }
 
-                    const mimeType =
+                    let mimeType =
                       att.mimeType ||
                       response.headers.get("content-type") ||
                       "image/jpeg";
+
+                    if (mimeType === "image/remote") {
+                      mimeType = response.headers.get("content-type") || "image/jpeg";
+                    }
 
                     const isImageVideoAudio =
                       mimeType.startsWith("image/") ||
@@ -173,13 +182,16 @@ export class GeminiAdapter implements IAIService {
   private getSystemInstruction(combinedSystemPrompt?: string, hasTools = false) {
     let coreInstructions = CORE_VELORA_INSTRUCTIONS;
 
-    if (!hasTools) {
-      coreInstructions = coreInstructions.replace(/TOOL-USE & ANTI-HALLUCINATION RULES[\s\S]*?(?=OUTPUT RULES)/, "");
-    }
+    // Do NOT strip instructions if hasTools is false. The core Velora instructions 
+    // are needed for web search and image generation to work properly!
+    
+    const mcpInstruction = hasTools
+      ? "\n\n[CRITICAL INSTRUCTION FOR MCP TOOLS: You have access to various tools via MCP. RULE 1: DO NOT attempt to use any file analysis or parsing tools (such as Excel, CSV, or PDF tools) unless the user has explicitly uploaded a corresponding file in this conversation. If no file is attached, you MUST NOT guess or hallucinate that a file exists. RULE 2: Use Web Search tools only if the user explicitly asks to search or if you require real-time/updated data to answer the query. RULE 3: If you lack the required context or files to use a tool, fulfill the request using your own knowledge or admit you cannot answer.]"
+      : "";
 
     const finalPrompt = combinedSystemPrompt
-      ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}`
-      : coreInstructions;
+      ? `${combinedSystemPrompt}\n\n---\n\n${coreInstructions}${mcpInstruction}`
+      : `${coreInstructions}${mcpInstruction}`;
 
     return {
       parts: [{ text: finalPrompt }],
@@ -352,12 +364,12 @@ export class GeminiAdapter implements IAIService {
                   f.name!,
                   f.args,
                 );
-                
+
                 let resultString = typeof result === "string" ? result : JSON.stringify(result);
                 if (resultString.length > 10000) {
                   resultString = resultString.substring(0, 10000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
                 }
-                
+
                 return {
                   functionResponse: {
                     name: f.name!,
@@ -573,7 +585,7 @@ export class GeminiAdapter implements IAIService {
               parts: responseParts,
             } as any);
           }
-          
+
           if (loopCount >= maxLoops && hasToolCalls) {
             contents.push({
               role: "user",

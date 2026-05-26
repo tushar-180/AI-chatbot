@@ -334,6 +334,7 @@ export const webSearchService = {
             systemPrompt: WEB_GROUNDING_SYSTEM_PROMPT(
                 resolved.resolvedQuery,
                 finalSources,
+                images
             ),
             citationsMarkdown:
                 "\n\nSources:\n" +

@@ -53,7 +53,7 @@ export async function retrieveFileContext(
                 .join("\n\n---\n\n");
             return `The user provided a file. Below are the most relevant excerpts from the file related to the user's query:\n\n${combinedText}`;
         } else {
-            console.log("[RAG] No chunks met the 0.5 similarity threshold.");
+            console.log("[RAG] No chunks met the 0.35 similarity threshold.");
             return `The user provided a file, but no highly relevant sections were found for their query.`;
         }
     } catch (err) {

@@ -931,7 +931,9 @@ const MessageItem = ({
                   </div>
                 )}
 
-                <AttachmentList attachments={msg.attachments || []} />
+                {isUser && (
+                  <AttachmentList attachments={msg.attachments || []} />
+                )}
               </>
             )}
           </div>
