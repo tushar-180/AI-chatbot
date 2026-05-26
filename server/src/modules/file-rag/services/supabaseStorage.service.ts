@@ -13,10 +13,16 @@ export const supabaseStorageService = {
         fileName: string,
         mimeType: string,
         userId: string,
+        fileHash: string
     ): Promise<{ path: string; url: string }> {
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+        if (fileBuffer.length > MAX_FILE_SIZE) {
+            throw new Error(`File size (${(fileBuffer.length / 1024 / 1024).toFixed(1)}MB) exceeds the 10MB limit.`);
+        }
+
         // Sanitize filename
         const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-        const filePath = `${userId}/${Date.now()}-${safeName}`;
+        const filePath = `${userId}/${fileHash}-${safeName}`;
 
         const { data, error } = await supabaseAdmin.storage
             .from(BUCKET_NAME)

@@ -463,9 +463,7 @@ export const useGroupChat = () => {
         if (attachments && attachments.length > 0) formData.append("attachments", JSON.stringify(attachments));
         formData.append("file", attachedFile);
 
-        await api.post(`/group/${groupId}/message`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.post(`/group/${groupId}/message`, formData);
       } else {
         await api.post(`/group/${groupId}/message`, {
           content,

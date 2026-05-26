@@ -70,10 +70,10 @@ export interface InputAreaProps {
     allowed: boolean;
     scope: "ok" | "global" | "user" | "cooldown" | "monthly";
     reason?:
-      | "global_quota_exceeded"
-      | "user_quota_exceeded"
-      | "cooldown_active"
-      | "monthly_credits_exhausted";
+    | "global_quota_exceeded"
+    | "user_quota_exceeded"
+    | "cooldown_active"
+    | "monthly_credits_exhausted";
     message?: string;
     retryAfterMs?: number;
   } | null;
@@ -208,11 +208,10 @@ const ModelSelector = ({
             <DropdownMenuItem
               key={p.id}
               onClick={() => onProviderChange(p.id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
-                selectedProvider === p.id
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${selectedProvider === p.id
                   ? "bg-white text-black"
                   : "text-slate-400 hover:bg-white/5 hover:text-white"
-              }`}
+                }`}
             >
               {getProviderIcon(p.id, 12)}
               <span className="capitalize">{getModelOnlyName(p.name)}</span>
@@ -233,7 +232,7 @@ const ModelSelector = ({
                 : quotaStatus.scope === "user"
                   ? "Daily user limit reached"
                   : quotaStatus.scope === "monthly" ||
-                      quotaStatus.reason === "monthly_credits_exhausted"
+                    quotaStatus.reason === "monthly_credits_exhausted"
                     ? "Monthly credits exhausted"
                     : "Cooldown active"
               : undefined
@@ -275,6 +274,14 @@ const InputArea = ({
   const [isUploading, setIsUploading] = useState(false);
   const selectionContext = useComposerStore((state) => state.selectionContext);
   const [isFocused, setIsFocused] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const { isListening, isSpeaking, start, stop } = useVoiceInput({
     onResult: (text) => {
@@ -346,8 +353,9 @@ const InputArea = ({
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    // "application/vnd.ms-powerpoint",
+    // "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/csv",
   ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -389,9 +397,7 @@ const InputArea = ({
     formData.append("image", file);
 
     try {
-      const res = await api.post("/upload/image", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await api.post("/upload/image", formData);
 
       const newAttachment: Attachment = {
         url: res.data.url,
@@ -424,10 +430,10 @@ const InputArea = ({
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ];
 
-    const PPT = [
-      "application/vnd.ms-powerpoint",
-      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    ];
+    // const PPT = [
+    //   "application/vnd.ms-powerpoint",
+    //   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    // ];
 
     if (mimeType.startsWith("image/")) {
       return ImageIcon;
@@ -435,7 +441,7 @@ const InputArea = ({
 
     if (WORD.includes(mimeType)) return FileText;
     if (EXCEL.includes(mimeType)) return Table;
-    if (PPT.includes(mimeType)) return MonitorPlay;
+    // if (PPT.includes(mimeType)) return MonitorPlay;
 
     if (mimeType.includes("pdf")) {
       return FileText;
@@ -465,6 +471,7 @@ const InputArea = ({
     if (attachedFile && onSubmitDocument) {
       onSubmitDocument(attachedFile);
       setAttachedFile(null);
+      setCooldown(30);
       return;
     }
 
@@ -585,7 +592,7 @@ const InputArea = ({
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.csv"
                 />
 
                 {canUpload && (
@@ -613,11 +620,13 @@ const InputArea = ({
                   onKeyDown={handleKeyDown}
                   rows={1}
                   placeholder={
-                    isTemporaryChatActive
-                      ? "Message Temporary Chat..."
-                      : currentChatId
-                        ? "Ask anything..."
-                        : "Start a conversation..."
+                    cooldown > 0
+                      ? `Cooling down... Please wait ${cooldown}s`
+                      : isTemporaryChatActive
+                        ? "Message Temporary Chat..."
+                        : currentChatId
+                          ? "Ask anything..."
+                          : "Start a conversation..."
                   }
                   // Prevent copy when NOT focused
                   onCopy={(e) => {
@@ -636,7 +645,6 @@ const InputArea = ({
                   }}
                   className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent px-2 lg:px-1 py-2 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
                 />
-
                 <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
                   {/* Mic button */}
                   <button
@@ -695,6 +703,7 @@ const InputArea = ({
                       disabled={
                         loading ||
                         isUploading ||
+                        cooldown > 0 ||
                         (!input.trim() &&
                           attachments.length === 0 &&
                           !selectionContext &&
@@ -703,6 +712,7 @@ const InputArea = ({
                       className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 cursor-pointer ${
                         loading ||
                         isUploading ||
+                        cooldown > 0 ||
                         (!input.trim() &&
                           attachments.length === 0 &&
                           !selectionContext)

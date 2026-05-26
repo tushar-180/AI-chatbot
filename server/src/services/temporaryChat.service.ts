@@ -8,7 +8,33 @@ import { aiService } from "./ai.service";
 import { chatStreamRegistry } from "./chatStreamRegistry.service";
 import { processAttachedFile } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
+import { mcpClientService } from "./mcpClient.service";
 import "multer"; // ensures Express.Multer.File namespace is available
+
+const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
+  const user = await userService.getUserByClerkId(userId);
+  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
+  const allTools = await mcpClientService.getActiveTools();
+
+  return allTools.filter((tool) => {
+    if (disabledMcpServers.includes(tool._serverName)) return false;
+
+    if (!hasFiles) {
+      const toolName = tool.name.toLowerCase();
+      const serverName = (tool._serverName || "").toLowerCase();
+      if (
+        toolName.includes("excel") || serverName.includes("excel") ||
+        toolName.includes("csv") || serverName.includes("csv") ||
+        toolName.includes("pdf") || serverName.includes("pdf") ||
+        toolName.includes("file") || serverName.includes("file") ||
+        toolName.includes("document") || serverName.includes("document")
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
+};
 
 const finalizeGroundedResponse = (
   response: string,
@@ -129,7 +155,7 @@ export const temporaryChatService = {
     const lastUserMessage = messages
       .filter((m) => m.role === "user")
       .pop();
-      
+
     if (attachedFile && lastUserMessage) {
       const result = await processAttachedFile(attachedFile, userId, lastUserMessage.attachments || []);
       lastUserMessage.attachments = result.attachments;
@@ -183,9 +209,15 @@ export const temporaryChatService = {
     let firstTokenTimedOut = false;
 
     try {
+      const hasFiles = promptMessages.some((m) =>
+        m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+      );
+      const tools = await getEnabledMcpTools(String(userId), hasFiles);
+
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
         activeStream.abortController.signal,
+        tools,
       );
 
       const timeout = setTimeout(() => {

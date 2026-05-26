@@ -1,11 +1,16 @@
 import { parseFile } from "./index";
-import { supabaseStorageService } from "../../services/supabaseStorage.service";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { supabaseStorageService } from "./services/supabaseStorage.service";
 import { sha256 } from "../../utils/hash";
-import { supabaseAdmin } from "../../config/supabase";
+import { supabaseAdmin } from "./config/supabase";
 import { splitTextIntoChunks } from "./textSplitter";
-import { generateEmbedding } from "../../services/embedding.service";
+import { generateEmbedding, generateEmbeddings, interBatchDelay } from "./services/embedding.service";
+import "multer"; // ensures Express.Multer.File namespace is available
 import { chatRepository } from "../../repositories/chat.repository";
 import type { Attachment } from "../../types/chat.types";
+
+const EMBEDDING_BATCH_SIZE = 32;
 
 export async function processAttachedFile(
     file: Express.Multer.File,
@@ -18,32 +23,45 @@ export async function processAttachedFile(
     const fileHash = sha256(file.buffer);
     const existingStoragePath = await chatRepository.findAttachmentByHash(userId, fileHash);
 
-    let storagePath: string;
-    let url: string;
-
+    let storagePath = "";
+    let url = "";
     let hasChunks = false;
+    let inlineFallback = false;
     let isNewUpload = false;
+    let localPath = "";
+
+    // Mirror the file to local /tmp for local MCP servers
+    try {
+        const tmpDir = path.join("/tmp", "velora-files");
+        await fs.mkdir(tmpDir, { recursive: true });
+        localPath = path.join(tmpDir, `${fileHash}-${file.originalname}`);
+        await fs.writeFile(localPath, file.buffer);
+    } catch (err) {
+        console.warn(`[FileHandler] Failed to save local file for MCP servers:`, err);
+    }
+
     if (existingStoragePath) {
         // Reuse
         storagePath = existingStoragePath;
         url = await supabaseStorageService.createSignedUrl(storagePath);
 
-        // Check if chunks exist in Supabase
+        // Check if chunks exist in Supabase (optimized)
         const { count, error } = await supabaseAdmin
             .from('file_chunks')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('storage_path', storagePath);
-        
+
         if (!error && count && count > 0) {
             hasChunks = true;
         }
     } else {
-        // 2. Upload to Supabase
+        // 2. Upload to Supabase (using fileHash to prevent race conditions)
         const uploaded = await supabaseStorageService.uploadDocument(
             file.buffer,
             file.originalname,
             file.mimetype,
-            userId
+            userId,
+            fileHash
         );
         storagePath = uploaded.path;
         url = uploaded.url;
@@ -53,8 +71,10 @@ export async function processAttachedFile(
     // 3. Extract text, chunk, and embed if we don't have chunks yet
     if (!hasChunks) {
         try {
-            const parsed = await parseFile(file.buffer, file.originalname, file.mimetype);
-            
+            // Hard limit text to 100k chars (~25k tokens) to guarantee we stay under the 30k TPM limit
+            // and complete the embedding process in a few seconds.
+            const parsed = await parseFile(file.buffer, file.originalname, file.mimetype, { maxLength: 100000 });
+
             if (!parsed.success) {
                 // If it's an unsupported file type (like an image), we gracefully bypass RAG.
                 if (parsed.error?.code === 'UNSUPPORTED_FILE') {
@@ -69,52 +89,63 @@ export async function processAttachedFile(
             } else {
                 const chunks = await splitTextIntoChunks(parsed.text);
                 
+                let totalChunks = 0;
+                let successfulChunks = 0;
+                let failedBatches = 0;
+
                 // Process chunks in batches to avoid rate limits and speed up execution
-                const BATCH_SIZE = 30;
-                for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-                    const batch = chunks.slice(i, i + BATCH_SIZE);
+                for (let i = 0; i < chunks.length; i += EMBEDDING_BATCH_SIZE) {
+                    const batch = chunks.slice(i, i + EMBEDDING_BATCH_SIZE);
 
-                    // 1. Generate arrays natively from the promises
-                    const batchResults = await Promise.all(
-                        batch.map(async (chunk) => {
-                            if (!chunk.trim()) return null;
-                            try {
-                                const embedding = await generateEmbedding(chunk);
-                                return {
-                                    storage_path: storagePath,
-                                    chunk_text: chunk,
-                                    embedding: embedding
-                                };
-                            } catch (embedErr) {
-                                console.error("Failed to generate embedding for chunk:", embedErr);
-                                return null;
-                            }
-                        })
-                    );
+                    // 1. Cleanly filter out empty chunks
+                    const validChunks = batch.filter(chunk => chunk.trim());
+                    if (validChunks.length === 0) continue;
+                    
+                    totalChunks += validChunks.length;
 
-                    // 2. Cleanly filter out failures out of line
-                    const rowsToInsert = batchResults.filter((row): row is NonNullable<typeof row> => row !== null);
-
-                    if (rowsToInsert.length > 0) {
-                        try {
-                            const { error: insertErr } = await supabaseAdmin.from('file_chunks').insert(rowsToInsert);
-                            if (insertErr) {
-                                console.error("Failed to bulk insert chunks:", insertErr);
-                            }
-                        } catch (err) {
-                            console.error("Error executing bulk insert:", err);
+                    try {
+                        const embeddings = await generateEmbeddings(validChunks);
+                        const rowsToInsert = validChunks.map((chunk, index) => ({
+                            storage_path: storagePath,
+                            chunk_text: chunk,
+                            embedding: embeddings[index]
+                        }));
+                        
+                        const { error: insertErr } = await supabaseAdmin.from('file_chunks').insert(rowsToInsert);
+                        if (insertErr) {
+                            console.error("Failed to bulk insert chunks:", insertErr);
+                            failedBatches++;
+                        } else {
+                            successfulChunks += validChunks.length;
                         }
+                    } catch (embedErr) {
+                        console.error("Failed to generate batch embeddings:", embedErr);
+                        failedBatches++;
                     }
+
+                    // Add delay between batches to respect rate limits
+                    if (i + EMBEDDING_BATCH_SIZE < chunks.length) {
+                        await interBatchDelay();
+                    }
+                }
+
+                // If any batch failed, we treat the entire file as a failure to prevent partial embeddings
+                if (failedBatches > 0) {
+                    // Clean up any partially inserted chunks
+                    await supabaseAdmin.from('file_chunks').delete().eq('storage_path', storagePath);
+                    throw new Error(
+                        `Embedding failed: ${failedBatches} batch(es) failed. Rolled back all chunks to avoid partial retrieval state.`
+                    );
                 }
             }
         } catch (err) {
-            console.error("File parsing/embedding failed:", err);
-            if (isNewUpload) {
-                // Cleanup newly uploaded file
-                await supabaseStorageService.deleteDocument(storagePath);
+            console.warn(`[FileHandler] RAG processing failed, falling back to inline Gemini API:`, (err as Error).message);
+            // Clean up any stray chunks, but DO NOT delete the file from Supabase storage
+            // so that Gemini can still download and process it inline.
+            if (storagePath) {
                 await supabaseAdmin.from('file_chunks').delete().eq('storage_path', storagePath);
             }
-            throw new Error(`File processing failed: ${(err as Error).message}`);
+            inlineFallback = true;
         }
     }
 
@@ -125,6 +156,8 @@ export async function processAttachedFile(
         size: file.size,
         storagePath,
         fileHash,
+        localPath,
+        inlineFallback: inlineFallback ? true : undefined,
     };
 
     return {
@@ -141,17 +174,25 @@ export async function cleanupChatFiles(chatId: string): Promise<void> {
     const cleanupResults = await Promise.allSettled(
         storagePaths.map(async (path) => {
             const usagesCount = await chatRepository.countStoragePathUsages(chatId, path);
-            
+
             // Only delete if no other chat is using this storage path
             if (usagesCount === 0) {
                 // Delete actual file from storage
                 await supabaseStorageService.deleteDocument(path);
-                
+                console.log(`[Cleanup] Deleted file from Supabase storage: ${path}`);
+
                 // Delete associated vector chunks from database
-                const { error: deleteErr } = await supabaseAdmin.from('file_chunks').delete().eq('storage_path', path);
+                const { error: deleteErr, count } = await supabaseAdmin
+                    .from('file_chunks')
+                    .delete()
+                    .eq('storage_path', path)
+                    .select();
+                
                 if (deleteErr) {
+                    console.error(`[Cleanup] Failed to delete chunks for path ${path}:`, deleteErr);
                     throw deleteErr;
                 }
+                console.log(`[Cleanup] Deleted ${count || 'unknown'} vector chunks from database for: ${path}`);
             }
         })
     );

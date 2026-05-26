@@ -20,14 +20,29 @@ import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import mongoose from "mongoose";
 import { calculateUsage, estimateTokenCount, serializePromptMessages } from "../utils/tokenCounter";
 
-const getEnabledMcpTools = async (userId: string) => {
+const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
   const user = await userService.getUserByClerkId(userId);
   const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
   const allTools = await mcpClientService.getActiveTools();
 
-  return allTools.filter(
-    (tool) => !disabledMcpServers.includes(tool._serverName),
-  );
+  return allTools.filter((tool) => {
+    if (disabledMcpServers.includes(tool._serverName)) return false;
+
+    if (!hasFiles) {
+      const toolName = tool.name.toLowerCase();
+      const serverName = (tool._serverName || "").toLowerCase();
+      if (
+        toolName.includes("excel") || serverName.includes("excel") ||
+        toolName.includes("csv") || serverName.includes("csv") ||
+        toolName.includes("pdf") || serverName.includes("pdf") ||
+        toolName.includes("file") || serverName.includes("file") ||
+        toolName.includes("document") || serverName.includes("document")
+      ) {
+        return false;
+      }
+    }
+    return true;
+  });
 };
 
 export class GroupChatService {
@@ -70,10 +85,10 @@ export class GroupChatService {
 
     let assistantMessage = isValidObjectId
       ? await GroupMessage.findOne({
-          _id: messageId,
-          groupId,
-          role: "assistant",
-        })
+        _id: messageId,
+        groupId,
+        role: "assistant",
+      })
       : null;
 
     // Streaming assistant placeholders use temporary UUIDs on the client.
@@ -303,7 +318,7 @@ export class GroupChatService {
 
   static async getGroupMessages(groupId: string) {
     const messages = await GroupMessage.find({ groupId }).sort({ createdAt: 1 });
-    
+
     const userIds = Array.from(new Set(messages.filter(m => m.role === "user").map(m => m.userId)));
     if (userIds.length === 0) return messages;
 
@@ -482,19 +497,21 @@ export class GroupChatService {
 
     // Build prompt
     const promptMessages: AIMessage[] = orderedMessages.map((msg) => {
-      const parsed = parseMultimedia(msg.content);
-      const attachments = [
-        ...(msg.attachments || []).map((att: any) => ({
-          url: att.url,
-          name: att.name,
-          mimeType: att.mimeType,
-          size: att.size,
-        })),
-        ...(parsed.attachments || []),
-      ];
+      const attachments = (msg.attachments || []).map((att: any) => {
+        const rawAtt = att.toObject ? att.toObject() : att;
+        return {
+          ...rawAtt,
+          url: rawAtt.url,
+          name: rawAtt.name,
+          mimeType: rawAtt.mimeType,
+          size: rawAtt.size,
+          localPath: rawAtt.localPath,
+          storagePath: rawAtt.storagePath,
+        };
+      });
       return {
         role: msg.role as AIRole,
-        content: parsed.content,
+        content: msg.content,
         username: msg.username,
         attachments: attachments.length > 0 ? attachments : undefined,
       };
@@ -600,7 +617,10 @@ export class GroupChatService {
 
     try {
       const activeUserId = clerkId || group.creatorId;
-      const tools = await getEnabledMcpTools(activeUserId);
+      const hasFiles = promptMessages.some((m) =>
+        m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
+      );
+      const tools = await getEnabledMcpTools(activeUserId, hasFiles);
       const aiProvider = aiService.getProvider(targetProvider);
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
@@ -668,6 +688,8 @@ export class GroupChatService {
         );
       }
 
+      const { attachments: aiAttachments } = parseMultimedia(fullResponse);
+
       // Save final message
       const aiMsg = await GroupMessage.create({
         groupId,
@@ -677,6 +699,7 @@ export class GroupChatService {
         content: fullResponse,
         status: "completed",
         metadata,
+        attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
         model: targetProvider,
       });
 
@@ -774,6 +797,8 @@ export class GroupChatService {
       this.sanitizeAssistantResponse(rawResponse) ||
       "⚠️ Response generation stopped.";
 
+    const { attachments: aiAttachments } = parseMultimedia(fullResponse);
+
     // Save final partial message
     const aiMsg = await GroupMessage.create({
       groupId,
@@ -786,6 +811,7 @@ export class GroupChatService {
         ...(activeStream.webSearchEnabled ? { webSearchEnabled: true } : {}),
         ...(activeStream.requesterId ? { requesterId: activeStream.requesterId } : {}),
       },
+      attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
       model: activeStream.model,
     });
 
@@ -1123,7 +1149,7 @@ export class GroupChatService {
 
   private static async populateGroupsMembers(groups: any[]) {
     if (!groups || groups.length === 0) return [];
-    
+
     const allUserIds = new Set<string>();
     groups.forEach((group: any) => {
       const g = group.toObject ? group.toObject() : group;

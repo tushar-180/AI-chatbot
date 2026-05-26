@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { FormEvent } from "react";
 import { useParams } from "react-router-dom";
 import { DEFAULT_CHAT_PROVIDER } from "@/features/chat/constants/chat.constants";
@@ -38,14 +38,23 @@ export const useChatInput = ({
   });
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const { chatId } = useParams<{ chatId?: string }>();
+  const { chatId, groupId, sharedChatId } = useParams<{ chatId?: string; groupId?: string; sharedChatId?: string }>();
+  const activeId = chatId || groupId || sharedChatId;
+  const prevActiveIdRef = useRef(activeId);
 
   // Clear typed input, attachments, and reset web search when chat switching
   useEffect(() => {
+    // If we transition from undefined (new chat) to a real ID right after creation,
+    // do NOT wipe out the UI state that was just submitted.
+    if (prevActiveIdRef.current === undefined && activeId !== undefined) {
+      prevActiveIdRef.current = activeId;
+      return;
+    }
     setInput("");
     setAttachments([]);
     setWebSearchEnabled(false);
-  }, [chatId]);
+    prevActiveIdRef.current = activeId;
+  }, [activeId]);
 
   // Persist provider selection
   useEffect(() => {

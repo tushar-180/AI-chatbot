@@ -101,7 +101,7 @@ const fetchProvidersGlobally = async () => {
   
   providersPromise = api.get("/ai/providers").then(res => {
     const rawProviders: Provider[] = res.data.providers || [];
-    const defaultModelId = "gemini:gemini-3.1-flash-lite-preview";
+    const defaultModelId = "gemini:gemini-3.1-flash-lite";
     const defaultModel = rawProviders.find((p: Provider) => p.id === defaultModelId);
     let sortedProviders = [...rawProviders];
     if (defaultModel) {
@@ -1160,23 +1160,10 @@ const GroupMessageItem = ({
                     )}
                   </div>
                 )}
-
-                <AttachmentList attachments={msg.attachments || []} />
-
-                {isAssistant && msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-3 flex items-center gap-1">
-                    <button
-                      onClick={() => {
-                        if (msg.sources?.length) {
-                          onSourcesClick?.(msg.sources, msg.sources[0]?.id);
-                        }
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                      Sources
-                    </button>
-                  </div>
+                {!isAssistant && (
+                  <AttachmentList attachments={msg.attachments || []} />
                 )}
+
               </>
             )}
           </div>
@@ -1346,6 +1333,20 @@ const GroupMessageItem = ({
                     </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>
+              )}
+
+              {!!msg.sources?.length && (
+                <button
+                  onClick={() => {
+                    if (msg.sources?.length) {
+                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                  title="View sources"
+                >
+                  Sources
+                </button>
               )}
             </div>
           )}

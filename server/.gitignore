@@ -32,3 +32,5 @@ temp/
 
 file_structure.txt
 src/modules/web-search/web_search.txt
+
+SUPABASE_SQL_QUERIES.md

@@ -53,11 +53,10 @@ const WebSearchToggle = ({
     <button
       type="button"
       onClick={() => onToggle(!enabled)}
-      className={`flex items-center gap-1.5 lg:gap-2 rounded-lg border transition-all px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest cursor-pointer ${
-        enabled
+      className={`flex items-center gap-1.5 lg:gap-2 rounded-lg border transition-all px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest cursor-pointer ${enabled
           ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200 shadow-[0_0_10px_rgba(52,211,153,0.15)]"
           : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-      }`}
+        }`}
     >
       <Globe size={12} className="shrink-0" />
       <span>Web Search</span>
@@ -87,6 +86,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const currentGroup = groups.find((g) => g._id === (groupId || currentGroupId));
   const members = currentGroup?.members || [];
   const [isFocused, setIsFocused] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   // Clear typed input, attachments, and reset web search when switching group chats
   useEffect(() => {
@@ -133,7 +140,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     const mentions = input.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
     for (const m of mentions) {
       const mentionText = m.substring(1).toLowerCase();
-      if (mentionText === "velora") return "gemini:gemini-3.1-flash-lite-preview";
+      if (mentionText === "velora") return "gemini:gemini-3.1-flash-lite";
       const provider = availableProviders.find(p => {
         const cleanName = getCleanModelName(p.id).toLowerCase();
         return cleanName === mentionText || p.id.toLowerCase() === mentionText;
@@ -163,8 +170,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         const res = await api.get("/ai/providers");
         const rawProviders: Provider[] = res.data.providers || [];
 
-        // Find "gemini:gemini-3.1-flash-lite-preview"
-        const defaultModelId = "gemini:gemini-3.1-flash-lite-preview";
+        // Find "gemini:gemini-3.1-flash-lite"
+        const defaultModelId = "gemini:gemini-3.1-flash-lite";
         const defaultModel = rawProviders.find(p => p.id === defaultModelId);
 
         let sortedProviders = [...rawProviders];
@@ -332,6 +339,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     }
 
     setIsSending(true);
+    if (attachments.length > 0 || attachedFile) {
+      setCooldown(30);
+    }
     try {
       await onSubmit(input, webSearchEnabled, attachments, attachedFile);
       setInput("");
@@ -351,8 +361,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    // "application/vnd.ms-powerpoint",
+    // "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/csv",
   ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -390,9 +401,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     formData.append("image", file);
 
     try {
-      const res = await api.post("/upload/image", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const res = await api.post("/upload/image", formData);
 
       const newAttachment: Attachment = {
         url: res.data.url,
@@ -430,7 +439,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         const textAfterAt = input.substring(selectionStart);
         const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
         const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
-  
+
         const hasAnotherModel = otherMentions.some((m) => {
           const mentionText = m.substring(1).toLowerCase();
           return (
@@ -441,7 +450,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             })
           );
         });
-  
+
         if (hasAnotherModel) {
           toast.error("Multiple AI model mentions are not allowed");
           setShowModelDropdown(false);
@@ -605,11 +614,10 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     type="button"
                     onClick={() => handleSelectMention(opt.name, opt.type)}
                     data-active={isActive}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
-                      isActive 
-                        ? "bg-white text-black font-semibold shadow-md shadow-white/5" 
+                    className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${isActive
+                        ? "bg-white text-black font-semibold shadow-md shadow-white/5"
                         : "text-slate-400 hover:bg-white/5 hover:text-white"
-                    }`}
+                      }`}
                   >
                     {opt.type === "model" ? (
                       getProviderIcon(opt.id, 12)
@@ -654,7 +662,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   className="hidden"
-                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                  accept=".png,.jpg,.jpeg,.pdf,.doc,.docx,.xls,.xlsx,.csv"
                 />
                 <button
                   type="button"
@@ -757,7 +765,11 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   }
                 }}
                 rows={1}
-                placeholder="Message group..."
+                placeholder={
+                  cooldown > 0
+                    ? `Cooling down... Please wait ${cooldown}s`
+                    : "Message group..."
+                }
                 className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-3 py-2 lg:px-4 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 block border border-transparent`}
                 style={sharedTextStyles}
               />
@@ -774,11 +786,10 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     start();
                   }
                 }}
-                className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
-                  isListening
+                className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${isListening
                     ? "bg-rose-500/20 text-rose-400"
                     : "text-slate-500 hover:bg-white/5 hover:text-white"
-                }`}
+                  }`}
                 aria-label="Voice input"
               >
                 {isListening && !isSpeaking && (
@@ -817,12 +828,11 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               ) : (
                 <button
                   type="submit"
-                  disabled={isSending || isUploading || (!input.trim() && attachments.length === 0)}
-                  className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
-                    isSending || isUploading || (!input.trim() && attachments.length === 0)
+                  disabled={isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)}
+                  className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)
                       ? "bg-slate-800 text-slate-600 cursor-not-allowed"
                       : "bg-white text-slate-900 hover:bg-slate-200 cursor-pointer"
-                  }`}
+                    }`}
                   aria-label={isSending || isUploading ? "Sending..." : "Send message"}
                   title={isSending || isUploading ? "Sending..." : "Send message"}
                 >

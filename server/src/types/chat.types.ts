@@ -34,6 +34,8 @@ export type Attachment = {
   size?: number;
   storagePath?: string;
   fileHash: string;
+  inlineFallback?: boolean;
+  localPath?: string;
 };
 
 export type ChatMessage = {

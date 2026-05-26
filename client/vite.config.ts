@@ -13,7 +13,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['hoist-non-react-statics'],
-  
   },
   build: {
     sourcemap: true,

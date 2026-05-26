@@ -234,7 +234,7 @@ export default function SharedChatPage() {
                             onSubmit={handleFormSubmit}
                             loading={isForking}
                             isStreaming={false}
-                            onStop={() => {}}
+                            onStop={() => { }}
                             currentChatId={null}
                             selectedProvider={selectedProvider}
                             onProviderChange={setSelectedProvider}
