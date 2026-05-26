@@ -196,38 +196,53 @@ export const chatRepository = {
 
     return message;
   },
+  async updateMessageInternal(query: any, updateData: Partial<ChatMessage>) {
+    // Read existing message first
+    const existingMessage = await Message.findOne(query);
 
-  async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
-    // Read the existing message first to get old token values for proper delta calculation
-    let existingMessage = await Message.findById(messageId);
-    if (!existingMessage) {
-      existingMessage = await Message.findOne({ requestId: messageId });
+    // Merge metadata safely to preserve old fields
+    if (updateData.metadata) {
+      let existingMetadata = {};
+
+      if (existingMessage?.metadata) {
+        existingMetadata =
+          typeof existingMessage.metadata.toObject === "function"
+            ? existingMessage.metadata.toObject()
+            : JSON.parse(JSON.stringify(existingMessage.metadata));
+      }
+
+      updateData.metadata = {
+        ...existingMetadata,
+        ...updateData.metadata,
+      };
     }
 
-    // Perform the update
-    let message = await Message.findByIdAndUpdate(messageId, updateData, {
+    // Update message
+    const message = await Message.findOneAndUpdate(query, updateData, {
       returnDocument: "after",
     });
 
+    // No message found
     if (!message) {
-      message = await Message.findOneAndUpdate(
-        { requestId: messageId },
-        updateData,
-        { returnDocument: "after" },
-      );
+      return null;
     }
 
-    if (message?.chatId && updateData.tokens) {
-      // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
+    // Handle token updates
+    if (message.chatId && updateData.tokens) {
       const oldTokens = existingMessage?.tokens;
+
+      // Calculate token deltas
       const deltaPrompt =
         (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+
       const deltaCompletion =
         (updateData.tokens.completionTokens || 0) -
         (oldTokens?.completionTokens || 0);
+
       const deltaTotal =
         (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
 
+      // Only update chat if values changed
       if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
         const chat = await Chat.findByIdAndUpdate(
           String(message.chatId),
@@ -237,31 +252,47 @@ export const chatRepository = {
               "tokens.completionTokens": deltaCompletion,
               "tokens.totalTokens": deltaTotal,
             },
-            $set: { updatedAt: new Date() },
+            $set: {
+              updatedAt: new Date(),
+            },
           },
           { new: true },
         );
 
-        if (chat && chat.projectId) {
+        // Touch project if exists
+        if (chat?.projectId) {
           const { projectRepository } = require("./project.repository");
+
           await projectRepository.touchProject(chat.projectId.toString());
         }
       } else {
+        // No token changes, still refresh chat timestamp
         await this.touchChat(String(message.chatId));
       }
-    } else if (message?.chatId) {
+    } else if (message.chatId) {
+      // No tokens but still refresh chat activity
       await this.touchChat(String(message.chatId));
     }
+
     return message;
   },
 
-  async findUserAttachments(userId: string) {
-    return await Message.find({
-      userId,
-      attachments: { $exists: true, $not: { $size: 0 } },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+  async updateMessage(messageId: string, updateData: Partial<ChatMessage>) {
+    // Try Mongo _id first
+    let message = await this.updateMessageInternal(
+      { _id: messageId },
+      updateData,
+    );
+
+    // Fallback to requestId
+    if (!message) {
+      message = await this.updateMessageInternal(
+        { requestId: messageId },
+        updateData,
+      );
+    }
+
+    return message;
   },
 
   async updateMessageByRequestId(
@@ -271,48 +302,16 @@ export const chatRepository = {
   ) {
     const query =
       chatId && chatId !== "null" ? { chatId, requestId } : { requestId };
-    // Read existing message to get old token values for delta calculation
-    const existingMessage = await Message.findOne(query);
 
-    const message = await Message.findOneAndUpdate(query, updateData, {
-      returnDocument: "after",
-    });
-    if (message?.chatId && updateData.tokens) {
-      // Calculate delta: new tokens minus old tokens
-      const oldTokens = existingMessage?.tokens;
-      const deltaPrompt =
-        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
-      const deltaCompletion =
-        (updateData.tokens.completionTokens || 0) -
-        (oldTokens?.completionTokens || 0);
-      const deltaTotal =
-        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
-
-      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
-        const chat = await Chat.findByIdAndUpdate(
-          String(message.chatId),
-          {
-            $inc: {
-              "tokens.promptTokens": deltaPrompt,
-              "tokens.completionTokens": deltaCompletion,
-              "tokens.totalTokens": deltaTotal,
-            },
-            $set: { updatedAt: new Date() },
-          },
-          { new: true },
-        );
-
-        if (chat && chat.projectId) {
-          const { projectRepository } = require("./project.repository");
-          await projectRepository.touchProject(chat.projectId.toString());
-        }
-      } else {
-        await this.touchChat(String(message.chatId));
-      }
-    } else if (message?.chatId) {
-      await this.touchChat(String(message.chatId));
-    }
-    return message;
+    return this.updateMessageInternal(query, updateData);
+  },
+  async findUserAttachments(userId: string) {
+    return await Message.find({
+      userId,
+      attachments: { $exists: true, $not: { $size: 0 } },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
   },
 
   async deleteMessagesAfter(chatId: string, messageId: string) {

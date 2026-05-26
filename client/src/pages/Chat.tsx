@@ -326,7 +326,9 @@ const Chat = () => {
 
           <div className="relative flex-1">
             {(() => {
-              const isTransitioning = (chatId || null) !== currentChatId;
+              const isTransitioning =
+                (chatId || null) !== currentChatId &&
+                !(!chatId && currentChatId !== null && (isStreaming || isCurrentChatLoading));
               return (
                 <MessageList
                   ref={messageListRef}
@@ -354,6 +356,7 @@ const Chat = () => {
                       webSearchEnabled: options?.webSearchEnabled,
                       attachments: options?.attachments,
                       attachedFile: options?.attachedFile,
+                      selection: options?.selection,
                     })
                   }
                   onEditStart={stopGeneration}

@@ -248,7 +248,7 @@ const GroupMessageItem = ({
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
       
       const fetchProviders = async () => {
         try {
