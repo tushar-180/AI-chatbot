@@ -18,7 +18,7 @@ interface GroupMessageListProps {
   onSourcesClick?: (sources: any[], activeId?: number) => void;
   onEditMessage?: (messageId: string, content: string, webSearchEnabled?: boolean, attachments?: any[], attachedFile?: File | null) => void;
   onEditStart?: () => void;
-  onRetryMessage?: (messageId: string) => void;
+  onRetryMessage?: (messageId: string, provider?: string, webSearchEnabled?: boolean) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
 }
 
@@ -281,7 +281,7 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                   onSourcesClick={onSourcesClick}
                   onEdit={(content, webSearchEnabled, attachments, attachedFile) => onEditMessage?.(msg._id, content, webSearchEnabled, attachments, attachedFile)}
                   onEditStart={onEditStart}
-                  onRetry={() => onRetryMessage?.(msg._id)}
+                  onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg._id, provider, webSearchEnabled)}
                   onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}
                 />
               ))}

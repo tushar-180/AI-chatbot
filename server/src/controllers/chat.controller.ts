@@ -468,6 +468,7 @@ export const retryMessage = asyncHandler(
       const chat = await chatService.retryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
+        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
         ...req.body,
       });
 
@@ -486,6 +487,7 @@ export const streamRetryMessage = async (req: Request, res: Response) => {
       chatService.streamRetryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
+        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
         ...req.body,
       }),
     );

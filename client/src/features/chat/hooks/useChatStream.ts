@@ -1294,7 +1294,7 @@ export const useChatStream = (hookOptions?: {
     }
   };
 
-  const retryMessage = async (messageId: string, provider: string) => {
+  const retryMessage = async (messageId: string, provider: string, webSearchEnabled?: boolean) => {
     if (!user?.id || !currentChatId) return;
 
     const activeKey = getActiveChatKey(currentChatId);
@@ -1328,6 +1328,7 @@ export const useChatStream = (hookOptions?: {
       model: provider,
       requestId,
       status: "streaming",
+      isWebSearching: webSearchEnabled,
     };
 
     // Trim the messages array up to the assistant message index and append placeholder
@@ -1362,6 +1363,7 @@ export const useChatStream = (hookOptions?: {
         body: JSON.stringify({
           provider,
           requestId,
+          webSearchEnabled,
         }),
       });
 
