@@ -15,10 +15,11 @@ export type GroupMessage = {
   username: string;
   userImage?: string;
   role: "user" | "assistant" | "system";
-  feedback?: "like" | "dislike" | null;
+  reactions?: Array<{ userId: string; username: string; type: "like" | "dislike" }>;
   content: string;
   status?: "streaming" | "stopped" | "completed" | "failed";
   type: "text" | "image" | "file" | "action" | "event";
+  model?: string;
   createdAt: string;
   updatedAt?: string;
   metadata?: {
@@ -55,6 +56,7 @@ type GroupState = {
   isAiThinking: boolean;
   isWebSearching: boolean;
   aiThinkingGroupIds: Record<string, boolean>;
+  aiThinkingRequesterIds: Record<string, string | null>;
   webSearchingGroupIds: Record<string, boolean>;
 
   setGroups: (groups: GroupChat[]) => void;
@@ -73,15 +75,15 @@ type GroupState = {
     content: string,
   ) => void;
 
-  setGroupMessageFeedback: (
+  setGroupMessageReactions: (
     messageId: string,
-    feedback: "like" | "dislike" | null,
+    reactions: Array<{ userId: string; username: string; type: "like" | "dislike" }>,
   ) => void;
 
   retryAiMessage: (messageId: string) => GroupMessage | null;
 
   setLoading: (loading: boolean) => void;
-  setIsAiThinking: (isAiThinking: boolean, groupId?: string | null) => void;
+  setIsAiThinking: (isAiThinking: boolean, groupId?: string | null, requesterId?: string | null) => void;
   setIsWebSearching: (isWebSearching: boolean, groupId?: string | null) => void;
 
   removeGroup: (id: string) => void;
@@ -98,6 +100,7 @@ export const useGroupStore = create<GroupState>()(
       isAiThinking: false,
       isWebSearching: false,
       aiThinkingGroupIds: {},
+      aiThinkingRequesterIds: {},
       webSearchingGroupIds: {},
 
       setGroups: (groups) => set({ groups }),
@@ -153,14 +156,14 @@ export const useGroupStore = create<GroupState>()(
           ),
         })),
 
-      // 🆕 FEEDBACK
-      setGroupMessageFeedback: (messageId, feedback) =>
+      // 🆕 REACTIONS
+      setGroupMessageReactions: (messageId, reactions) =>
         set((state) => ({
           groupMessages: state.groupMessages.map((m) =>
             m._id === messageId
               ? {
                   ...m,
-                  feedback,
+                  reactions,
                 }
               : m,
           ),
@@ -189,17 +192,21 @@ export const useGroupStore = create<GroupState>()(
 
       setLoading: (loading) => set({ loading }),
 
-      setIsAiThinking: (isAiThinking, groupId) =>
+      setIsAiThinking: (isAiThinking, groupId, requesterId) =>
         set((state) => {
           const targetGroupId = groupId ?? state.currentGroupId ?? "";
           const nextThinking = { ...state.aiThinkingGroupIds };
+          const nextRequesterIds = { ...state.aiThinkingRequesterIds };
           if (isAiThinking) {
             nextThinking[targetGroupId] = true;
+            nextRequesterIds[targetGroupId] = requesterId || null;
           } else {
             delete nextThinking[targetGroupId];
+            delete nextRequesterIds[targetGroupId];
           }
           return {
             aiThinkingGroupIds: nextThinking,
+            aiThinkingRequesterIds: nextRequesterIds,
             isAiThinking: targetGroupId === state.currentGroupId ? isAiThinking : state.isAiThinking,
           };
         }),

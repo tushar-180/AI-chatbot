@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { User } from "../models/User.model";
-import { Chat, Message } from "../models/Chat.model";
+import { Chat, Message, TokenUsageRecord } from "../models/Chat.model";
 import { AI_PROVIDERS } from "../services/ai/constants";
 
 const normalizeModelName = (modelName: string): string => {
@@ -46,7 +46,7 @@ export const adminController = {
       const totalMessagesCount = await Message.countDocuments();
 
       // 1.5 Fetch global token counts (from assistant messages only - they have accurate API-reported usage)
-      const totalTokensResult = await Message.aggregate([
+      const totalTokensResult = await TokenUsageRecord.aggregate([
         { $match: { role: "assistant" } },
         {
           $group: {
@@ -62,7 +62,7 @@ export const adminController = {
       const totalCompletionTokens = totalTokensResult[0]?.completionTokens || 0;
 
       // 2. Fetch global model usage analytics and tokens (keeps top model stat active)
-      const globalModelUsage = await Message.aggregate([
+      const globalModelUsage = await TokenUsageRecord.aggregate([
         { $match: { model: { $exists: true, $ne: null } } },
         {
           $group: {
@@ -104,7 +104,7 @@ export const adminController = {
       const chatStatsMap = new Map(chatStats.map((stat) => [stat._id, stat.count]));
 
       // 4. Aggregate favorite model per user based on messages, with normalization
-      const userStats = await Message.aggregate([
+      const userStats = await TokenUsageRecord.aggregate([
         { $match: { model: { $exists: true, $ne: null } } },
         { $group: { _id: { userId: "$userId", model: "$model" }, count: { $sum: 1 } } },
       ]);
@@ -149,7 +149,7 @@ export const adminController = {
       }
 
       // 4.5 Aggregate token counts per user (assistant messages only for accurate provider-reported usage)
-      const userTokenStats = await Message.aggregate([
+      const userTokenStats = await TokenUsageRecord.aggregate([
         { $match: { role: "assistant" } },
         {
           $group: {

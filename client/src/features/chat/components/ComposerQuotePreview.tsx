@@ -1,9 +1,25 @@
 import { X, MessageSquareQuote } from "lucide-react";
 import { useComposerStore } from "../store/useComposerStore";
 
-export const ComposerQuotePreview = () => {
-  const selectionContext = useComposerStore((state) => state.selectionContext);
-  const clearSelectionContext = useComposerStore((state) => state.clearSelectionContext);
+export interface SelectionContext {
+  selectedText: string;
+  originalSourceMessage: string;
+}
+
+interface ComposerQuotePreviewProps {
+  selectionContext?: SelectionContext | null;
+  onClear?: () => void;
+}
+
+export const ComposerQuotePreview = ({
+  selectionContext: propSelectionContext,
+  onClear: propOnClear,
+}: ComposerQuotePreviewProps = {}) => {
+  const storeSelectionContext = useComposerStore((state) => state.selectionContext);
+  const storeClearSelectionContext = useComposerStore((state) => state.clearSelectionContext);
+
+  const selectionContext = propSelectionContext !== undefined ? propSelectionContext : storeSelectionContext;
+  const onClear = propOnClear !== undefined ? propOnClear : storeClearSelectionContext;
 
   if (!selectionContext) return null;
 
@@ -22,15 +38,18 @@ export const ComposerQuotePreview = () => {
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={clearSelectionContext}
-          className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer flex items-center justify-center h-5 w-5 bg-white/5 border border-white/5 shrink-0"
-          title="Remove context"
-        >
-          <X size={10} strokeWidth={2.5} />
-        </button>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-all cursor-pointer flex items-center justify-center h-5 w-5 bg-white/5 border border-white/5 shrink-0"
+            title="Remove context"
+          >
+            <X size={10} strokeWidth={2.5} />
+          </button>
+        )}
       </div>
     </div>
   );
 };
+

@@ -23,6 +23,7 @@ import {
   Table,
   MonitorPlay,
   File as FileIcon,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -34,11 +35,17 @@ import type { WebSource, Message, Attachment } from "../types/chat.types";
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
 import { useAvailableProviders } from "@/features/chat/hooks/useAvailableProviders";
+import { ComposerQuotePreview } from "./ComposerQuotePreview";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
 import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
@@ -77,9 +84,9 @@ const getModelOnlyName = (fullName: string) => {
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }) => void;
+  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }) => void;
   onEditStart?: () => void;
-  onRetry?: () => void;
+  onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
   highlight?: string;
   onCitationClick?: (id: number) => void;
@@ -102,9 +109,10 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           {attachment.mimeType?.startsWith("image/") ||
             attachment.url?.startsWith("data:image") ? (
             <img
-              src={attachment.url || ""}
+              src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-100"
+              className="h-auto w-full object-contain max-h-[32rem] bg-slate-950/40"
+              fetchPriority="high"
             />
           ) : (
             <div className="flex items-center gap-3 p-4">
@@ -279,11 +287,19 @@ const MessageItem = ({
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState<any[]>(msg.attachments || []);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [editSelectionContext, setEditSelectionContext] = useState<any>(
+    msg.metadata?.selection || null
+  );
 
   // Edit-local provider & web search state
   const [editProvider, setEditProvider] = useState(getStoredProvider);
   const [editWebSearchEnabled, setEditWebSearchEnabled] = useState(false);
   const { availableProviders } = useAvailableProviders(editProvider, setEditProvider);
+
+  // State for the retry web search toggle
+  const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
+    Boolean((msg.metadata as any)?.webSearchEnabled)
+  );
   const canUpload = supportsVision(editProvider);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -301,7 +317,7 @@ const MessageItem = ({
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [isEditing]);
 
@@ -412,6 +428,7 @@ const MessageItem = ({
   const handleEditStart = () => {
     setIsEditing(true);
     setEditContent(msg.content);
+    setEditSelectionContext(msg.metadata?.selection || null);
     setEditProvider(getStoredProvider());
     setEditWebSearchEnabled(false);
     onEditStart?.();
@@ -420,6 +437,7 @@ const MessageItem = ({
   const handleEditCancel = () => {
     setIsEditing(false);
     setEditContent(msg.content);
+    setEditSelectionContext(msg.metadata?.selection || null);
     setAttachments(msg.attachments || []);
     setAttachedFile(null);
   };
@@ -437,18 +455,21 @@ const MessageItem = ({
     const attachmentsChanged =
       JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
     const hasNewFile = Boolean(attachedFile);
+    const selectionChanged =
+      JSON.stringify(editSelectionContext) !== JSON.stringify(msg.metadata?.selection || null);
 
     if (!editContent.trim()) {
       setIsEditing(false);
       return;
     }
 
-    if (contentChanged || attachmentsChanged || hasNewFile) {
+    if (contentChanged || attachmentsChanged || hasNewFile || selectionChanged) {
       onEdit?.(editContent, {
         provider: editProvider,
         webSearchEnabled: editWebSearchEnabled,
         attachments,
         attachedFile,
+        selection: editSelectionContext,
       });
     }
 
@@ -677,6 +698,10 @@ const MessageItem = ({
               )
             ) : isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                <ComposerQuotePreview
+                  selectionContext={editSelectionContext}
+                  onClear={() => setEditSelectionContext(null)}
+                />
                 {/* Model Selector + Web Search Toggle */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <DropdownMenu>
@@ -732,10 +757,10 @@ const MessageItem = ({
                   onChange={(e) => {
                     setEditContent(e.target.value);
                     e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
                   }}
                   onKeyDown={handleKeyDown}
-                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-y-auto p-0 text-white placeholder-slate-500 min-h-[1.5em] max-h-[200px]"
                   rows={1}
                 />
 
@@ -986,13 +1011,66 @@ const MessageItem = ({
                 />
               </button>
 
-              <button
-                onClick={onRetry}
-                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                title="Regenerate response"
-              >
-                <RotateCcw size={17} />
-              </button>
+              {onRetry && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                      title="Regenerate response"
+                    >
+                      <RotateCcw size={17} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="right"
+                    align="end"
+                    className="w-48 bg-slate-900 border-slate-800"
+                    collisionPadding={{ top: 100, bottom: 200 }}
+                  >
+                    <DropdownMenuCheckboxItem
+                      checked={retryWebSearchEnabled}
+                      onCheckedChange={setRetryWebSearchEnabled}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                    >
+                      <Globe size={14} className="mr-2 opacity-70" />
+                      Web Search
+                    </DropdownMenuCheckboxItem>
+                    
+                    <DropdownMenuSeparator className="bg-slate-800" />
+                    
+                    <DropdownMenuItem
+                      onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
+                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                    >
+                      <RotateCcw size={14} className="mr-2 opacity-70" />
+                      Try Again
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer">
+                        <Bot size={14} className="mr-2 opacity-70" />
+                        Select Another Model
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent 
+                        className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
+                        collisionPadding={{ top: 100, bottom: 200 }}
+                      >
+                        {availableProviders.map((provider) => (
+                          <DropdownMenuItem
+                            key={provider.id}
+                            onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                            className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
+                          >
+                            {getProviderIcon(provider.id, 12)}
+                            <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               {!!msg.sources?.length && (
                 <button

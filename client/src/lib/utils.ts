@@ -33,9 +33,15 @@ export function optimizeImageUrl(url: string | null | undefined, width: number =
     if (uploadIndex !== -1) {
       const beforeUpload = url.slice(0, uploadIndex + 8); // includes '/upload/'
       const afterUpload = url.slice(uploadIndex + 8);
-      const hParam = height ? `,h_${height}` : `,h_${width}`;
-      const transformParams = `f_auto,q_auto,w_${width}${hParam},c_fill/`;
-      return `${beforeUpload}${transformParams}${afterUpload}`;
+      if (height) {
+        // Explicit height: crop to exact dimensions (avatars, thumbnails)
+        const transformParams = `f_auto,q_auto,w_${width},h_${height},c_fill/`;
+        return `${beforeUpload}${transformParams}${afterUpload}`;
+      } else {
+        // Width only: scale down preserving aspect ratio (attachments, full images)
+        const transformParams = `f_auto,q_auto,w_${width},c_limit/`;
+        return `${beforeUpload}${transformParams}${afterUpload}`;
+      }
     }
   }
   

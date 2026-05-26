@@ -412,12 +412,16 @@ export const editMessage = asyncHandler(async (req: Request, res: Response) => {
     const attachments = typeof req.body.attachments === 'string'
       ? JSON.parse(req.body.attachments)
       : (req.body.attachments || []);
+    const selection = req.body.selection !== undefined
+      ? (typeof req.body.selection === 'string' && req.body.selection !== 'undefined' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
 
     const chat = await chatService.editMessage({
       chatId: String(req.params.id),
       messageId: String(req.params.messageId),
       ...req.body,
       attachments,
+      selection,
       attachedFile: (req as any).file || null,
     });
 
@@ -432,6 +436,9 @@ export const streamEditMessage = async (req: Request, res: Response) => {
     const attachments = typeof req.body.attachments === 'string'
       ? JSON.parse(req.body.attachments)
       : (req.body.attachments || []);
+    const selection = req.body.selection !== undefined
+      ? (typeof req.body.selection === 'string' && req.body.selection !== 'undefined' ? JSON.parse(req.body.selection) : req.body.selection)
+      : undefined;
 
     await pipeStreamResponse(
       req,
@@ -441,6 +448,7 @@ export const streamEditMessage = async (req: Request, res: Response) => {
         messageId: String(req.params.messageId),
         ...req.body,
         attachments,
+        selection,
         attachedFile: (req as any).file || null,
       }),
     );
@@ -460,6 +468,7 @@ export const retryMessage = asyncHandler(
       const chat = await chatService.retryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
+        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
         ...req.body,
       });
 
@@ -478,6 +487,7 @@ export const streamRetryMessage = async (req: Request, res: Response) => {
       chatService.streamRetryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
+        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
         ...req.body,
       }),
     );

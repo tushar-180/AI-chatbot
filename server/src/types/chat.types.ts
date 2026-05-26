@@ -97,6 +97,12 @@ export type EditMessageInput = {
   requestId?: string;
   attachments?: Attachment[];
   webSearchEnabled?: boolean;
+  selection?: {
+    selectedText: string;
+    originalSourceMessage: string;
+    sourceMessageId: string;
+    actionType: string;
+  };
   attachedFile?: Express.Multer.File | null;
 };
 

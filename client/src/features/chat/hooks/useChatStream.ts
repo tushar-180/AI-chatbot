@@ -554,7 +554,7 @@ export const useChatStream = (hookOptions?: {
               if (user?.id) {
                 try {
                   const realMessages =
-                    await chatService.fetchMessages(finalChatId);
+                    await chatService.fetchMessages(finalChatId, true);
                   setMessages(realMessages);
                   setOptimisticMessagesForChat(finalChatId, null);
                 } catch (err) {
@@ -607,7 +607,7 @@ export const useChatStream = (hookOptions?: {
         );
 
         chatService
-          .fetchMessages(chatIdToRefresh)
+          .fetchMessages(chatIdToRefresh, true)
           .then((realMessages) => {
             setMessages(realMessages);
             setOptimisticMessagesForChat(chatIdToRefresh, null);
@@ -1094,7 +1094,7 @@ export const useChatStream = (hookOptions?: {
       if (user?.id) {
         await refreshChats();
         if (chatId) {
-          const realMessages = await chatService.fetchMessages(chatId);
+          const realMessages = await chatService.fetchMessages(chatId, true);
           setMessages(realMessages);
           setOptimisticMessagesForChat(chatId, null);
         }
@@ -1124,6 +1124,7 @@ export const useChatStream = (hookOptions?: {
       webSearchEnabled?: boolean;
       attachments?: Attachment[];
       attachedFile?: File | null;
+      selection?: any;
     },
   ) => {
     if (!newContent.trim()) return;
@@ -1158,6 +1159,10 @@ export const useChatStream = (hookOptions?: {
       content: newContent,
       attachments: options?.attachments,
       status: "completed",
+      metadata: {
+        ...currentMessages[messageIndex].metadata,
+        ...(options && "selection" in options ? { selection: options.selection } : {}),
+      },
       updatedAt: new Date(
         Math.max(
           Date.now(),
@@ -1214,6 +1219,9 @@ export const useChatStream = (hookOptions?: {
         if (options?.attachments) {
           body.append("attachments", JSON.stringify(options.attachments));
         }
+        if (options?.selection !== undefined) {
+          body.append("selection", typeof options.selection === 'string' ? options.selection : JSON.stringify(options.selection));
+        }
         body.append("file", options.attachedFile);
       } else {
         headers["Content-Type"] = "application/json";
@@ -1223,6 +1231,7 @@ export const useChatStream = (hookOptions?: {
           requestId,
           webSearchEnabled,
           attachments: options?.attachments,
+          selection: options?.selection,
         });
       }
 
@@ -1285,7 +1294,7 @@ export const useChatStream = (hookOptions?: {
     }
   };
 
-  const retryMessage = async (messageId: string, provider: string) => {
+  const retryMessage = async (messageId: string, provider: string, webSearchEnabled?: boolean) => {
     if (!user?.id || !currentChatId) return;
 
     const activeKey = getActiveChatKey(currentChatId);
@@ -1319,6 +1328,7 @@ export const useChatStream = (hookOptions?: {
       model: provider,
       requestId,
       status: "streaming",
+      isWebSearching: webSearchEnabled,
     };
 
     // Trim the messages array up to the assistant message index and append placeholder
@@ -1353,6 +1363,7 @@ export const useChatStream = (hookOptions?: {
         body: JSON.stringify({
           provider,
           requestId,
+          webSearchEnabled,
         }),
       });
 

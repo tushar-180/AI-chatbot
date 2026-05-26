@@ -6,21 +6,49 @@ export interface Provider {
   name: string;
 }
 
+// Global cache variables to deduplicate parallel requests and cache resolved providers
+let cachedProviders: Provider[] | null = null;
+let providersPromise: Promise<Provider[]> | null = null;
+
 export const useAvailableProviders = (
   selectedProvider: string,
   onProviderChange: (value: string) => void,
 ) => {
-  const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
+  const [availableProviders, setAvailableProviders] = useState<Provider[]>(
+    cachedProviders || [],
+  );
 
   useEffect(() => {
+    if (cachedProviders) {
+      setAvailableProviders(cachedProviders);
+      return;
+    }
+
     const fetchProviders = async () => {
+      if (!providersPromise) {
+        providersPromise = api
+          .get("/ai/providers")
+          .then((res) => {
+            const providers = res.data.providers || [];
+            cachedProviders = providers;
+            return providers;
+          })
+          .catch((err) => {
+            providersPromise = null; // Reset on failure to allow future retries
+            throw err;
+          });
+      }
+
       try {
-        const res = await api.get("/ai/providers");
-        setAvailableProviders(res.data.providers || []);
+        const providers = await providersPromise;
+        if (providers) {
+          setAvailableProviders(providers);
+        }
       } catch (err) {
         console.error("Error fetching providers", err);
       }
     };
+
     fetchProviders();
   }, []);
 

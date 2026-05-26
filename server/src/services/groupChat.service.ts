@@ -1,5 +1,5 @@
 import { GroupChat, GroupMessage } from "../models/GroupChat.model";
-import { Message, Chat } from "../models/Chat.model";
+import { Message, Chat, TokenUsageRecord } from "../models/Chat.model";
 import { User } from "../models/User.model";
 import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
@@ -18,6 +18,7 @@ import crypto from "crypto";
 import { processAttachedFile } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import mongoose from "mongoose";
+import { calculateUsage, estimateTokenCount, serializePromptMessages } from "../utils/tokenCounter";
 
 const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
   const user = await userService.getUserByClerkId(userId);
@@ -64,10 +65,15 @@ export class GroupChatService {
       type: message.type,
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt ? message.updatedAt.toISOString() : message.createdAt.toISOString(),
+      model: message.model,
       metadata: message.metadata,
       sources: message.metadata?.sources || undefined,
       attachments: message.attachments || [],
-      feedback: message.feedback || null,
+      reactions: (message.reactions || []).map((r: any) => ({
+        userId: r.userId,
+        username: r.username,
+        type: r.type,
+      })),
     };
   }
 
@@ -383,17 +389,66 @@ export class GroupChatService {
       attachments: messageAttachments,
     });
 
+    if (role === "user") {
+      try {
+        let targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite-preview";
+        const mentionMatch = content.match(/@([a-zA-Z0-9-:_/.]+)/);
+        if (mentionMatch) {
+          const mention = mentionMatch[1].toLowerCase();
+          if (mention !== "velora" && mention !== "system") {
+            const allProviders = aiService.getAvailableProviders();
+            const matchedProv = allProviders.find((p) => {
+              const cleanName = p.id
+                .split(":")
+                .pop()
+                ?.split("/")
+                .pop()
+                ?.toLowerCase();
+              return cleanName === mention || p.id.toLowerCase() === mention;
+            });
+            if (matchedProv) {
+              targetProvider = matchedProv.id;
+            } else {
+              targetProvider = mention;
+            }
+          }
+        }
+
+        const promptText = content || "";
+        const attachmentCount = messageAttachments.length;
+        const promptTokens = estimateTokenCount(promptText, attachmentCount);
+        const tokens = {
+          promptTokens,
+          completionTokens: 0,
+          totalTokens: promptTokens,
+        };
+
+        await TokenUsageRecord.findOneAndUpdate(
+          { messageId: message._id },
+          {
+            userId: clerkId,
+            chatId: groupId,
+            role: "user",
+            model: targetProvider,
+            tokens,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.error("Failed to save user token usage in group:", err);
+      }
+    }
+
     groupSocketManager.broadcast(groupId, {
       type: "message",
       message: this.serializeGroupMessage(message),
     });
 
     // Handle Agent Mention
-    const match = content.match(/@([a-zA-Z0-9-:_/.]+)/);
-    if (match) {
-      const mention = match[1].toLowerCase();
+    const mentions = [...content.matchAll(/@([a-zA-Z0-9-:_/.]+)/g)].map(m => m[1].toLowerCase());
+    if (mentions.length > 0) {
       const allProviders = aiService.getAvailableProviders();
-      const isAiMention =
+      const isAiMention = mentions.some((mention) => 
         mention === "velora" ||
         allProviders.some((p) => {
           const cleanName = p.id
@@ -403,12 +458,14 @@ export class GroupChatService {
             .pop()
             ?.toLowerCase();
           return cleanName === mention || p.id.toLowerCase() === mention;
-        });
+        })
+      );
       if (isAiMention) {
         groupSocketManager.broadcast(groupId, {
           type: "ai_thinking",
           isThinking: true,
           webSearchEnabled,
+          requesterId: clerkId,
         });
         this.handleAiResponse(groupId, content, webSearchEnabled, clerkId).catch(
           console.error,
@@ -424,6 +481,7 @@ export class GroupChatService {
     userContent: string,
     webSearchEnabled = false,
     clerkId?: string,
+    overrideProvider?: string,
   ) {
     const group = await GroupChat.findById(groupId);
     if (!group) return;
@@ -508,12 +566,13 @@ export class GroupChatService {
       });
     }
 
-    let targetProvider: string | undefined = undefined;
-    const mentionMatch = userContent.match(/@([a-zA-Z0-9-:_/.]+)/);
-    if (mentionMatch) {
-      const mention = mentionMatch[1].toLowerCase();
-      if (mention !== "velora" && mention !== "system") {
-        const allProviders = aiService.getAvailableProviders();
+    let targetProvider: string | undefined = overrideProvider;
+    if (!targetProvider) {
+      const mentions = [...userContent.matchAll(/@([a-zA-Z0-9-:_/.]+)/g)].map(m => m[1].toLowerCase());
+      const allProviders = aiService.getAvailableProviders();
+      
+      for (const mention of mentions) {
+        if (mention === "velora" || mention === "system") continue;
         const matchedProv = allProviders.find((p) => {
           const cleanName = p.id
             .split(":")
@@ -525,8 +584,7 @@ export class GroupChatService {
         });
         if (matchedProv) {
           targetProvider = matchedProv.id;
-        } else {
-          targetProvider = mention;
+          break;
         }
       }
     }
@@ -552,6 +610,9 @@ export class GroupChatService {
       tempId,
       assistantUsername,
       webSearchEnabled,
+      promptMessages,
+      targetProvider,
+      clerkId,
     });
 
     try {
@@ -612,6 +673,9 @@ export class GroupChatService {
       if (webSearchEnabled) {
         metadata.webSearchEnabled = true;
       }
+      if (clerkId) {
+        metadata.requesterId = clerkId;
+      }
       if (webGrounding && webGrounding.sources.length > 0) {
         metadata.sources = webGrounding.sources.map(
           ({ id, title, url, hostname, snippet }) => ({
@@ -636,7 +700,43 @@ export class GroupChatService {
         status: "completed",
         metadata,
         attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
+        model: targetProvider,
       });
+
+      try {
+        const promptText = serializePromptMessages(promptMessages as any[]);
+        const promptAttachmentCount = promptMessages.reduce(
+          (sum, m) => sum + (m.attachments?.length || 0),
+          0,
+        );
+
+        let usage;
+        try {
+          usage = await stream.usage;
+        } catch (e) {
+          console.error("Failed to get stream usage for group chat:", e);
+        }
+
+        const tokens = usage || calculateUsage(
+          promptText,
+          fullResponse,
+          promptAttachmentCount
+        );
+
+        await TokenUsageRecord.findOneAndUpdate(
+          { messageId: aiMsg._id },
+          {
+            userId: clerkId || group.creatorId,
+            chatId: groupId,
+            role: "assistant",
+            model: targetProvider,
+            tokens,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (tokenErr) {
+        console.error("Failed to save assistant token usage in group:", tokenErr);
+      }
 
       groupStreamRegistry.delete(groupId);
 
@@ -668,6 +768,7 @@ export class GroupChatService {
         role: "assistant",
         content: errorContent,
         status: "failed",
+        model: targetProvider,
       });
 
       groupStreamRegistry.delete(groupId);
@@ -706,9 +807,43 @@ export class GroupChatService {
       role: "assistant",
       content: fullResponse,
       status: "stopped",
-      metadata: activeStream.webSearchEnabled ? { webSearchEnabled: true } : {},
+      metadata: {
+        ...(activeStream.webSearchEnabled ? { webSearchEnabled: true } : {}),
+        ...(activeStream.requesterId ? { requesterId: activeStream.requesterId } : {}),
+      },
       attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
+      model: activeStream.model,
     });
+
+    try {
+      const promptText = activeStream.promptMessages
+        ? serializePromptMessages(activeStream.promptMessages)
+        : "";
+      const promptAttachmentCount = activeStream.promptMessages
+        ? activeStream.promptMessages.reduce(
+            (sum, m: any) => sum + (m.attachments?.length || 0),
+            0,
+          )
+        : 0;
+
+      const tokens = calculateUsage(promptText, fullResponse, promptAttachmentCount);
+
+      const groupDoc = await GroupChat.findById(groupId);
+
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: aiMsg._id },
+        {
+          userId: activeStream.clerkId || groupDoc?.creatorId || "unknown",
+          chatId: groupId,
+          role: "assistant",
+          model: activeStream.targetProvider || "unknown",
+          tokens,
+        },
+        { upsert: true, new: true }
+      );
+    } catch (tokenErr) {
+      console.error("Failed to save assistant token usage in group stop:", tokenErr);
+    }
 
     // Broadcast stopped message state
     groupSocketManager.broadcast(groupId, {
@@ -853,6 +988,7 @@ export class GroupChatService {
         type: "ai_thinking",
         isThinking: true,
         webSearchEnabled,
+        requesterId: message.userId,
       });
 
       this.handleAiResponse(groupId, content, webSearchEnabled, message.userId).catch(
@@ -867,6 +1003,7 @@ export class GroupChatService {
     groupId: string,
     messageId: string,
     targetProvider?: string,
+    webSearchOverride?: boolean,
   ) {
     const assistantMessage = await this.findAssistantMessageForRetry(
       groupId,
@@ -902,43 +1039,65 @@ export class GroupChatService {
       throw new Error("No user message found to retry");
     }
 
-    const webSearchEnabled = Boolean(lastUserMessage.metadata?.webSearchEnabled);
+    const webSearchEnabled = webSearchOverride !== undefined 
+      ? webSearchOverride 
+      : Boolean(lastUserMessage.metadata?.webSearchEnabled);
 
     // Trigger AI response regeneration
     groupSocketManager.broadcast(groupId, {
       type: "ai_thinking",
       isThinking: true,
       webSearchEnabled,
+      requesterId: lastUserMessage.userId,
     });
+
+    const finalProvider = targetProvider || assistantMessage.model;
 
     this.handleAiResponse(
       groupId,
       lastUserMessage.content,
       webSearchEnabled,
       lastUserMessage.userId,
+      finalProvider,
     ).catch(console.error);
 
     return { success: true };
   }
 
-  static async updateGroupMessageFeedback(
+  static async updateGroupMessageReaction(
     messageId: string,
-    feedback: "like" | "dislike" | null,
+    userId: string,
+    username: string,
+    reactionType: "like" | "dislike" | null,
   ) {
-    const message = await GroupMessage.findByIdAndUpdate(
-      messageId,
-      { feedback },
-      { new: true },
-    );
+    const message = await GroupMessage.findById(messageId);
     if (!message) throw new Error("Message not found");
 
+    // Always remove any existing reaction by this user first
+    await GroupMessage.updateOne(
+      { _id: messageId },
+      { $pull: { reactions: { userId } } },
+    );
+
+    // If a new reaction type is specified, add it
+    if (reactionType) {
+      await GroupMessage.updateOne(
+        { _id: messageId },
+        { $push: { reactions: { userId, username, type: reactionType } } },
+      );
+    }
+
+    // Re-fetch to get the final state
+    const updated = await GroupMessage.findById(messageId);
+    if (!updated) throw new Error("Message not found after update");
+
     // Broadcast the updated message state to everyone in the group
-    groupSocketManager.broadcast(message.groupId.toString(), {
+    groupSocketManager.broadcast(updated.groupId.toString(), {
       type: "message_updated",
-      message: this.serializeGroupMessage(message),
+      message: this.serializeGroupMessage(updated),
     });
 
-    return message;
+    return updated;
   }
 
   static async deleteGroup(groupId: string, clerkId: string) {

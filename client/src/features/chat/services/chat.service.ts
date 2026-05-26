@@ -7,7 +7,9 @@ import type {
 
 export type { Chat, Message };
 
-const normalizeMessage = (message: Message & { metadata?: { sources?: Message["sources"] } }): Message => {
+const normalizeMessage = (
+  message: Message & { metadata?: { sources?: Message["sources"] } },
+): Message => {
   if (message.sources?.length) {
     return message;
   }
@@ -21,6 +23,15 @@ const normalizeMessage = (message: Message & { metadata?: { sources?: Message["s
 
   return message;
 };
+
+interface CacheEntry {
+  messages: Message[];
+  timestamp: number;
+}
+
+const messageCache = new Map<string, CacheEntry>();
+const inFlightMessageFetches = new Map<string, Promise<Message[]>>();
+const CACHE_TTL_MS = 5000; // 5 seconds
 
 export const chatService = {
   /**
@@ -36,9 +47,34 @@ export const chatService = {
   /**
    * Fetches messages for a specific chat.
    */
-  async fetchMessages(chatId: string): Promise<Message[]> {
-    const res = await api.get(`/chat/${chatId}`);
-    return (res.data.messages || []).map(normalizeMessage);
+  fetchMessages(chatId: string, forceRefetch = false): Promise<Message[]> {
+    if (!forceRefetch) {
+      const cached = messageCache.get(chatId);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return Promise.resolve(cached.messages);
+      }
+    }
+
+    let promise = inFlightMessageFetches.get(chatId);
+    if (!promise) {
+      promise = api
+        .get(`/chat/${chatId}`)
+        .then((res) => {
+          inFlightMessageFetches.delete(chatId);
+          const messages = (res.data.messages || []).map(normalizeMessage);
+          messageCache.set(chatId, {
+            messages,
+            timestamp: Date.now(),
+          });
+          return messages;
+        })
+        .catch((err) => {
+          inFlightMessageFetches.delete(chatId);
+          throw err;
+        });
+      inFlightMessageFetches.set(chatId, promise);
+    }
+    return promise;
   },
 
   /**
@@ -77,11 +113,15 @@ export const chatService = {
     });
   },
 
-  async updateMessageFeedback(chatId: string, messageId: string, feedback: "like" | "dislike" | null) {
-    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
+  async updateMessageFeedback(
+    chatId: string,
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) {
+    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, {
+      feedback,
+    });
   },
-
-
 
   /**
    * Parses a raw SSE event string.

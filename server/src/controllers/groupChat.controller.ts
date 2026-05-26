@@ -270,12 +270,14 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const messageId = req.params.messageId as string;
-      const provider = req.body?.provider;
+      const provider = req.body?.targetProvider;
+      const webSearchEnabled = req.body?.webSearchEnabled;
 
       const result = await GroupChatService.retryGroupMessage(
         groupId,
         messageId,
         provider,
+        webSearchEnabled,
       );
       res.json(result);
     } catch (error: any) {
@@ -287,10 +289,12 @@ export class GroupChatController {
   static async updateGroupMessageFeedback(req: Request, res: Response) {
     try {
       const messageId = req.params.messageId as string;
-      const { feedback } = req.body;
+      const { feedback, userId, username } = req.body;
 
-      const message = await GroupChatService.updateGroupMessageFeedback(
+      const message = await GroupChatService.updateGroupMessageReaction(
         messageId,
+        userId,
+        username,
         feedback,
       );
       res.json(message);
