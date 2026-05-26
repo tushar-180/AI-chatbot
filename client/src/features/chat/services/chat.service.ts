@@ -7,7 +7,9 @@ import type {
 
 export type { Chat, Message };
 
-const normalizeMessage = (message: Message & { metadata?: { sources?: Message["sources"] } }): Message => {
+const normalizeMessage = (
+  message: Message & { metadata?: { sources?: Message["sources"] } },
+): Message => {
   if (message.sources?.length) {
     return message;
   }
@@ -111,11 +113,15 @@ export const chatService = {
     });
   },
 
-  async updateMessageFeedback(chatId: string, messageId: string, feedback: "like" | "dislike" | null) {
-    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, { feedback });
+  async updateMessageFeedback(
+    chatId: string,
+    messageId: string,
+    feedback: "like" | "dislike" | null,
+  ) {
+    return api.patch(`/chat/${chatId}/messages/${messageId}/feedback`, {
+      feedback,
+    });
   },
-
-
 
   /**
    * Parses a raw SSE event string.

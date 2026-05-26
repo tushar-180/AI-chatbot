@@ -17,6 +17,10 @@ export const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+// --- Network health check state ---
+let serverIsDown = false;
+let pendingHealthCheck: ReturnType<typeof setTimeout> | null = null;
+
 // --- Auth token wiring ---
 // useAuthSetup calls setAuthTokenGetter(getToken) once on mount.
 // The request interceptor below then calls it before every request.
@@ -28,6 +32,9 @@ export const setAuthTokenGetter = (fn: () => Promise<string | null>) => {
 
 // Attach Clerk JWT to every outgoing request
 api.interceptors.request.use(async (config) => {
+  if (serverIsDown) {
+    return Promise.reject(new axios.Cancel("Server is offline. Request blocked to prevent spam."));
+  }
   if (getAuthToken) {
     const token = await getAuthToken();
     if (token) {
@@ -37,11 +44,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// --- Network health check ---
-// Track whether we've already confirmed the server is down
-// to avoid spamming the server-down event on every failed request.
-let serverIsDown = false;
-let pendingHealthCheck: ReturnType<typeof setTimeout> | null = null;
+// Synchronize serverIsDown state with global window events
+if (typeof window !== "undefined") {
+  window.addEventListener("server-down", () => {
+    serverIsDown = true;
+  });
+  window.addEventListener("server-up", () => {
+    serverIsDown = false;
+  });
+}
 
 const confirmServerDown = () => {
   if (pendingHealthCheck) return;
@@ -49,12 +60,22 @@ const confirmServerDown = () => {
   pendingHealthCheck = setTimeout(async () => {
     pendingHealthCheck = null;
     try {
-      await axios.get(`${API_ORIGIN}/health`, { timeout: 4000 });
+      const res = await axios.get(`${API_ORIGIN}/health?t=${Date.now()}`, {
+        timeout: 4000,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      });
+      if (res.status !== 200 || !res.data || res.data.ok !== true) {
+        throw new Error("Invalid health check response");
+      }
       if (serverIsDown) {
         serverIsDown = false;
         window.dispatchEvent(new CustomEvent("server-up"));
       }
-    } catch {
+    } catch (error) {
       if (!serverIsDown) {
         serverIsDown = true;
         window.dispatchEvent(new CustomEvent("server-down"));
@@ -72,9 +93,14 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
     if (
       axios.isAxiosError(error) &&
-      (!error.response || error.code === "ECONNABORTED" || error.response.status >= 500)
+      (!error.response ||
+        error.code === "ECONNABORTED" ||
+        error.response.status >= 500)
     ) {
       confirmServerDown();
     }

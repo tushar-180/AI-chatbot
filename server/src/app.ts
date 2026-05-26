@@ -49,6 +49,9 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.status(200).json({ ok: true });
 });
 

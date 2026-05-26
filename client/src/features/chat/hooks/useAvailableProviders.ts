@@ -14,7 +14,9 @@ export const useAvailableProviders = (
   selectedProvider: string,
   onProviderChange: (value: string) => void,
 ) => {
-  const [availableProviders, setAvailableProviders] = useState<Provider[]>(cachedProviders || []);
+  const [availableProviders, setAvailableProviders] = useState<Provider[]>(
+    cachedProviders || [],
+  );
 
   useEffect(() => {
     if (cachedProviders) {
@@ -76,4 +78,3 @@ export const useAvailableProviders = (
     currentProvider,
   };
 };
-
