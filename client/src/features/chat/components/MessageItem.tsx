@@ -34,6 +34,7 @@ import type { WebSource, Message, Attachment } from "../types/chat.types";
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { formatModelName } from "../constants/chat.constants";
 import { useAvailableProviders } from "@/features/chat/hooks/useAvailableProviders";
+import { ComposerQuotePreview } from "./ComposerQuotePreview";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -77,7 +78,7 @@ const getModelOnlyName = (fullName: string) => {
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }) => void;
+  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }) => void;
   onEditStart?: () => void;
   onRetry?: () => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
@@ -281,6 +282,9 @@ const MessageItem = ({
   const [isUploading, setIsUploading] = useState(false);
   const [attachments, setAttachments] = useState<any[]>(msg.attachments || []);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [editSelectionContext, setEditSelectionContext] = useState<any>(
+    msg.metadata?.selection || null
+  );
 
   // Edit-local provider & web search state
   const [editProvider, setEditProvider] = useState(getStoredProvider);
@@ -303,7 +307,7 @@ const MessageItem = ({
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [isEditing]);
 
@@ -414,6 +418,7 @@ const MessageItem = ({
   const handleEditStart = () => {
     setIsEditing(true);
     setEditContent(msg.content);
+    setEditSelectionContext(msg.metadata?.selection || null);
     setEditProvider(getStoredProvider());
     setEditWebSearchEnabled(false);
     onEditStart?.();
@@ -422,6 +427,7 @@ const MessageItem = ({
   const handleEditCancel = () => {
     setIsEditing(false);
     setEditContent(msg.content);
+    setEditSelectionContext(msg.metadata?.selection || null);
     setAttachments(msg.attachments || []);
     setAttachedFile(null);
   };
@@ -439,18 +445,21 @@ const MessageItem = ({
     const attachmentsChanged =
       JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
     const hasNewFile = Boolean(attachedFile);
+    const selectionChanged =
+      JSON.stringify(editSelectionContext) !== JSON.stringify(msg.metadata?.selection || null);
 
     if (!editContent.trim()) {
       setIsEditing(false);
       return;
     }
 
-    if (contentChanged || attachmentsChanged || hasNewFile) {
+    if (contentChanged || attachmentsChanged || hasNewFile || selectionChanged) {
       onEdit?.(editContent, {
         provider: editProvider,
         webSearchEnabled: editWebSearchEnabled,
         attachments,
         attachedFile,
+        selection: editSelectionContext,
       });
     }
 
@@ -679,6 +688,10 @@ const MessageItem = ({
               )
             ) : isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px]">
+                <ComposerQuotePreview
+                  selectionContext={editSelectionContext}
+                  onClear={() => setEditSelectionContext(null)}
+                />
                 {/* Model Selector + Web Search Toggle */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <DropdownMenu>
@@ -734,10 +747,10 @@ const MessageItem = ({
                   onChange={(e) => {
                     setEditContent(e.target.value);
                     e.target.style.height = "auto";
-                    e.target.style.height = `${e.target.scrollHeight}px`;
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
                   }}
                   onKeyDown={handleKeyDown}
-                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-hidden p-0 text-white placeholder-slate-500 min-h-[1.5em]"
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-y-auto p-0 text-white placeholder-slate-500 min-h-[1.5em] max-h-[200px]"
                   rows={1}
                 />
 

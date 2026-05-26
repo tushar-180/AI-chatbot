@@ -66,7 +66,7 @@ interface MessageListProps {
   onEditMessage?: (
     messageId: string,
     content: string,
-    options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null }
+    options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }
   ) => void;
   onEditStart?: () => void;
   onRetryMessage?: (messageId: string) => void;
@@ -329,7 +329,8 @@ const MessageList = forwardRef<
       (messagesLoading ||
         (currentChatId && !hasLoadedCurrentChat) ||
         (currentChatId && !hasCompletedInitialScroll)) &&
-      !isNewChat;
+      !isNewChat &&
+      !isStreaming;
 
     return (
       <div
@@ -491,7 +492,7 @@ const MessageList = forwardRef<
                   key={msg.id}
                   message={msg}
                   isStreaming={isStreaming && i === messages.length - 1}
-                  onEdit={(content) => onEditMessage?.(msg.id, content)}
+                  onEdit={(content, options) => onEditMessage?.(msg.id, content, options)}
                   onEditStart={onEditStart}
                   onRetry={() => onRetryMessage?.(msg.id)}
                   onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
