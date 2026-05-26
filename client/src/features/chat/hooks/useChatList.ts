@@ -49,7 +49,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     try {
       await api.delete(`/chat/${chatId}`);
       removeChat(chatId);
-      
+
       // If the deleted chat was the active one, navigate back to new chat
       if (chatId === currentChatId) {
         setCurrentChat(null);
@@ -57,7 +57,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
         setIsNewChat(true);
         navigate("/chat");
       }
-      
+
       toast.success("Chat deleted successfully.");
     } catch (err) {
       console.error("Error deleting chat", err);
@@ -78,25 +78,29 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
 
   const moveChatToProject = async (chatId: string, projectId: string) => {
     try {
-      const chatToMove = chats.find(c => c._id === chatId) || (chatId === currentChatId ? currentChat : null);
-      
+      const chatToMove =
+        chats.find((c) => c._id === chatId) ||
+        (chatId === currentChatId ? currentChat : null);
+
       await api.patch(`/chat/${chatId}/move`, { projectId });
       removeChat(chatId);
-      
+
       if (chatToMove) {
         const activeProjectId = useProjectStore.getState().activeProjectId;
         if (activeProjectId === projectId) {
-          useProjectStore.getState().addChatToProjectStore({ ...chatToMove, projectId });
+          useProjectStore
+            .getState()
+            .addChatToProjectStore({ ...chatToMove, projectId });
         }
       }
-      
+
       if (chatId === currentChatId) {
         setCurrentChat(null);
         setMessages([]);
         setIsNewChat(true);
         navigate("/chat");
       }
-      
+
       toast.success("Chat moved to project successfully.");
     } catch (err) {
       console.error("Error moving chat to project", err);
@@ -109,7 +113,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
       await api.post(`/chat/${chatId}/archive`);
       updateChatArchive(chatId, true);
       toast.success("Chat archived successfully.");
-      
+
       if (chatId === currentChatId) {
         navigate("/chat");
       }
@@ -121,14 +125,16 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
 
   const unarchiveChat = async (chatId: string) => {
     try {
-      const chat = chats.find(c => c._id === chatId) || (currentChatId === chatId ? currentChat : null);
+      const chat =
+        chats.find((c) => c._id === chatId) ||
+        (currentChatId === chatId ? currentChat : null);
       await api.post(`/chat/${chatId}/unarchive`);
-      
+
       // If it was pinned, also unpin it on the server
       if (chat?.isPinned) {
         await api.post(`/chat/${chatId}/unpin`);
       }
-      
+
       updateChatArchive(chatId, false);
       toast.success("Chat unarchived and restored.");
     } catch (err) {
@@ -158,8 +164,10 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     }
   };
   const selectChat = async (chatId: string, highlight?: string) => {
-    const queryStr = highlight ? `?highlight=${encodeURIComponent(highlight)}` : "";
-    
+    const queryStr = highlight
+      ? `?highlight=${encodeURIComponent(highlight)}`
+      : "";
+
     // If it's already the current chat, just navigate to handle highlight/focus
     if (chatId === currentChatId) {
       setSidebarOpen(false);
@@ -223,7 +231,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
       if (fetchedChats.length < 20) {
         setHasMore(false);
       }
-      
+
       appendChats(fetchedChats);
       setPage(nextPage);
     } catch (err) {
@@ -344,9 +352,9 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
       // We'll show a single toast for the entire operation.
       const deletePromises = chatIds.map((id) => api.delete(`/chat/${id}`));
       await Promise.all(deletePromises);
-      
+
       chatIds.forEach((id) => removeChat(id));
-      
+
       // If the current chat was among the deleted ones, reset state
       if (currentChatId && chatIds.includes(currentChatId)) {
         setCurrentChat(null);
@@ -354,7 +362,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
         setIsNewChat(true);
         navigate("/chat");
       }
-      
+
       toast.success(`${chatIds.length} chats deleted successfully.`);
 
       // If the list is now empty but there might be more on the server, re-fetch page 1

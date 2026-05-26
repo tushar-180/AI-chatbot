@@ -1,6 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import axios from "axios";
-import {API_ORIGIN } from "../lib/api";
+import { API_ORIGIN } from "../lib/api";
 
 interface ServerStatusContextType {
   isDown: boolean;
@@ -10,9 +16,13 @@ interface ServerStatusContextType {
   onClose: () => void;
 }
 
-const ServerStatusContext = createContext<ServerStatusContextType | undefined>(undefined);
+const ServerStatusContext = createContext<ServerStatusContextType | undefined>(
+  undefined,
+);
 
-export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [isDown, setIsDown] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
 
@@ -20,21 +30,32 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const checkStatus = useCallback(async () => {
     try {
-      await axios.get(`${API_ORIGIN}/health`, { timeout: 5000 });
+      const res = await axios.get(`${API_ORIGIN}/health?t=${Date.now()}`, {
+        timeout: 5000,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      });
+      if (res.status !== 200 || !res.data || res.data.ok !== true) {
+        throw new Error("Invalid health check response");
+      }
       setIsDown(false);
       setIsDismissed(false); // Reset dismissal when server is back
+      window.dispatchEvent(new CustomEvent("server-up"));
     } catch (error) {
-      if (
-        axios.isAxiosError(error) &&
-        (!error.response || error.code === "ECONNABORTED" || error.response.status >= 500)
-      ) {
-        setIsDown(true);
-      }
+      setIsDown(true);
+      setIsDismissed(false);
+      window.dispatchEvent(new CustomEvent("server-down"));
     }
   }, []);
 
-  // Register event listeners once on mount — stable, no re-registration on state changes
+  // Register event listeners and check server status on mount
   useEffect(() => {
+    // Proactively check if the server is up/down on page reload
+    checkStatus();
+
     const handleServerDown = () => {
       setIsDown(true);
       setIsDismissed(false);
@@ -52,7 +73,7 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
       window.removeEventListener("server-down", handleServerDown);
       window.removeEventListener("server-up", handleServerUp);
     };
-  }, []); // Empty deps: only register once
+  }, [checkStatus]); // Empty deps: only register once
 
   // Poll the health endpoint every 10s while the server is down
   useEffect(() => {
@@ -64,24 +85,41 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const retry = async () => {
     setIsRetrying(true);
     try {
-      await axios.get(`${API_ORIGIN}/health`, { timeout: 5000 });
+      const res = await axios.get(`${API_ORIGIN}/health?t=${Date.now()}`, {
+        timeout: 5000,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0",
+        },
+      });
+      if (res.status !== 200 || !res.data || res.data.ok !== true) {
+        throw new Error("Invalid health check response");
+      }
       setIsDown(false);
       setIsDismissed(false);
+      window.dispatchEvent(new CustomEvent("server-up"));
     } catch (error) {
-      // Still down
+      setIsDown(true);
+      setIsDismissed(false);
+      window.dispatchEvent(new CustomEvent("server-down"));
     } finally {
       setIsRetrying(false);
     }
   };
 
   return (
-    <ServerStatusContext.Provider 
-      value={{ 
-        isDown: isDown && !isDismissed, 
-        isRetrying, 
-        retry, 
-        setDown: (down) => { setIsDown(down); setIsDismissed(false); },
-        onClose: () => setIsDismissed(true)
+    <ServerStatusContext.Provider
+      value={{
+        isDown: isDown && !isDismissed,
+        isRetrying,
+        retry,
+        setDown: (down) => {
+          setIsDown(down);
+          setIsDismissed(false);
+          window.dispatchEvent(new CustomEvent(down ? "server-down" : "server-up"));
+        },
+        onClose: () => setIsDismissed(true),
       }}
     >
       {children}
@@ -92,7 +130,9 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({ 
 export const useServerStatus = () => {
   const context = useContext(ServerStatusContext);
   if (context === undefined) {
-    throw new Error("useServerStatus must be used within a ServerStatusProvider");
+    throw new Error(
+      "useServerStatus must be used within a ServerStatusProvider",
+    );
   }
   return context;
 };

@@ -150,3 +150,43 @@ export type ChatMessage = {
 export const Chat = mongoose.model("Chat", chatSchema);
 export const Message = mongoose.model("Message", messageSchema);
 
+const tokenUsageRecordSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    chatId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chat",
+      required: true,
+      index: true,
+    },
+    messageId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      required: true,
+      unique: true,
+      index: true,
+    },
+    role: {
+      type: String,
+      enum: ["user", "assistant", "system"],
+      required: true,
+    },
+    model: {
+      type: String,
+      index: true,
+    },
+    tokens: {
+      type: tokenUsageSchema,
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+export const TokenUsageRecord = mongoose.model("TokenUsageRecord", tokenUsageRecordSchema);
+
+

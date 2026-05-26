@@ -1,4 +1,4 @@
-import { Chat, Message } from "../models/Chat.model";
+import { Chat, Message, TokenUsageRecord } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
 import mongoose from "mongoose";
 
@@ -173,6 +173,18 @@ export const chatRepository = {
     });
 
     if (messageData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: messageData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
       const chat = await Chat.findByIdAndUpdate(
         chatId,
         {
@@ -227,8 +239,20 @@ export const chatRepository = {
       return null;
     }
 
-    // Handle token updates
-    if (message.chatId && updateData.tokens) {
+    if (message?.chatId && updateData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: updateData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
+      // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
       const oldTokens = existingMessage?.tokens;
 
       // Calculate token deltas
@@ -302,16 +326,60 @@ export const chatRepository = {
   ) {
     const query =
       chatId && chatId !== "null" ? { chatId, requestId } : { requestId };
+    // Read existing message to get old token values for delta calculation
+    const existingMessage = await Message.findOne(query);
 
-    return this.updateMessageInternal(query, updateData);
-  },
-  async findUserAttachments(userId: string) {
-    return await Message.find({
-      userId,
-      attachments: { $exists: true, $not: { $size: 0 } },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const message = await Message.findOneAndUpdate(query, updateData, {
+      returnDocument: "after",
+    });
+    if (message?.chatId && updateData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: updateData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
+      // Calculate delta: new tokens minus old tokens
+      const oldTokens = existingMessage?.tokens;
+      const deltaPrompt =
+        (updateData.tokens.promptTokens || 0) - (oldTokens?.promptTokens || 0);
+      const deltaCompletion =
+        (updateData.tokens.completionTokens || 0) -
+        (oldTokens?.completionTokens || 0);
+      const deltaTotal =
+        (updateData.tokens.totalTokens || 0) - (oldTokens?.totalTokens || 0);
+
+      if (deltaPrompt !== 0 || deltaCompletion !== 0 || deltaTotal !== 0) {
+        const chat = await Chat.findByIdAndUpdate(
+          String(message.chatId),
+          {
+            $inc: {
+              "tokens.promptTokens": deltaPrompt,
+              "tokens.completionTokens": deltaCompletion,
+              "tokens.totalTokens": deltaTotal,
+            },
+            $set: { updatedAt: new Date() },
+          },
+          { new: true },
+        );
+
+        if (chat && chat.projectId) {
+          const { projectRepository } = require("./project.repository");
+          await projectRepository.touchProject(chat.projectId.toString());
+        }
+      } else {
+        await this.touchChat(String(message.chatId));
+      }
+    } else if (message?.chatId) {
+      await this.touchChat(String(message.chatId));
+    }
+    return message;
   },
 
   async deleteMessagesAfter(chatId: string, messageId: string) {
@@ -453,5 +521,14 @@ export const chatRepository = {
    */
   async deleteMessagesByChatId(chatId: string): Promise<void> {
     await Message.deleteMany({ chatId });
+  },
+
+  async findUserAttachments(userId: string) {
+    return await Message.find({
+      userId,
+      attachments: { $exists: true, $not: { $size: 0 } },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
   },
 };

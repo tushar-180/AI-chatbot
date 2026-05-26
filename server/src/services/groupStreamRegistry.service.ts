@@ -9,6 +9,9 @@ export interface ActiveGroupStream {
   model: string;
   requesterId?: string;
   abortController: AbortController;
+  promptMessages?: any[];
+  targetProvider?: string;
+  clerkId?: string;
 }
 
 const activeGroupStreams = new Map<string, ActiveGroupStream>();
@@ -19,15 +22,17 @@ export const groupStreamRegistry = {
     tempId,
     assistantUsername,
     webSearchEnabled,
-    model,
-    requesterId,
+    promptMessages,
+    targetProvider,
+    clerkId,
   }: {
     groupId: string;
     tempId: string;
     assistantUsername: string;
     webSearchEnabled: boolean;
-    model: string;
-    requesterId?: string;
+    promptMessages?: any[];
+    targetProvider?: string;
+    clerkId?: string;
   }) {
     const activeStream: ActiveGroupStream = {
       groupId,
@@ -35,9 +40,12 @@ export const groupStreamRegistry = {
       assistantUsername,
       fullResponse: "",
       webSearchEnabled,
-      model,
-      requesterId,
+      model: targetProvider || "",
+      requesterId: clerkId,
       abortController: new AbortController(),
+      promptMessages,
+      targetProvider,
+      clerkId,
     };
 
     activeGroupStreams.set(groupId, activeStream);

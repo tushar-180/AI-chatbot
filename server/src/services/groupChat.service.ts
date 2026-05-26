@@ -1,5 +1,5 @@
 import { GroupChat, GroupMessage } from "../models/GroupChat.model";
-import { Message, Chat } from "../models/Chat.model";
+import { Message, Chat, TokenUsageRecord } from "../models/Chat.model";
 import { User } from "../models/User.model";
 import { groupSocketManager } from "../utils/groupSocket";
 import { aiService } from "./ai.service";
@@ -18,6 +18,7 @@ import crypto from "crypto";
 import { processAttachedFile } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import mongoose from "mongoose";
+import { calculateUsage, estimateTokenCount, serializePromptMessages } from "../utils/tokenCounter";
 
 const getEnabledMcpTools = async (userId: string) => {
   const user = await userService.getUserByClerkId(userId);
@@ -373,6 +374,56 @@ export class GroupChatService {
       attachments: messageAttachments,
     });
 
+    if (role === "user") {
+      try {
+        let targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite-preview";
+        const mentionMatch = content.match(/@([a-zA-Z0-9-:_/.]+)/);
+        if (mentionMatch) {
+          const mention = mentionMatch[1].toLowerCase();
+          if (mention !== "velora" && mention !== "system") {
+            const allProviders = aiService.getAvailableProviders();
+            const matchedProv = allProviders.find((p) => {
+              const cleanName = p.id
+                .split(":")
+                .pop()
+                ?.split("/")
+                .pop()
+                ?.toLowerCase();
+              return cleanName === mention || p.id.toLowerCase() === mention;
+            });
+            if (matchedProv) {
+              targetProvider = matchedProv.id;
+            } else {
+              targetProvider = mention;
+            }
+          }
+        }
+
+        const promptText = content || "";
+        const attachmentCount = messageAttachments.length;
+        const promptTokens = estimateTokenCount(promptText, attachmentCount);
+        const tokens = {
+          promptTokens,
+          completionTokens: 0,
+          totalTokens: promptTokens,
+        };
+
+        await TokenUsageRecord.findOneAndUpdate(
+          { messageId: message._id },
+          {
+            userId: clerkId,
+            chatId: groupId,
+            role: "user",
+            model: targetProvider,
+            tokens,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (err) {
+        console.error("Failed to save user token usage in group:", err);
+      }
+    }
+
     groupSocketManager.broadcast(groupId, {
       type: "message",
       message: this.serializeGroupMessage(message),
@@ -542,8 +593,9 @@ export class GroupChatService {
       tempId,
       assistantUsername,
       webSearchEnabled,
-      model: targetProvider,
-      requesterId: clerkId,
+      promptMessages,
+      targetProvider,
+      clerkId,
     });
 
     try {
@@ -628,6 +680,41 @@ export class GroupChatService {
         model: targetProvider,
       });
 
+      try {
+        const promptText = serializePromptMessages(promptMessages as any[]);
+        const promptAttachmentCount = promptMessages.reduce(
+          (sum, m) => sum + (m.attachments?.length || 0),
+          0,
+        );
+
+        let usage;
+        try {
+          usage = await stream.usage;
+        } catch (e) {
+          console.error("Failed to get stream usage for group chat:", e);
+        }
+
+        const tokens = usage || calculateUsage(
+          promptText,
+          fullResponse,
+          promptAttachmentCount
+        );
+
+        await TokenUsageRecord.findOneAndUpdate(
+          { messageId: aiMsg._id },
+          {
+            userId: clerkId || group.creatorId,
+            chatId: groupId,
+            role: "assistant",
+            model: targetProvider,
+            tokens,
+          },
+          { upsert: true, new: true }
+        );
+      } catch (tokenErr) {
+        console.error("Failed to save assistant token usage in group:", tokenErr);
+      }
+
       groupStreamRegistry.delete(groupId);
 
       groupSocketManager.broadcast(groupId, {
@@ -701,6 +788,36 @@ export class GroupChatService {
       },
       model: activeStream.model,
     });
+
+    try {
+      const promptText = activeStream.promptMessages
+        ? serializePromptMessages(activeStream.promptMessages)
+        : "";
+      const promptAttachmentCount = activeStream.promptMessages
+        ? activeStream.promptMessages.reduce(
+            (sum, m: any) => sum + (m.attachments?.length || 0),
+            0,
+          )
+        : 0;
+
+      const tokens = calculateUsage(promptText, fullResponse, promptAttachmentCount);
+
+      const groupDoc = await GroupChat.findById(groupId);
+
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: aiMsg._id },
+        {
+          userId: activeStream.clerkId || groupDoc?.creatorId || "unknown",
+          chatId: groupId,
+          role: "assistant",
+          model: activeStream.targetProvider || "unknown",
+          tokens,
+        },
+        { upsert: true, new: true }
+      );
+    } catch (tokenErr) {
+      console.error("Failed to save assistant token usage in group stop:", tokenErr);
+    }
 
     // Broadcast stopped message state
     groupSocketManager.broadcast(groupId, {
