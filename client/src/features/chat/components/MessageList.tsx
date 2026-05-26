@@ -69,7 +69,7 @@ interface MessageListProps {
     options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }
   ) => void;
   onEditStart?: () => void;
-  onRetryMessage?: (messageId: string) => void;
+  onRetryMessage?: (messageId: string, provider?: string, webSearchEnabled?: boolean) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
@@ -494,7 +494,7 @@ const MessageList = forwardRef<
                   isStreaming={isStreaming && i === messages.length - 1}
                   onEdit={(content, options) => onEditMessage?.(msg.id, content, options)}
                   onEditStart={onEditStart}
-                  onRetry={() => onRetryMessage?.(msg.id)}
+                  onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg.id, provider, webSearchEnabled)}
                   onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
                   highlight={highlight || undefined}
                   onCitationClick={onCitationClick}

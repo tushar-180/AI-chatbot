@@ -376,7 +376,7 @@ export const useGroupChat = () => {
         toast.warning("This group chat was deleted by its creator.");
         navigate("/chat");
       } else if (data.type === "ai_thinking") {
-        setIsAiThinking(data.isThinking, groupId);
+        setIsAiThinking(data.isThinking, groupId, data.requesterId);
         if (data.isThinking) {
           setIsWebSearching(!!data.webSearchEnabled, groupId);
         } else {
@@ -584,7 +584,7 @@ export const useGroupChat = () => {
     }
   };
 
-  const retryMessage = async (messageId: string) => {
+  const retryMessage = async (messageId: string, provider?: string, webSearchEnabledParam?: boolean) => {
     if (!groupId) return;
 
     const storeState = useGroupStore.getState();
@@ -611,9 +611,9 @@ export const useGroupChat = () => {
       .reverse()
       .find((m) => m.role === "user");
 
-    const webSearchEnabled = Boolean(
-      previousUserMessage?.metadata?.webSearchEnabled,
-    );
+    const webSearchEnabled = webSearchEnabledParam !== undefined 
+      ? webSearchEnabledParam 
+      : Boolean(previousUserMessage?.metadata?.webSearchEnabled);
 
     stopRequestedRef.current = false;
 
@@ -636,7 +636,10 @@ export const useGroupChat = () => {
     setIsWebSearching(webSearchEnabled);
 
     try {
-      await api.post(`/group/${groupId}/messages/${messageId}/retry`, {});
+      await api.post(`/group/${groupId}/messages/${messageId}/retry`, {
+        targetProvider: provider,
+        webSearchEnabled,
+      });
     } catch (err) {
       setGroupMessages(previousMessages);
       setIsAiThinking(false);
@@ -653,17 +656,36 @@ export const useGroupChat = () => {
     messageId: string,
     feedback: "like" | "dislike" | null,
   ) => {
-    if (!groupId) return;
+    if (!groupId || !user?.id) return;
+
+    const username =
+      user.firstName ||
+      user.username ||
+      user.primaryEmailAddress?.emailAddress.split("@")[0] ||
+      "User";
+
     try {
-      // Optimistically update the message locally so the thumbs up/down change color instantly!
+      // Optimistically update the reactions array locally
       setGroupMessages((prev) =>
-        prev.map((m) => (m._id === messageId ? { ...m, feedback } : m)),
+        prev.map((m) => {
+          if (m._id !== messageId) return m;
+          const currentReactions = m.reactions || [];
+          // Remove any existing reaction by this user
+          const filtered = currentReactions.filter((r) => r.userId !== user.id);
+          // Add the new reaction if not null
+          const updated = feedback
+            ? [...filtered, { userId: user.id!, username, type: feedback }]
+            : filtered;
+          return { ...m, reactions: updated };
+        }),
       );
       await api.patch(`/group/${groupId}/messages/${messageId}/feedback`, {
         feedback,
+        userId: user.id,
+        username,
       });
     } catch (err) {
-      console.error("Error updating group message feedback:", err);
+      console.error("Error updating group message reaction:", err);
     }
   };
 
@@ -690,8 +712,20 @@ export const useGroupChat = () => {
     retryMessage,
     updateMessageFeedback,
     typingUsers,
-    isStreaming:
-      isAiThinking || groupMessages.some((m) => m.status === "streaming"),
+    isStreaming: (() => {
+      const isGlobalStreaming = isAiThinking || groupMessages.some((m) => m.status === "streaming");
+      if (!isGlobalStreaming) return false;
+      
+      const storeState = useGroupStore.getState();
+      const currentRequesterId = storeState.aiThinkingRequesterIds[groupId || ""];
+      if (currentRequesterId) {
+        return currentRequesterId === user?.id;
+      }
+      
+      // Fallback if requesterId isn't present in state
+      const lastUserMsg = [...groupMessages].reverse().find(m => m.role === "user");
+      return lastUserMsg?.userId === user?.id;
+    })(),
     currentGroup: groups.find((g) => g._id === groupId),
   };
 };

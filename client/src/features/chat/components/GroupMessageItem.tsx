@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
+import { useGroupStore } from "@/features/chat/store/useGroupStore";
 import { optimizeImageUrl } from "@/lib/utils";
 
 import {
@@ -19,7 +20,20 @@ import {
   Paperclip,
   Loader2,
   FileText,
+  Bot,
 } from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
 import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
@@ -47,7 +61,7 @@ interface GroupMessageItemProps {
   onEdit?: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[], attachedFile?: File | null) => void;
   onEditStart?: () => void;
 
-  onRetry?: () => void;
+  onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
 
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
 }
@@ -69,9 +83,39 @@ const getProviderIcon = (providerId: string, size = 14) => {
   return Icon ? <Icon size={size} /> : null;
 };
 
+const getModelOnlyName = (fullName: string) => {
+  return fullName.includes(" : ") ? fullName.split(" : ")[1] : fullName;
+};
+
 const getCleanModelName = (id: string) => {
   const afterColon = id.includes(":") ? id.split(":")[1] : id;
   return afterColon.includes("/") ? afterColon.split("/").pop() || afterColon : afterColon;
+};
+
+let cachedProviders: Provider[] | null = null;
+let providersPromise: Promise<Provider[]> | null = null;
+
+const fetchProvidersGlobally = async () => {
+  if (cachedProviders) return cachedProviders;
+  if (providersPromise) return providersPromise;
+  
+  providersPromise = api.get("/ai/providers").then(res => {
+    const rawProviders: Provider[] = res.data.providers || [];
+    const defaultModelId = "gemini:gemini-3.1-flash-lite-preview";
+    const defaultModel = rawProviders.find((p: Provider) => p.id === defaultModelId);
+    let sortedProviders = [...rawProviders];
+    if (defaultModel) {
+      sortedProviders = [defaultModel, ...rawProviders.filter((p: Provider) => p.id !== defaultModelId)];
+    }
+    cachedProviders = sortedProviders;
+    return sortedProviders;
+  }).catch(err => {
+    console.error("Error fetching providers", err);
+    providersPromise = null;
+    return [];
+  });
+  
+  return providersPromise;
 };
 
 const WebSearchToggle = ({
@@ -149,10 +193,9 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
           {attachment.mimeType?.startsWith("image/") ||
           attachment.url.startsWith("data:image") ? (
             <img
-              src={optimizeImageUrl(attachment.url || "", 600, 338)}
+              src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-100 bg-slate-950/40"
-              style={{ aspectRatio: "auto 16 / 9" }}
+              className="h-auto w-full object-contain max-h-[32rem] bg-slate-950/40"
               fetchPriority="high"
             />
           ) : (
@@ -208,9 +251,23 @@ const GroupMessageItem = ({
 }: GroupMessageItemProps) => {
   const { user } = useUser();
   const dbUser = useChatStore((state) => state.dbUser);
+  const { currentGroupId, groups } = useGroupStore();
+  const currentGroup = groups.find((g) => g._id === currentGroupId);
+  const members = currentGroup?.members || [];
 
+  const messages = useGroupStore((state) => state.groupMessages);
   const isAssistant = msg.role === "assistant" || msg.userId === "velora";
   const isMe = msg.userId === user?.id && !isAssistant;
+  
+  let isRequester = msg.metadata?.requesterId === user?.id;
+  if (msg.metadata?.requesterId === undefined && isAssistant) {
+    const myIndex = messages.findIndex((m: GroupMessage) => m._id === msg._id);
+    const prevMsg = myIndex > 0 ? messages[myIndex - 1] : null;
+    if (prevMsg && prevMsg.role === "user") {
+      isRequester = prevMsg.userId === user?.id;
+    }
+  }
+
   const isSystem = msg.role === "system";
   const isUser = msg.role === "user";
 
@@ -227,6 +284,9 @@ const GroupMessageItem = ({
   const [filterText, setFilterText] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
+    Boolean(msg.metadata?.webSearchEnabled)
+  );
   const [isFocused, setIsFocused] = useState(false);
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -244,28 +304,16 @@ const GroupMessageItem = ({
   const CHAR_LIMIT = 500;
   const needsToggle = msg.content.length > CHAR_LIMIT;
 
+  // Fetch providers unconditionally so valid mentions can be highlighted in sent messages
+  useEffect(() => {
+    fetchProvidersGlobally().then(providers => setAvailableProviders(providers));
+  }, []);
+
   useEffect(() => {
     if (isEditing && textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-      
-      const fetchProviders = async () => {
-        try {
-          const res = await api.get("/ai/providers");
-          const rawProviders: Provider[] = res.data.providers || [];
-          const defaultModelId = "gemini:gemini-3.1-flash-lite-preview";
-          const defaultModel = rawProviders.find(p => p.id === defaultModelId);
-          let sortedProviders = [...rawProviders];
-          if (defaultModel) {
-            sortedProviders = [defaultModel, ...rawProviders.filter(p => p.id !== defaultModelId)];
-          }
-          setAvailableProviders(sortedProviders);
-        } catch (err) {
-          console.error("Error fetching providers", err);
-        }
-      };
-      fetchProviders();
     }
   }, [isEditing]);
 
@@ -372,6 +420,9 @@ const GroupMessageItem = ({
         return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
       });
 
+      const isUserMatch = mentionText === "everyone" || members.some(m => m.username.toLowerCase() === mentionText);
+      const isUserPartialMatch = !trailingSpace && !isUserMatch && ("everyone".startsWith(mentionText) || members.some(m => m.username.toLowerCase().startsWith(mentionText)));
+
       if (isValidModel) {
         parts.push(
           <span key={match.index} className="text-emerald-400 font-medium">
@@ -382,6 +433,20 @@ const GroupMessageItem = ({
       } else if (isPartialMatch) {
         parts.push(
           <span key={match.index} className="text-emerald-400/60 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isUserMatch) {
+        parts.push(
+          <span key={match.index} className="text-orange-400 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isUserPartialMatch) {
+        parts.push(
+          <span key={match.index} className="text-orange-400/60 font-medium">
             {fullToken}
           </span>
         );
@@ -513,30 +578,32 @@ const GroupMessageItem = ({
     });
   };
 
-  const handleSelectModel = (cleanModelName: string) => {
+  const handleSelectMention = (mentionName: string, type: "user" | "model" | "everyone") => {
     if (!textareaRef.current) return;
     const selectionStart = textareaRef.current.selectionStart;
     const textBeforeCursor = editContent.substring(0, selectionStart);
     const textAfterCursor = editContent.substring(selectionStart);
     const lastAtPos = textBeforeCursor.lastIndexOf("@");
     if (lastAtPos !== -1) {
-      const textBeforeAt = editContent.substring(0, lastAtPos);
-      const textAfterAt = editContent.substring(selectionStart);
-      const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
-      const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
-      const hasAnotherModel = otherMentions.some((m) => {
-        const mentionText = m.substring(1).toLowerCase();
-        return mentionText === "velora" || availableProviders.some((p) => {
-          const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+      if (type === "model") {
+        const textBeforeAt = editContent.substring(0, lastAtPos);
+        const textAfterAt = editContent.substring(selectionStart);
+        const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
+        const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+        const hasAnotherModel = otherMentions.some((m) => {
+          const mentionText = m.substring(1).toLowerCase();
+          return mentionText === "velora" || availableProviders.some((p) => {
+            const cleanName = getCleanModelName(p.id).toLowerCase();
+            return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+          });
         });
-      });
-      if (hasAnotherModel) {
-        toast.error("Multiple AI model mentions are not allowed");
-        setShowModelDropdown(false);
-        return;
+        if (hasAnotherModel) {
+          toast.error("Multiple AI model mentions are not allowed");
+          setShowModelDropdown(false);
+          return;
+        }
       }
-      const insertText = `@${cleanModelName} `;
+      const insertText = `@${mentionName} `;
       const newInput = editContent.substring(0, lastAtPos) + insertText + textAfterCursor;
       setEditContent(newInput);
       setShowModelDropdown(false);
@@ -551,34 +618,41 @@ const GroupMessageItem = ({
     }
   };
 
-  const filteredProviders = availableProviders.filter((p) => {
+  const filteredUsers = filterText ? members.filter((m) => m.username.toLowerCase().includes(filterText)) : members;
+  const filteredModels = availableProviders.filter((p) => {
     const cleanModelName = getCleanModelName(p.id).toLowerCase();
     const searchString = `${cleanModelName} ${p.name}`.toLowerCase();
     return searchString.includes(filterText);
   });
+  const isEveryoneMatch = "everyone".includes(filterText);
+  const dropdownOptions = [
+    ...(isEveryoneMatch ? [{ type: "everyone" as const, id: "everyone", name: "everyone", originalName: "everyone", avatar: undefined }] : []),
+    ...filteredUsers.map(m => ({ type: "user" as const, id: m.userId, name: m.username, originalName: m.username, avatar: m.userImage })),
+    ...filteredModels.map(p => ({ type: "model" as const, id: p.id, name: getCleanModelName(p.id), originalName: p.name }))
+  ];
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showModelDropdown && filteredProviders.length > 0) {
+    if (showModelDropdown && dropdownOptions.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev + 1) % filteredProviders.length);
+        setActiveIndex((prev) => (prev + 1) % dropdownOptions.length);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + filteredProviders.length) % filteredProviders.length);
+        setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
         return;
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        setActiveIndex((prev) => e.shiftKey ? (prev - 1 + filteredProviders.length) % filteredProviders.length : (prev + 1) % filteredProviders.length);
+        setActiveIndex((prev) => e.shiftKey ? (prev - 1 + dropdownOptions.length) % dropdownOptions.length : (prev + 1) % dropdownOptions.length);
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        const selectedModel = filteredProviders[activeIndex];
-        if (selectedModel) {
-          handleSelectModel(getCleanModelName(selectedModel.id));
+        const selected = dropdownOptions[activeIndex];
+        if (selected) {
+          handleSelectMention(selected.name, selected.type);
         }
         return;
       }
@@ -733,17 +807,24 @@ const GroupMessageItem = ({
           match.startsWith("\r");
 
         const mentionText = match.trim();
-        const modelName = mentionText.substring(1).toLowerCase();
+        const mentionTarget = mentionText.substring(1).toLowerCase();
 
-        const isValidModel = modelName === "velora" || availableProviders.some((p) => {
+        const isValidModel = mentionTarget === "velora" || availableProviders.some((p) => {
           const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === modelName || p.id.toLowerCase() === modelName;
+          return cleanName === mentionTarget || p.id.toLowerCase() === mentionTarget;
         });
+
+        const isUserMatch = mentionTarget === "everyone" || members.some(m => m.username.toLowerCase() === mentionTarget);
 
         if (isValidModel) {
           return (
             (hasLeadingSpace ? " " : "") +
             `<span class="text-emerald-400 font-medium">${mentionText}</span>`
+          );
+        } else if (isUserMatch) {
+          return (
+            (hasLeadingSpace ? " " : "") +
+            `<span class="text-orange-400 font-medium">${mentionText}</span>`
           );
         }
 
@@ -833,12 +914,12 @@ const GroupMessageItem = ({
           >
             {isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px] relative">
-                {showModelDropdown && filteredProviders.length > 0 && (
+                {showModelDropdown && dropdownOptions.length > 0 && (
                   <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
                     <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
                       <span className="flex items-center gap-1.5">
                         <Sparkles size={10} className="text-emerald-400" />
-                        Choose AI Model
+                        Choose Mention
                       </span>
                       <button
                         type="button"
@@ -849,15 +930,14 @@ const GroupMessageItem = ({
                       </button>
                     </div>
                     <div className="space-y-0.5">
-                      {filteredProviders.map((p, index) => {
-                        const cleanModelName = getCleanModelName(p.id);
+                      {dropdownOptions.map((opt, index) => {
                         const isActive = index === activeIndex;
                         return (
                           <button
-                            key={p.id}
+                            key={opt.id + opt.type}
                             ref={isActive ? activeItemRef : undefined}
                             type="button"
-                            onClick={() => handleSelectModel(cleanModelName)}
+                            onClick={() => handleSelectMention(opt.name, opt.type)}
                             data-active={isActive}
                             className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
                               isActive 
@@ -865,9 +945,21 @@ const GroupMessageItem = ({
                                 : "text-slate-400 hover:bg-white/5 hover:text-white"
                             }`}
                           >
-                            {getProviderIcon(p.id, 12)}
+                            {opt.type === "model" ? (
+                              getProviderIcon(opt.id, 12)
+                            ) : opt.type === "everyone" ? (
+                              <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                @
+                              </div>
+                            ) : opt.avatar ? (
+                              <img src={opt.avatar} alt={opt.name} className="w-4 h-4 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[8px] font-bold shrink-0">
+                                {opt.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
                             <span className="truncate capitalize">
-                              @{cleanModelName}
+                              @{opt.name}
                             </span>
                           </button>
                         );
@@ -1103,48 +1195,158 @@ const GroupMessageItem = ({
                   <Copy size={17} />
                 )}
               </button>
+              {/* Like button with per-user reactions */}
+              {(() => {
+                const reactions = msg.reactions || [];
+                const likes = reactions.filter((r) => r.type === "like");
+                const myLike = likes.some((r) => r.userId === user?.id);
 
-              <button
-                onClick={() =>
-                  onFeedback?.(msg.feedback === "like" ? null : "like")
-                }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
-                  msg.feedback === "like"
-                    ? "text-indigo-400 bg-indigo-500/10"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                title="Like"
-              >
-                <ThumbsUp
-                  size={17}
-                  fill={msg.feedback === "like" ? "currentColor" : "none"}
-                />
-              </button>
+                return (
+                  <div className="relative group/like">
+                    <button
+                      onClick={() =>
+                        onFeedback?.(myLike ? null : "like")
+                      }
+                      className={`p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1 ${
+                        myLike
+                          ? "text-indigo-400 bg-indigo-500/10"
+                          : "text-slate-500 hover:text-slate-300"
+                      }`}
+                      title="Like"
+                    >
+                      <ThumbsUp
+                        size={17}
+                        fill={myLike ? "currentColor" : "none"}
+                      />
+                      {likes.length > 0 && (
+                        <span className="text-[11px] font-semibold tabular-nums leading-none">
+                          {likes.length}
+                        </span>
+                      )}
+                    </button>
 
-              <button
-                onClick={() =>
-                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
-                }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
-                  msg.feedback === "dislike"
-                    ? "text-red-400 bg-red-500/10"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-                title="Dislike"
-              >
-                <ThumbsDown
-                  size={17}
-                  fill={msg.feedback === "dislike" ? "currentColor" : "none"}
-                />
-              </button>
+                    {likes.length > 0 && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl bg-slate-800 border border-white/10 shadow-2xl text-[11px] text-slate-200 whitespace-nowrap opacity-0 pointer-events-none group-hover/like:opacity-100 group-hover/like:pointer-events-auto transition-all duration-200 z-50">
+                        <div className="flex flex-col gap-0.5">
+                          {likes.map((r) => (
+                            <span key={r.userId} className="font-medium">
+                              {r.userId === user?.id ? "You" : r.username}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-slate-800" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
-              <button
-                onClick={onRetry}
-                className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
-                title="Retry"
-              >
-                <RotateCcw size={17} />
-              </button>
+              {/* Dislike button with per-user reactions */}
+              {(() => {
+                const reactions = msg.reactions || [];
+                const dislikes = reactions.filter((r) => r.type === "dislike");
+                const myDislike = dislikes.some((r) => r.userId === user?.id);
+
+                return (
+                  <div className="relative group/dislike">
+                    <button
+                      onClick={() =>
+                        onFeedback?.(myDislike ? null : "dislike")
+                      }
+                      className={`p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1 ${
+                        myDislike
+                          ? "text-red-400 bg-red-500/10"
+                          : "text-slate-500 hover:text-slate-300"
+                      }`}
+                      title="Dislike"
+                    >
+                      <ThumbsDown
+                        size={17}
+                        fill={myDislike ? "currentColor" : "none"}
+                      />
+                      {dislikes.length > 0 && (
+                        <span className="text-[11px] font-semibold tabular-nums leading-none">
+                          {dislikes.length}
+                        </span>
+                      )}
+                    </button>
+
+                    {dislikes.length > 0 && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 rounded-xl bg-slate-800 border border-white/10 shadow-2xl text-[11px] text-slate-200 whitespace-nowrap opacity-0 pointer-events-none group-hover/dislike:opacity-100 group-hover/dislike:pointer-events-auto transition-all duration-200 z-50">
+                        <div className="flex flex-col gap-0.5">
+                          {dislikes.map((r) => (
+                            <span key={r.userId} className="font-medium">
+                              {r.userId === user?.id ? "You" : r.username}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-slate-800" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {onRetry && isRequester && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                      title="Regenerate response"
+                    >
+                      <RotateCcw size={17} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="right"
+                    align="end"
+                    className="w-48 bg-slate-900 border-slate-800"
+                    collisionPadding={{ top: 100, bottom: 200 }}
+                  >
+                    <DropdownMenuCheckboxItem
+                      checked={retryWebSearchEnabled}
+                      onCheckedChange={setRetryWebSearchEnabled}
+                      onSelect={(e) => e.preventDefault()}
+                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                    >
+                      <Globe size={14} className="mr-2 opacity-70" />
+                      Web Search
+                    </DropdownMenuCheckboxItem>
+                    
+                    <DropdownMenuSeparator className="bg-slate-800" />
+                    
+                    <DropdownMenuItem
+                      onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
+                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                    >
+                      <RotateCcw size={14} className="mr-2 opacity-70" />
+                      Try Again
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer">
+                        <Bot size={14} className="mr-2 opacity-70" />
+                        Select Another Model
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent 
+                        className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
+                        collisionPadding={{ top: 100, bottom: 200 }}
+                      >
+                        {availableProviders.map((provider) => (
+                          <DropdownMenuItem
+                            key={provider.id}
+                            onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                            className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
+                          >
+                            {getProviderIcon(provider.id, 12)}
+                            <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           )}
 
@@ -1186,7 +1388,7 @@ const areEqual = (
     prev.message._id === next.message._id &&
     prev.message.content === next.message.content &&
     prev.message.status === next.message.status &&
-    prev.message.feedback === next.message.feedback &&
+    prev.message.reactions === next.message.reactions &&
     prev.message.username === next.message.username &&
     prev.message.userImage === next.message.userImage &&
     prev.message.attachments === next.message.attachments &&

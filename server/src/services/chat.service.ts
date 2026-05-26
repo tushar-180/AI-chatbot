@@ -376,6 +376,7 @@ async function* streamAssistantResponse(
   provider?: string,
   includeChatId = false,
   existingAssistantMessageId?: string,
+  webSearchOverride?: boolean,
 ): AsyncGenerator<StreamPayload> {
   const aiProvider = aiService.getProvider(provider);
   const providerName = aiProvider.getProviderName();
@@ -396,7 +397,9 @@ async function* streamAssistantResponse(
     String(chat.userId),
     messagesForPrompt,
     lastUserMessage?.content,
-    Boolean(lastUserMessage?.metadata?.webSearchEnabled),
+    webSearchOverride !== undefined 
+      ? webSearchOverride 
+      : Boolean(lastUserMessage?.metadata?.webSearchEnabled),
     provider,
     chat.projectId ? String(chat.projectId) : undefined,
   );
@@ -1449,11 +1452,13 @@ export const chatService = {
     messageId,
     provider,
     requestId,
+    webSearchEnabled,
   }: {
     chatId: string;
     messageId: string;
     provider?: string;
     requestId: string;
+    webSearchEnabled?: boolean;
   }) {
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
@@ -1514,6 +1519,7 @@ export const chatService = {
       provider,
       false,
       messageId,
+      webSearchEnabled,
     );
   },
 

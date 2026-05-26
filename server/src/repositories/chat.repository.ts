@@ -522,4 +522,13 @@ export const chatRepository = {
   async deleteMessagesByChatId(chatId: string): Promise<void> {
     await Message.deleteMany({ chatId });
   },
+
+  async findUserAttachments(userId: string) {
+    return await Message.find({
+      userId,
+      attachments: { $exists: true, $not: { $size: 0 } },
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+  },
 };

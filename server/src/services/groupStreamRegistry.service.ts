@@ -6,6 +6,8 @@ export interface ActiveGroupStream {
   assistantUsername: string;
   fullResponse: string;
   webSearchEnabled: boolean;
+  model: string;
+  requesterId?: string;
   abortController: AbortController;
   promptMessages?: any[];
   targetProvider?: string;
@@ -38,6 +40,8 @@ export const groupStreamRegistry = {
       assistantUsername,
       fullResponse: "",
       webSearchEnabled,
+      model: targetProvider || "",
+      requesterId: clerkId,
       abortController: new AbortController(),
       promptMessages,
       targetProvider,
