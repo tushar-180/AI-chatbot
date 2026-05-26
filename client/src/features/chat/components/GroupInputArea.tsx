@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, memo } from "react";
 import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X, FileText } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { useGroupStore } from "@/features/chat/store/useGroupStore";
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
 import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
 import OpenAIMono from "@lobehub/icons/es/OpenAI/components/Mono";
@@ -82,7 +83,10 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const { groupId } = useParams<{ groupId?: string }>();
-    const [isFocused, setIsFocused] = useState(false);
+  const { currentGroupId, groups } = useGroupStore();
+  const currentGroup = groups.find((g) => g._id === (groupId || currentGroupId));
+  const members = currentGroup?.members || [];
+  const [isFocused, setIsFocused] = useState(false);
 
   // Clear typed input, attachments, and reset web search when switching group chats
   useEffect(() => {
@@ -248,6 +252,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
       });
 
+      const isUserMatch = mentionText === "everyone" || members.some(m => m.username.toLowerCase() === mentionText);
+      const isUserPartialMatch = !trailingSpace && !isUserMatch && ("everyone".startsWith(mentionText) || members.some(m => m.username.toLowerCase().startsWith(mentionText)));
+
       if (isValidModel) {
         parts.push(
           <span key={match.index} className="text-emerald-400 font-medium">
@@ -258,6 +265,20 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       } else if (isPartialMatch) {
         parts.push(
           <span key={match.index} className="text-emerald-400/60 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isUserMatch) {
+        parts.push(
+          <span key={match.index} className="text-orange-400 font-medium">
+            {fullToken}
+          </span>
+        );
+        if (trailingSpace) parts.push(trailingSpace);
+      } else if (isUserPartialMatch) {
+        parts.push(
+          <span key={match.index} className="text-orange-400/60 font-medium">
             {fullToken}
           </span>
         );
@@ -395,7 +416,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSelectModel = (cleanModelName: string) => {
+  const handleSelectMention = (mentionName: string, type: "user" | "model" | "everyone") => {
     if (!textareaRef.current) return;
 
     const selectionStart = textareaRef.current.selectionStart;
@@ -404,30 +425,31 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
     const lastAtPos = textBeforeCursor.lastIndexOf("@");
     if (lastAtPos !== -1) {
-      // Check if there is already another model mention in the other parts of the input text
-      const textBeforeAt = input.substring(0, lastAtPos);
-      const textAfterAt = input.substring(selectionStart);
-      const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
-      const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
-
-      const hasAnotherModel = otherMentions.some((m) => {
-        const mentionText = m.substring(1).toLowerCase();
-        return (
-          mentionText === "velora" ||
-          availableProviders.some((p) => {
-            const cleanName = getCleanModelName(p.id).toLowerCase();
-            return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-          })
-        );
-      });
-
-      if (hasAnotherModel) {
-        toast.error("Multiple AI model mentions are not allowed");
-        setShowModelDropdown(false);
-        return;
+      if (type === "model") {
+        const textBeforeAt = input.substring(0, lastAtPos);
+        const textAfterAt = input.substring(selectionStart);
+        const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
+        const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+  
+        const hasAnotherModel = otherMentions.some((m) => {
+          const mentionText = m.substring(1).toLowerCase();
+          return (
+            mentionText === "velora" ||
+            availableProviders.some((p) => {
+              const cleanName = getCleanModelName(p.id).toLowerCase();
+              return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+            })
+          );
+        });
+  
+        if (hasAnotherModel) {
+          toast.error("Multiple AI model mentions are not allowed");
+          setShowModelDropdown(false);
+          return;
+        }
       }
 
-      const insertText = `@${cleanModelName} `;
+      const insertText = `@${mentionName} `;
       const newInput = input.substring(0, lastAtPos) + insertText + textAfterCursor;
       setInput(newInput);
       setShowModelDropdown(false);
@@ -443,12 +465,20 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     }
   };
 
-  // Filter based on letters typed after '@'
-  const filteredProviders = availableProviders.filter((p) => {
+  const filteredUsers = filterText ? members.filter((m) => m.username.toLowerCase().includes(filterText)) : members;
+  const filteredModels = availableProviders.filter((p) => {
     const cleanModelName = getCleanModelName(p.id).toLowerCase();
     const searchString = `${cleanModelName} ${p.name}`.toLowerCase();
     return searchString.includes(filterText);
   });
+
+  const isEveryoneMatch = "everyone".includes(filterText);
+
+  const dropdownOptions = [
+    ...(isEveryoneMatch ? [{ type: "everyone" as const, id: "everyone", name: "everyone", originalName: "everyone", avatar: undefined }] : []),
+    ...filteredUsers.map(m => ({ type: "user" as const, id: m.userId, name: m.username, originalName: m.username, avatar: m.userImage })),
+    ...filteredModels.map(p => ({ type: "model" as const, id: p.id, name: getCleanModelName(p.id), originalName: p.name }))
+  ];
 
   // Clamp activeIndex on filter change
   useEffect(() => {
@@ -465,31 +495,31 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   }, [activeIndex]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (showModelDropdown && filteredProviders.length > 0) {
+    if (showModelDropdown && dropdownOptions.length > 0) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev + 1) % filteredProviders.length);
+        setActiveIndex((prev) => (prev + 1) % dropdownOptions.length);
         return;
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + filteredProviders.length) % filteredProviders.length);
+        setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
         return;
       }
       if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          setActiveIndex((prev) => (prev - 1 + filteredProviders.length) % filteredProviders.length);
+          setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
         } else {
-          setActiveIndex((prev) => (prev + 1) % filteredProviders.length);
+          setActiveIndex((prev) => (prev + 1) % dropdownOptions.length);
         }
         return;
       }
       if (e.key === "Enter") {
         e.preventDefault();
-        const selectedModel = filteredProviders[activeIndex];
-        if (selectedModel) {
-          handleSelectModel(getCleanModelName(selectedModel.id));
+        const selected = dropdownOptions[activeIndex];
+        if (selected) {
+          handleSelectMention(selected.name, selected.type);
         }
         return;
       }
@@ -550,12 +580,12 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         className="mx-auto max-w-4xl relative pointer-events-auto"
       >
         {/* Model dropdown popover */}
-        {showModelDropdown && filteredProviders.length > 0 && (
+        {showModelDropdown && dropdownOptions.length > 0 && (
           <div className="absolute bottom-full left-4 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
             <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
               <span className="flex items-center gap-1.5">
                 <Sparkles size={10} className="text-emerald-400" />
-                Choose AI Model
+                Choose Mention
               </span>
               <button
                 type="button"
@@ -566,15 +596,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               </button>
             </div>
             <div className="space-y-0.5">
-              {filteredProviders.map((p, index) => {
-                const cleanModelName = getCleanModelName(p.id);
+              {dropdownOptions.map((opt, index) => {
                 const isActive = index === activeIndex;
                 return (
                   <button
-                    key={p.id}
+                    key={opt.id + opt.type}
                     ref={isActive ? activeItemRef : undefined}
                     type="button"
-                    onClick={() => handleSelectModel(cleanModelName)}
+                    onClick={() => handleSelectMention(opt.name, opt.type)}
                     data-active={isActive}
                     className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
                       isActive 
@@ -582,9 +611,21 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                         : "text-slate-400 hover:bg-white/5 hover:text-white"
                     }`}
                   >
-                    {getProviderIcon(p.id, 12)}
+                    {opt.type === "model" ? (
+                      getProviderIcon(opt.id, 12)
+                    ) : opt.type === "everyone" ? (
+                      <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[10px] font-bold shrink-0">
+                        @
+                      </div>
+                    ) : opt.avatar ? (
+                      <img src={opt.avatar} alt={opt.name} className="w-4 h-4 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[8px] font-bold shrink-0">
+                        {opt.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <span className="truncate capitalize">
-                      @{cleanModelName}
+                      @{opt.name}
                     </span>
                   </button>
                 );
@@ -632,7 +673,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               </>
             )}
             <div className="hidden lg:block text-[10px] text-slate-500 font-semibold uppercase tracking-widest">
-              Type @ to search & mention AI models
+              Type @ to mention users or AI models
             </div>
           </div>
 

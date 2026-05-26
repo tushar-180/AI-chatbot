@@ -378,8 +378,8 @@ const Chat = () => {
                       }
                     }
                   }}
-                  onRetryMessage={(messageId) =>
-                    retryMessage(messageId, selectedProvider)
+                  onRetryMessage={(messageId, provider, webSearchEnabled) =>
+                    retryMessage(messageId, provider || selectedProvider, webSearchEnabled)
                   }
                   onCitationClick={handleCitationClick}
                   onSourcesClick={handleSourcesOpen}
