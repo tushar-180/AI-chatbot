@@ -12,12 +12,17 @@ interface UseChatMessagesOptions {
 export const useChatMessages = ({
   skipFetch = false,
 }: UseChatMessagesOptions = {}) => {
-  const { currentChatId, streamingChatIds, setMessages } =
-    useChatStore();
+  const currentChatId = useChatStore((state) => state.currentChatId);
+  const streamingChatIds = useChatStore((state) => state.streamingChatIds);
+  const setMessages = useChatStore((state) => state.setMessages);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadedChatId, setLoadedChatId] = useState<string | null>(null);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const { user, isLoaded } = useUser();
+
+  const isChatStreaming = Boolean(
+    currentChatId && streamingChatIds[currentChatId] === true,
+  );
 
   useEffect(() => {
     // 1. If no chat is selected, reset states and return
@@ -56,10 +61,6 @@ export const useChatMessages = ({
       });
       return;
     }
-
-    const isChatStreaming = Boolean(
-      currentChatId && streamingChatIds[currentChatId] === true,
-    );
 
     // 2. Let the active stream drive the visible messages without forcing a refetch later.
     if (isChatStreaming) {
@@ -122,7 +123,7 @@ export const useChatMessages = ({
   }, [
     currentChatId,
     isLoaded,
-    streamingChatIds,
+    isChatStreaming,
     skipFetch,
     loadedChatId,
     setMessages,

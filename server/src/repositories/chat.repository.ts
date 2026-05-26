@@ -1,4 +1,4 @@
-import { Chat, Message } from "../models/Chat.model";
+import { Chat, Message, TokenUsageRecord } from "../models/Chat.model";
 import type { ChatMessage } from "../types/chat.types";
 import mongoose from "mongoose";
 
@@ -173,6 +173,18 @@ export const chatRepository = {
     });
 
     if (messageData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: messageData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
       const chat = await Chat.findByIdAndUpdate(
         chatId,
         {
@@ -218,6 +230,18 @@ export const chatRepository = {
     }
 
     if (message?.chatId && updateData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: updateData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
       // Calculate the delta: new tokens minus old tokens (to avoid double-counting on retries)
       const oldTokens = existingMessage?.tokens;
       const deltaPrompt =
@@ -278,6 +302,18 @@ export const chatRepository = {
       returnDocument: "after",
     });
     if (message?.chatId && updateData.tokens) {
+      await TokenUsageRecord.findOneAndUpdate(
+        { messageId: message._id },
+        {
+          userId: message.userId,
+          chatId: message.chatId,
+          role: message.role,
+          model: message.model,
+          tokens: updateData.tokens,
+        },
+        { upsert: true, new: true }
+      );
+
       // Calculate delta: new tokens minus old tokens
       const oldTokens = existingMessage?.tokens;
       const deltaPrompt =

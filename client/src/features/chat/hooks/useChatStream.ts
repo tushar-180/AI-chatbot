@@ -554,7 +554,7 @@ export const useChatStream = (hookOptions?: {
               if (user?.id) {
                 try {
                   const realMessages =
-                    await chatService.fetchMessages(finalChatId);
+                    await chatService.fetchMessages(finalChatId, true);
                   setMessages(realMessages);
                   setOptimisticMessagesForChat(finalChatId, null);
                 } catch (err) {
@@ -607,7 +607,7 @@ export const useChatStream = (hookOptions?: {
         );
 
         chatService
-          .fetchMessages(chatIdToRefresh)
+          .fetchMessages(chatIdToRefresh, true)
           .then((realMessages) => {
             setMessages(realMessages);
             setOptimisticMessagesForChat(chatIdToRefresh, null);
@@ -1094,7 +1094,7 @@ export const useChatStream = (hookOptions?: {
       if (user?.id) {
         await refreshChats();
         if (chatId) {
-          const realMessages = await chatService.fetchMessages(chatId);
+          const realMessages = await chatService.fetchMessages(chatId, true);
           setMessages(realMessages);
           setOptimisticMessagesForChat(chatId, null);
         }

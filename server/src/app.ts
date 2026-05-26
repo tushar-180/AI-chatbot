@@ -27,14 +27,14 @@ export const allowedOrigins = [
   //"https://qpqhnchb-5173.inc1.devtunnels.ms " ,//ani
   "https://44g0q4j6-5173.inc1.devtunnels.ms", // line-to-remove
   process.env.CLIENT_URL,
-  "https://khz5bstr-5173.inc1.devtunnels.ms"
+  "https://khz5bstr-5173.inc1.devtunnels.ms",
 ].filter(Boolean) as string[];
 
 app.use(
-    cors({
-        origin: allowedOrigins,
-        credentials: true,
-    }),
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+  }),
 );
 app.use(express.json());
 app.use(morgan("dev"));
@@ -43,18 +43,17 @@ app.use(morgan("dev"));
 app.use(clerkMiddleware());
 
 app.get("/", (req, res) => {
-    const serverUrl =
-        process.env.SERVER_URL ||
-        `http://localhost:${process.env.PORT || 5000}`;
-    res.send(`API running... Server URL: ${serverUrl}`);
+  const serverUrl =
+    process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+  res.send(`API running... Server URL: ${serverUrl}`);
 });
 
 app.get("/health", (req, res) => {
-    res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true });
 });
 
 app.get("/api/ping", (req, res) => {
-    res.status(200).json({ pong: true });
+  res.status(200).json({ pong: true });
 });
 
 // Routes
