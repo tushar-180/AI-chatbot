@@ -111,19 +111,29 @@ export const useTextSelection = () => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
 
-      // 1. If clicking inside the floating toolbar itself, do NOT dismiss it
       const toolbarElement = document.getElementById("selection-toolbar");
-      if (toolbarElement && toolbarElement.contains(target)) {
-        return;
+
+      // allow toolbar
+      if (toolbarElement?.contains(target)) return;
+
+      // allow message bubble (except when clicking on interactive elements like buttons, inputs, textareas, or selectors)
+      if (target.closest("[data-message-id]")) {
+        const isInteractive = target.closest("button, textarea, input, select, [role='button'], [role='menuitem'], .cursor-pointer");
+        if (!isInteractive) return;
       }
 
-      // 2. Instantly collapse browser selection range to clear it
-      window.getSelection()?.removeAllRanges();
+      // IMPORTANT: delay clearing so selection creation finishes
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) {
+          clearSelection();
+          return;
+        }
 
-      // Otherwise, clear selection on new click start
-      clearSelection();
+        selection.removeAllRanges();
+        clearSelection();
+      }, 0);
     };
-
     document.addEventListener("mousedown", handleDocumentMouseDown);
     document.addEventListener("touchstart", handleDocumentMouseDown);
 

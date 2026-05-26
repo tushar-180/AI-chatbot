@@ -1217,6 +1217,7 @@ export const chatService = {
     webSearchEnabled,
     attachments,
     attachedFile,
+    selection,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const chat = await requireChat(chatId);
@@ -1239,6 +1240,7 @@ export const chatService = {
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
         fileText,
+        ...(selection !== undefined ? { selection } : {}),
       },
     });
 
@@ -1312,6 +1314,7 @@ export const chatService = {
     webSearchEnabled,
     attachments,
     attachedFile,
+    selection,
   }: EditMessageInput) {
     const trimmedMessage = requireMessage(content);
     const resolvedRequestId = requireRequestId(requestId);
@@ -1335,6 +1338,7 @@ export const chatService = {
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
         fileText,
+        ...(selection !== undefined ? { selection } : {}),
       },
     });
 

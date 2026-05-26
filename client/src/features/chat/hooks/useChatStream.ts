@@ -1124,6 +1124,7 @@ export const useChatStream = (hookOptions?: {
       webSearchEnabled?: boolean;
       attachments?: Attachment[];
       attachedFile?: File | null;
+      selection?: any;
     },
   ) => {
     if (!newContent.trim()) return;
@@ -1158,6 +1159,10 @@ export const useChatStream = (hookOptions?: {
       content: newContent,
       attachments: options?.attachments,
       status: "completed",
+      metadata: {
+        ...currentMessages[messageIndex].metadata,
+        ...(options && "selection" in options ? { selection: options.selection } : {}),
+      },
       updatedAt: new Date(
         Math.max(
           Date.now(),
@@ -1214,6 +1219,9 @@ export const useChatStream = (hookOptions?: {
         if (options?.attachments) {
           body.append("attachments", JSON.stringify(options.attachments));
         }
+        if (options?.selection !== undefined) {
+          body.append("selection", typeof options.selection === 'string' ? options.selection : JSON.stringify(options.selection));
+        }
         body.append("file", options.attachedFile);
       } else {
         headers["Content-Type"] = "application/json";
@@ -1223,6 +1231,7 @@ export const useChatStream = (hookOptions?: {
           requestId,
           webSearchEnabled,
           attachments: options?.attachments,
+          selection: options?.selection,
         });
       }
 
