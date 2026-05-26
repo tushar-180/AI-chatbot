@@ -101,7 +101,7 @@ const fetchProvidersGlobally = async () => {
   
   providersPromise = api.get("/ai/providers").then(res => {
     const rawProviders: Provider[] = res.data.providers || [];
-    const defaultModelId = "gemini:gemini-3.5-flash";
+    const defaultModelId = "gemini:gemini-3.1-flash-lite";
     const defaultModel = rawProviders.find((p: Provider) => p.id === defaultModelId);
     let sortedProviders = [...rawProviders];
     if (defaultModel) {

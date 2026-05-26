@@ -72,36 +72,62 @@ export class OpenAIAdapter implements IAIService {
 
           for (const att of msg.attachments) {
             try {
+              let mimeType = att.mimeType || "image/jpeg";
               let imageUrl = att.url;
+              let isSupportedImage = false;
 
               if (att.url.startsWith("http")) {
                 if (OpenAIAdapter.imageCache.has(att.url)) {
                   imageUrl = OpenAIAdapter.imageCache.get(att.url)!;
+                  // If we cached it, we assume it's a valid data URL
+                  isSupportedImage = true;
                 } else {
-                  const res = await fetch(att.url);
-                  if (res.ok) {
-                    const arrayBuffer = await res.arrayBuffer();
-                    const base64Data =
-                      Buffer.from(arrayBuffer).toString("base64");
-                    const mimeType =
-                      att.mimeType ||
-                      res.headers.get("content-type") ||
-                      "image/jpeg";
-                    imageUrl = `data:${mimeType};base64,${base64Data}`;
-                    OpenAIAdapter.imageCache.set(att.url, imageUrl);
+                  // Only fetch if it might be an image to save bandwidth for PDFs/etc
+                  if (!mimeType || mimeType.startsWith("image/")) {
+                    const res = await fetch(att.url);
+                    if (res.ok) {
+                      mimeType = res.headers.get("content-type") || mimeType;
+
+                      // Explicitly exclude SVG from being passed as an image to OpenAI
+                      if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
+                        const arrayBuffer = await res.arrayBuffer();
+                        const base64Data = Buffer.from(arrayBuffer).toString("base64");
+                        imageUrl = `data:${mimeType};base64,${base64Data}`;
+
+                        if (OpenAIAdapter.imageCache.size > 500) {
+                          const firstKey = OpenAIAdapter.imageCache.keys().next().value;
+                          if (firstKey) OpenAIAdapter.imageCache.delete(firstKey);
+                        }
+                        OpenAIAdapter.imageCache.set(att.url, imageUrl);
+                        isSupportedImage = true;
+                      }
+                    } else {
+                      throw new Error(`Fetch failed: ${res.statusText}`);
+                    }
                   }
                 }
               }
 
-              contentParts.push({
-                type: "image_url",
-                image_url: { url: imageUrl },
-              });
+              if (isSupportedImage) {
+                contentParts.push({
+                  type: "image_url",
+                  image_url: { url: imageUrl },
+                });
+              } else {
+                // For SVGs, documents, and other unsupported files, pass the absolute path to the model as text 
+                // so it can use MCP tools to read the file if needed.
+                const mcpPath = (att as any).localPath || att.url;
+                contentParts.push({
+                  type: "text",
+                  text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name || 'document'}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]`
+                });
+              }
             } catch (err) {
-              console.error(
-                `Failed to process image for OpenAI: ${att.url}`,
-                err,
-              );
+              // Silently ignore dead links or unfetchable images
+              contentParts.push({
+                type: "text",
+                text: `\n[File unavailable: ${att.url}]`
+              });
             }
           }
 
@@ -165,7 +191,7 @@ export class OpenAIAdapter implements IAIService {
     let loopCount = 0;
     const maxLoops = 10;
     let finalOutput = "";
-    let totalUsage: ReturnType<typeof normalizeOpenAIUsage>;
+    let totalUsage: ReturnType<typeof normalizeOpenAIUsage> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     try {
       while (hasToolCalls && loopCount < maxLoops) {
@@ -262,7 +288,7 @@ export class OpenAIAdapter implements IAIService {
     ] as any[];
 
     const openAITools = this.mapMcpToolsToOpenAI(tools);
-    let latestUsage: ReturnType<typeof normalizeOpenAIUsage>;
+    let latestUsage: ReturnType<typeof normalizeOpenAIUsage> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     let settleUsage: (usage: ReturnType<typeof normalizeOpenAIUsage>) => void =
       () => undefined;
     let usageSettled = false;

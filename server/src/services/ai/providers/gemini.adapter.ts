@@ -55,6 +55,22 @@ export class GeminiAdapter implements IAIService {
     };
   }
 
+  private async ensureLocalFileExists(localPath: string, url: string) {
+    if (localPath && url && !existsSync(localPath)) {
+      try {
+        await fs.mkdir(path.dirname(localPath), { recursive: true });
+        const res = await fetch(url);
+        if (res.ok) {
+          const buffer = Buffer.from(await res.arrayBuffer());
+          await fs.writeFile(localPath, buffer);
+          console.log(`[Auto-Restore] Restored ${localPath} from Supabase.`);
+        }
+      } catch (err) {
+        console.warn(`[Auto-Restore] Failed to restore ${localPath}:`, err);
+      }
+    }
+  }
+
   private async formatContents(messages: AIMessage[]) {
     const isVision = supportsVision(this.model);
 
@@ -85,26 +101,9 @@ export class GeminiAdapter implements IAIService {
                       !att.mimeType.startsWith("video/") &&
                       !att.mimeType.startsWith("audio/");
 
-                    // Auto-restore mechanism for ephemeral hostings (like Render free tier)
-                    const ensureLocalFileExists = async (localPath: string, url: string) => {
-                      if (localPath && url && !existsSync(localPath)) {
-                        try {
-                          await fs.mkdir(path.dirname(localPath), { recursive: true });
-                          const res = await fetch(url);
-                          if (res.ok) {
-                            const buffer = Buffer.from(await res.arrayBuffer());
-                            await fs.writeFile(localPath, buffer);
-                            console.log(`[Auto-Restore] Restored ${localPath} from Supabase.`);
-                          }
-                        } catch (err) {
-                          console.warn(`[Auto-Restore] Failed to restore ${localPath}:`, err);
-                        }
-                      }
-                    };
-
                     if (isDefinitelyUnsupported) {
                       const mcpPath = (att as any).localPath || att.url;
-                      await ensureLocalFileExists((att as any).localPath, att.url);
+                      await this.ensureLocalFileExists((att as any).localPath, att.url);
                       return { text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]` };
                     }
 
@@ -128,7 +127,7 @@ export class GeminiAdapter implements IAIService {
                     }
 
                     const isImageVideoAudio =
-                      mimeType.startsWith("image/") ||
+                      (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") ||
                       mimeType.startsWith("video/") ||
                       mimeType.startsWith("audio/");
 
@@ -142,9 +141,7 @@ export class GeminiAdapter implements IAIService {
 
                     if (!isImageVideoAudio && (!isDocument || !(att as any).inlineFallback)) {
                       const mcpPath = (att as any).localPath || att.url;
-                      if (typeof ensureLocalFileExists === 'function') {
-                        await ensureLocalFileExists((att as any).localPath, att.url);
-                      }
+                      await this.ensureLocalFileExists((att as any).localPath, att.url);
                       return { text: `\n[CRITICAL INSTRUCTION: The user uploaded the file "${att.name}". It is physically located at exactly this absolute path: ${mcpPath}. DO NOT hallucinate paths like /mnt/data/. You MUST use this exact path ${mcpPath} for all MCP tool executions!]` };
                     }
 
@@ -153,11 +150,16 @@ export class GeminiAdapter implements IAIService {
                       Buffer.from(arrayBuffer).toString("base64");
 
                     const data = { mimeType, data: base64Data };
+                    
+                    if (GeminiAdapter.imageCache.size > 500) {
+                      const firstKey = GeminiAdapter.imageCache.keys().next().value;
+                      if (firstKey) GeminiAdapter.imageCache.delete(firstKey);
+                    }
                     GeminiAdapter.imageCache.set(att.url, data);
 
                     return { inlineData: data };
                   } catch (err) {
-                    console.error(`Failed to process image: ${att.url}`, err);
+                    // Silently ignore dead links or unfetchable images
                     return { text: `\n[File unavailable: ${att.url}]` };
                   }
                 }),
@@ -302,7 +304,7 @@ export class GeminiAdapter implements IAIService {
     let loopCount = 0;
     const maxLoops = 5;
     let finalOutput = "";
-    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
     try {
       while (hasToolCalls && loopCount < maxLoops) {
@@ -445,7 +447,7 @@ export class GeminiAdapter implements IAIService {
       .join("\n\n---\n\n");
 
     const geminiTools = this.mapMcpToolsToGemini(tools);
-    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata>;
+    let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     let settleUsage: (
       usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
     ) => void = () => undefined;

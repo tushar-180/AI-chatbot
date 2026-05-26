@@ -1,4 +1,4 @@
-export const DEFAULT_CHAT_PROVIDER = "gemini:gemini-3.5-flash";
+export const DEFAULT_CHAT_PROVIDER = "gemini:gemini-3.1-flash-lite";
 export const CHAT_TITLE_MAX_LENGTH = 30;
 
 /**

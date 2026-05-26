@@ -140,7 +140,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     const mentions = input.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
     for (const m of mentions) {
       const mentionText = m.substring(1).toLowerCase();
-      if (mentionText === "velora") return "gemini:gemini-3.5-flash";
+      if (mentionText === "velora") return "gemini:gemini-3.1-flash-lite";
       const provider = availableProviders.find(p => {
         const cleanName = getCleanModelName(p.id).toLowerCase();
         return cleanName === mentionText || p.id.toLowerCase() === mentionText;
@@ -170,8 +170,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         const res = await api.get("/ai/providers");
         const rawProviders: Provider[] = res.data.providers || [];
 
-        // Find "gemini:gemini-3.5-flash"
-        const defaultModelId = "gemini:gemini-3.5-flash";
+        // Find "gemini:gemini-3.1-flash-lite"
+        const defaultModelId = "gemini:gemini-3.1-flash-lite";
         const defaultModel = rawProviders.find(p => p.id === defaultModelId);
 
         let sortedProviders = [...rawProviders];
