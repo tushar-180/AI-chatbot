@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import axios from "axios";
 import { API_ORIGIN } from "../lib/api";
@@ -27,6 +28,11 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isRetrying, setIsRetrying] = useState(false);
 
   const [isDismissed, setIsDismissed] = useState(false);
+
+  const isDownRef = useRef(isDown);
+  useEffect(() => {
+    isDownRef.current = isDown;
+  }, [isDown]);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -62,6 +68,10 @@ export const ServerStatusProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const handleServerUp = () => {
+      if (isDownRef.current) {
+        window.location.reload();
+        return;
+      }
       setIsDown(false);
       setIsDismissed(false);
     };

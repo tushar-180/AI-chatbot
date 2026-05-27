@@ -11,15 +11,6 @@ import { mcpClientService } from "./services/mcpClient.service";
 const PORT = process.env.PORT || 5000;
 
 connectDB().then(() => {
-  mcpClientService
-    .initialize()
-    .then(() => {
-      console.log("[MCP] Dynamic client service initialized.");
-    })
-    .catch((err) => {
-      console.error("[MCP] Initialization error:", err);
-    });
-
   const httpServer = createServer(app);
   
   const io = new Server(httpServer, {
@@ -33,6 +24,16 @@ connectDB().then(() => {
 
   httpServer.listen(PORT, () => {
     console.log(`Server Running On Port ${PORT}`);
+
+    // Initialize MCP client service in the background after the server starts listening
+    mcpClientService
+      .initialize()
+      .then(() => {
+        console.log("[MCP] Dynamic client service initialized.");
+      })
+      .catch((err) => {
+        console.error("[MCP] Initialization error:", err);
+      });
   });
 });
 
