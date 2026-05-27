@@ -729,12 +729,12 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             </div>
           )}
 
-          <div className="flex items-end gap-1.5 lg:gap-2 pr-2 pb-1.5 lg:pb-2 pl-2 lg:pl-0">
+          <div className="flex items-end gap-1.5 lg:gap-2 pr-3 lg:pr-4 pt-2 lg:pt-3 pb-2 lg:pb-3 pl-1 lg:pl-0">
             <div className="relative flex-1 min-w-0">
               {/* Backdrop highlight overlay */}
               <div
                 ref={backdropRef}
-                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 lg:px-4 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 bg-transparent border border-transparent"
+                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-slate-100 bg-transparent"
                 style={sharedTextStyles}
               >
                 {highlightMentions(input)}
@@ -770,12 +770,12 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     ? `Cooling down... Please wait ${cooldown}s`
                     : "Message group..."
                 }
-                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-3 py-2 lg:px-4 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 block border border-transparent`}
+                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 block`}
                 style={sharedTextStyles}
               />
             </div>
 
-            <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
+            <div className="flex items-end gap-1.5 lg:gap-2">
               {/* Mic button */}
               <button
                 type="button"
