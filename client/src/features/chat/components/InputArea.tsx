@@ -586,7 +586,7 @@ const InputArea = ({
                 </div>
               )}
 
-              <div className="flex items-end gap-1.5 lg:gap-2 pr-2 pb-1.5 lg:pb-2 pl-2 lg:pl-0">
+              <div className="flex items-end gap-1.5 lg:gap-2 pr-3 lg:pr-4 pt-2 lg:pt-3 pb-2 lg:pb-3 pl-1 lg:pl-1.5">
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -600,7 +600,7 @@ const InputArea = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full mb-1 lg:mb-2 text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
+                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
                     aria-label="Upload image"
                   >
                     {isUploading ? (
@@ -643,9 +643,9 @@ const InputArea = ({
                       });
                     }
                   }}
-                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-14 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent px-2 lg:px-1 py-2 lg:py-3.5 text-[0.95rem] lg:text-[1rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent pl-1 pr-2 lg:pl-0 lg:pr-3 py-2 text-[0.95rem] lg:text-[1rem] leading-5 lg:leading-[1.5rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
                 />
-                <div className="flex items-end gap-1.5 lg:gap-2 pb-1 lg:pb-2">
+                <div className="flex items-end gap-1.5 lg:gap-2">
                   {/* Mic button */}
                   <button
                     type="button"
