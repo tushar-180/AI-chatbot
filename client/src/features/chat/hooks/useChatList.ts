@@ -272,6 +272,9 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
 
+  const loadingRef = useRef(loading);
+  loadingRef.current = loading;
+
   const messagesLengthRef = useRef(useChatStore.getState().messages.length);
   messagesLengthRef.current = useChatStore.getState().messages.length;
 
@@ -281,7 +284,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
     const fetchKey = `${user?.id}-${viewingArchived}`;
     if (
       !user?.id ||
-      loading ||
+      loadingRef.current ||
       isStreamingRef.current ||
       fetchedUserIdRef.current === fetchKey
     ) {
@@ -312,7 +315,7 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
           !isSharedChatRoute &&
           !currentChatIdRef.current &&
           !isNewChatRef.current &&
-          !loading &&
+          !loadingRef.current &&
           !isStreamingRef.current &&
           messagesLengthRef.current === 0;
 
@@ -334,7 +337,6 @@ export const useChatList = ({ shouldFetch = false } = {}) => {
   }, [
     user?.id,
     isSharedChatRoute,
-    loading,
     setChats,
     setCurrentChat,
     setMessages,
