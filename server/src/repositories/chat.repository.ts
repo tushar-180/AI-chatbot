@@ -531,4 +531,64 @@ export const chatRepository = {
       .sort({ createdAt: -1 })
       .lean();
   },
+
+  /**
+   * Fetch recent messages from all chats within a project,
+   * excluding the current chat. Used for cross-chat project memory.
+   *
+   * @param projectId  - The project to scope the query to
+   * @param excludeChatId - The current chat to exclude (its messages are already in context)
+   * @param messagesPerChat - How many recent messages to take from each sibling chat
+   * @param maxChats  - Cap on how many sibling chats to include (most-recently-updated first)
+   */
+  async findRecentMessagesByProjectId(
+    projectId: string,
+    excludeChatId: string,
+    messagesPerChat = 6,
+    maxChats = 5,
+  ): Promise<Array<{ chatTitle: string; messages: Array<{ role: string; content: string }> }>> {
+    // 1. Find the most-recently-updated sibling chats
+    const siblingChats = await Chat.find({
+      projectId,
+      _id: { $ne: excludeChatId },
+    })
+      .select("_id title")
+      .sort({ updatedAt: -1 })
+      .limit(maxChats)
+      .lean();
+
+    if (!siblingChats.length) return [];
+
+    // 2. For each sibling chat, grab its last N user/assistant messages
+    const results = await Promise.all(
+      siblingChats.map(async (chat) => {
+        const msgs = await Message.find({
+          chatId: chat._id,
+          role: { $in: ["user", "assistant"] },
+          status: "completed",
+        })
+          .select("role content")
+          .sort({ createdAt: -1 })
+          .limit(messagesPerChat)
+          .lean();
+
+        // Reverse so they appear in chronological order
+        const chronological = msgs.reverse().map((m) => ({
+          role: m.role as string,
+          content:
+            typeof m.content === "string" && m.content.length > 800
+              ? m.content.slice(0, 800) + "…"
+              : (m.content as string) || "",
+        }));
+
+        return {
+          chatTitle: (chat as any).title || "Untitled Chat",
+          messages: chronological,
+        };
+      }),
+    );
+
+    // Only return chats that actually have messages
+    return results.filter((r) => r.messages.length > 0);
+  },
 };
