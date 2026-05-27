@@ -44,10 +44,10 @@ const MetricTile = ({
   }[tone];
 
   return (
-    <div className="rounded-lg border border-white/5 bg-slate-950/60 p-4">
+    <div className="rounded-lg border border-zinc-800/40 bg-zinc-900/60 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</p>
           <p className="mt-2 font-mono text-2xl font-black leading-none text-white">{value}</p>
         </div>
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${toneClass}`}>
@@ -267,7 +267,7 @@ const McpAdminTab = () => {
             </span>
             <div>
               <h2 className="text-xl font-bold tracking-tight text-white">MCP Registry</h2>
-              <p className="mt-1 max-w-2xl text-xs font-medium leading-relaxed text-slate-400">
+              <p className="mt-1 max-w-2xl text-xs font-medium leading-relaxed text-zinc-400">
                 Manage local stdio servers, remote SSE integrations, and the tools currently exposed to chat models.
               </p>
             </div>
@@ -278,7 +278,7 @@ const McpAdminTab = () => {
               type="button"
               onClick={() => void fetchMcpData()}
               disabled={isLoading}
-              className="flex h-10 items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 text-xs font-bold uppercase tracking-widest text-slate-300 transition hover:border-white/10 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-10 items-center gap-2 rounded-lg border border-zinc-800/40 bg-white/5 px-3 text-xs font-bold uppercase tracking-widest text-zinc-300 transition hover:border-zinc-700/60 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
               <span>Refresh</span>
@@ -305,12 +305,12 @@ const McpAdminTab = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-bold uppercase tracking-widest text-white">Configured Servers</h3>
-            <p className="mt-1 text-xs font-medium text-slate-500">
+            <p className="mt-1 text-xs font-medium text-zinc-500">
               {mcpServers.length === 0 ? "No servers in the registry yet." : "Expand a server to inspect configuration and tool schemas."}
             </p>
           </div>
           {isLoading && mcpServers.length > 0 && (
-            <span className="inline-flex items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <span className="inline-flex items-center gap-2 rounded-lg border border-zinc-800/40 bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
               <Loader2 size={12} className="animate-spin" />
               Syncing
             </span>
@@ -318,15 +318,15 @@ const McpAdminTab = () => {
         </div>
 
         {isLoading && mcpServers.length === 0 ? (
-          <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-white/5 bg-slate-950/50 p-8 text-center">
+          <div className="flex min-h-56 flex-col items-center justify-center rounded-lg border border-zinc-800/40 bg-zinc-900/50 p-8 text-center">
             <Loader2 size={24} className="mb-3 animate-spin text-sky-300" />
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Syncing MCP registry</p>
+            <p className="text-xs font-bold uppercase tracking-widest text-zinc-400">Syncing MCP registry</p>
           </div>
         ) : mcpServers.length === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-slate-950/30 p-8 text-center">
-            <Cpu size={30} className="mb-4 text-slate-700" />
+          <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-800/40 bg-zinc-900/30 p-8 text-center">
+            <Cpu size={30} className="mb-4 text-zinc-700" />
             <h4 className="text-sm font-bold text-white">No MCP servers registered</h4>
-            <p className="mt-2 max-w-sm text-xs font-medium leading-relaxed text-slate-500">
+            <p className="mt-2 max-w-sm text-xs font-medium leading-relaxed text-zinc-500">
               Register a command or SSE endpoint to make external tools available to supported models.
             </p>
             <button

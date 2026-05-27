@@ -61,23 +61,23 @@
 
 .dark {
   color-scheme: dark;
-  --background: #030712;
-  --foreground: #e2e8f0;
-  --muted: #94a3b8;
-  --border: rgba(148, 163, 184, 0.18);
-  --card: #0f172a;
-  --card-foreground: #e2e8f0;
-  --surface: rgba(148, 163, 184, 0.08);
-  --surface-strong: rgba(148, 163, 184, 0.14);
-  --primary: #6366f1;
-  --primary-foreground: #ffffff;
-  --accent: #38bdf8;
-  --accent-foreground: #0f172a;
-  --ring: #818cf8;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --muted: #a1a1aa;
+  --border: rgba(244, 244, 245, 0.08);
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --surface: rgba(244, 244, 245, 0.04);
+  --surface-strong: rgba(244, 244, 245, 0.08);
+  --primary: #f4f4f5;
+  --primary-foreground: #09090b;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --ring: #71717a;
 
-  /* Glow colors */
-  --glow-primary: rgba(99, 102, 241, 0.12);
-  --glow-accent: rgba(56, 189, 248, 0.08);
+  /* Glow colors - ultra subtle minimal light */
+  --glow-primary: rgba(255, 255, 255, 0.015);
+  --glow-accent: rgba(255, 255, 255, 0.008);
 }
 
 @layer base {
@@ -368,6 +368,54 @@
 
 .animate-draw-line-horiz {
   animation: draw-grid-line-horiz 2.5s cubic-bezier(0.85, 0, 0.15, 1) forwards;
+}
+
+/* Floating particle animation */
+@keyframes float-particle {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  25% {
+    transform: translateY(-30px) translateX(10px);
+  }
+  50% {
+    transform: translateY(-15px) translateX(-8px);
+  }
+  75% {
+    transform: translateY(-40px) translateX(5px);
+  }
+}
+
+.animate-float-particle {
+  animation: float-particle 20s ease-in-out infinite;
+}
+
+/* Slow orbit spin */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 45s linear infinite;
+}
+
+/* Reverse slow orbit spin */
+@keyframes spin-slow-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-spin-slow-reverse {
+  animation: spin-slow-reverse 50s linear infinite;
 }
 
 .code-block {

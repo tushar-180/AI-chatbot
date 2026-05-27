@@ -66,10 +66,20 @@ interface MessageListProps {
   onEditMessage?: (
     messageId: string,
     content: string,
-    options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }
+    options?: {
+      provider?: string;
+      webSearchEnabled?: boolean;
+      attachments?: any[];
+      attachedFile?: File | null;
+      selection?: any;
+    },
   ) => void;
   onEditStart?: () => void;
-  onRetryMessage?: (messageId: string, provider?: string, webSearchEnabled?: boolean) => void;
+  onRetryMessage?: (
+    messageId: string,
+    provider?: string,
+    webSearchEnabled?: boolean,
+  ) => void;
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
@@ -335,8 +345,9 @@ const MessageList = forwardRef<
     return (
       <div
         ref={scrollContainerRef}
-        className={`px-4 py-8 md:px-10 [overflow-anchor:none] ${showSuggestions ? "scrollbar-hide" : ""
-          }`}
+        className={`px-4 py-8 md:px-10 [overflow-anchor:none] ${
+          showSuggestions ? "scrollbar-hide" : ""
+        }`}
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-8">
           {isTemporaryChatActive && messages.length > 0 && (
@@ -364,10 +375,10 @@ const MessageList = forwardRef<
                   />
                 </div>
 
-                <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
-                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+                <div className="flex items-center gap-1.5 rounded-2xl bg-zinc-900/80 px-5 py-4 ring-1 ring-zinc-800/60">
+                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
+                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
+                  <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400" />
                 </div>
               </div>
             </div>
@@ -399,19 +410,23 @@ const MessageList = forwardRef<
                   </div>
 
                   <h2 className="mb-3 font-display text-2xl lg:text-[1.85rem] xl:text-[2rem] font-bold tracking-tight text-white leading-tight">
-                    {isTemporaryChatActive ? "Temporary Chat Mode" : `Hello ${dbUser?.firstName || ""}, how can I help you today?`}
+                    {isTemporaryChatActive
+                      ? "Temporary Chat Mode"
+                      : `Hello ${dbUser?.firstName || ""}, how can I help?`}
                   </h2>
 
-                  <p className="max-w-md text-sm lg:text-base leading-relaxed tracking-[0.01em] text-slate-400">
+                  <p className="max-w-md text-sm lg:text-base leading-relaxed tracking-[0.01em] text-zinc-400">
                     {isTemporaryChatActive ? (
                       "This chat is secure and completely stateless. Messages, metadata, and responses exist only in-memory and will be permanently erased once you leave."
                     ) : isNewChat ? (
                       <>
                         <span className="hidden lg:inline">
-                          Your new conversation is ready. Choose a suggestion below or send a message to get started.
+                          Your new conversation is ready. Choose a suggestion
+                          below or send a message to get started.
                         </span>
                         <span className="lg:hidden">
-                          Your new conversation is ready. Send a message to get started.
+                          Your new conversation is ready. Send a message to get
+                          started.
                         </span>
                       </>
                     ) : (
@@ -425,33 +440,44 @@ const MessageList = forwardRef<
                     <button
                       key={idx}
                       onClick={() => onSuggestionClick?.(suggestion.prompt)}
-                      className={`group flex flex-col items-start rounded-2xl border p-4 lg:p-5 text-left transition-all duration-300 active:scale-[0.99] lg:active:scale-100 cursor-pointer ${isTemporaryChatActive
+                      className={`group flex flex-col items-start rounded-2xl border p-4 lg:p-5 text-left transition-all duration-300 active:scale-[0.99] lg:active:scale-100 cursor-pointer ${
+                        isTemporaryChatActive
                           ? "border-emerald-500/10 bg-emerald-950/[0.02] hover:border-emerald-500/30 hover:bg-emerald-950/[0.06] hover:shadow-[0_0_20px_rgba(16,185,129,0.05)] active:bg-emerald-500/10"
-                          : "border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-indigo-500/[0.03] active:bg-white/[0.08]"
-                        }`}
+                          : "border-zinc-800/50 bg-zinc-900/20 hover:border-zinc-700/60 hover:bg-zinc-800/30 active:bg-zinc-800/50"
+                      }`}
                     >
                       <div className="mb-2.5 flex items-center gap-3 text-slate-400 transition-colors duration-300 group-hover:text-slate-200">
                         <div
-                          className={`flex h-8 w-8 lg:h-9 lg:w-9 shrink-0 items-center justify-center rounded-xl bg-slate-800/60 transition-all duration-300 ${isTemporaryChatActive
+                          className={`flex h-8 w-8 lg:h-9 lg:w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-800/60 transition-all duration-300 ${
+                            isTemporaryChatActive
                               ? "group-hover:bg-emerald-500/[0.12] group-hover:shadow-sm group-hover:shadow-emerald-500/20 group-hover:text-emerald-400"
-                              : "group-hover:bg-indigo-500/[0.12] group-hover:shadow-sm group-hover:shadow-indigo-500/20 group-hover:text-indigo-400"
-                            }`}
+                              : "group-hover:bg-zinc-700/60 group-hover:text-zinc-200"
+                          }`}
                         >
-                          <suggestion.icon size={16} strokeWidth={1.8} className="lg:hidden" />
-                          <suggestion.icon size={18} strokeWidth={1.8} className="hidden lg:block" />
+                          <suggestion.icon
+                            size={16}
+                            strokeWidth={1.8}
+                            className="lg:hidden"
+                          />
+                          <suggestion.icon
+                            size={18}
+                            strokeWidth={1.8}
+                            className="hidden lg:block"
+                          />
                         </div>
 
                         <span
-                          className={`text-sm lg:text-base font-semibold tracking-tight transition-colors duration-300 ${isTemporaryChatActive
+                          className={`text-sm lg:text-base font-semibold tracking-tight transition-colors duration-300 ${
+                            isTemporaryChatActive
                               ? "group-hover:text-emerald-300"
-                              : "group-hover:text-slate-200"
-                            }`}
+                              : "group-hover:text-zinc-100"
+                          }`}
                         >
                           {suggestion.title}
                         </span>
                       </div>
 
-                      <p className="pl-0 lg:pl-12 text-[13px] lg:text-sm leading-relaxed text-slate-500 transition-colors duration-300 group-hover:text-slate-400">
+                      <p className="pl-0 lg:pl-12 text-[13px] lg:text-sm leading-relaxed text-zinc-500 transition-colors duration-300 group-hover:text-zinc-400">
                         {suggestion.desc}
                       </p>
                     </button>
@@ -460,10 +486,10 @@ const MessageList = forwardRef<
               </div>
             ) : messagesError && currentChatId && messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
-                <p className="text-base font-semibold tracking-tight text-slate-200">
+                <p className="text-base font-semibold tracking-tight text-zinc-200">
                   Unable to load messages
                 </p>
-                <p className="mt-2.5 max-w-md text-sm leading-relaxed text-slate-500">
+                <p className="mt-2.5 max-w-md text-sm leading-relaxed text-zinc-500">
                   {messagesError}
                 </p>
               </div>
@@ -474,23 +500,25 @@ const MessageList = forwardRef<
               <div
                 className={`flex flex-col items-center justify-center py-24 text-center `}
               >
-                <p className="text-base tracking-wide text-slate-500 hidden">
+                <p className="text-base tracking-wide text-zinc-500 hidden">
                   No messages yet. The stage is yours.
                 </p>
               </div>
             ) : (
               <>
                 {messages.map((msg, i) => {
-
                   return (
-
                     <MessageItem
                       key={msg.id}
                       message={msg}
                       isStreaming={isStreaming && i === messages.length - 1}
-                      onEdit={(content, options) => onEditMessage?.(msg.id, content, options)}
+                      onEdit={(content, options) =>
+                        onEditMessage?.(msg.id, content, options)
+                      }
                       onEditStart={onEditStart}
-                      onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg.id, provider, webSearchEnabled)}
+                      onRetry={(provider, webSearchEnabled) =>
+                        onRetryMessage?.(msg.id, provider, webSearchEnabled)
+                      }
                       onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
                       highlight={highlight || undefined}
                       onCitationClick={onCitationClick}
@@ -509,7 +537,7 @@ const MessageList = forwardRef<
                         scrollToBottom(true);
                       }}
                       aria-label="Scroll to bottom"
-                      className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-white/10 bg-slate-900/90 px-3 text-slate-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-white/20 hover:bg-slate-800 active:scale-95"
+                      className="pointer-events-auto flex h-11 min-w-11 items-center justify-center rounded-full border border-zinc-800/60 bg-zinc-900/90 px-3 text-zinc-200 shadow-lg shadow-black/30 backdrop-blur transition-all duration-200 hover:scale-110 hover:border-zinc-700 hover:bg-zinc-800 active:scale-95"
                     >
                       {isStreaming ? (
                         <div className="flex items-center gap-1">

@@ -1,5 +1,16 @@
 import React, { useState, useRef, useEffect, memo } from "react";
-import { ArrowUp, Loader2, Users, Sparkles, Globe, Square, Mic, Paperclip, X, FileText } from "lucide-react";
+import {
+  ArrowUp,
+  Loader2,
+  Users,
+  Sparkles,
+  Globe,
+  Square,
+  Mic,
+  Paperclip,
+  X,
+  FileText,
+} from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useGroupStore } from "@/features/chat/store/useGroupStore";
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
@@ -13,7 +24,12 @@ import type { Attachment } from "@/features/chat/hooks/useChatInput";
 import { supportsVision } from "@/features/chat/constants/chat.constants";
 
 interface GroupInputAreaProps {
-  onSubmit: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[], attachedFile?: File | null) => Promise<void>;
+  onSubmit: (
+    content: string,
+    webSearchEnabled?: boolean,
+    attachments?: Attachment[],
+    attachedFile?: File | null,
+  ) => Promise<void>;
   isStreaming?: boolean;
   onStop?: () => void;
   onTyping?: (isTyping: boolean) => void;
@@ -39,7 +55,9 @@ const getProviderIcon = (providerId: string, size = 14) => {
 const getCleanModelName = (id: string) => {
   // e.g. "nvidia:nvidia/nemotron-3-super-120b-a12b" -> "nemotron-3-super-120b-a12b"
   const afterColon = id.includes(":") ? id.split(":")[1] : id;
-  return afterColon.includes("/") ? afterColon.split("/").pop() || afterColon : afterColon;
+  return afterColon.includes("/")
+    ? afterColon.split("/").pop() || afterColon
+    : afterColon;
 };
 
 const WebSearchToggle = ({
@@ -53,10 +71,11 @@ const WebSearchToggle = ({
     <button
       type="button"
       onClick={() => onToggle(!enabled)}
-      className={`flex items-center gap-1.5 lg:gap-2 rounded-lg border transition-all px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest cursor-pointer ${enabled
+      className={`flex items-center gap-1.5 lg:gap-2 rounded-lg border transition-all px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest cursor-pointer ${
+        enabled
           ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200 shadow-[0_0_10px_rgba(52,211,153,0.15)]"
-          : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
-        }`}
+          : "border-zinc-800/60 bg-white/5 text-zinc-400 lg:text-zinc-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+      }`}
     >
       <Globe size={12} className="shrink-0" />
       <span>Web Search</span>
@@ -64,7 +83,12 @@ const WebSearchToggle = ({
   );
 };
 
-const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming = false, onStop, onTyping }) => {
+const GroupInputArea: React.FC<GroupInputAreaProps> = ({
+  onSubmit,
+  isStreaming = false,
+  onStop,
+  onTyping,
+}) => {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [availableProviders, setAvailableProviders] = useState<Provider[]>([]);
@@ -83,7 +107,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const [isUploading, setIsUploading] = useState(false);
   const { groupId } = useParams<{ groupId?: string }>();
   const { currentGroupId, groups } = useGroupStore();
-  const currentGroup = groups.find((g) => g._id === (groupId || currentGroupId));
+  const currentGroup = groups.find(
+    (g) => g._id === (groupId || currentGroupId),
+  );
   const members = currentGroup?.members || [];
   const [isFocused, setIsFocused] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -128,7 +154,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         mentionText === "velora" ||
         availableProviders.some((p) => {
           const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+          return (
+            cleanName === mentionText || p.id.toLowerCase() === mentionText
+          );
         })
       );
     });
@@ -141,7 +169,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     for (const m of mentions) {
       const mentionText = m.substring(1).toLowerCase();
       if (mentionText === "velora") return "gemini:gemini-3.1-flash-lite";
-      const provider = availableProviders.find(p => {
+      const provider = availableProviders.find((p) => {
         const cleanName = getCleanModelName(p.id).toLowerCase();
         return cleanName === mentionText || p.id.toLowerCase() === mentionText;
       });
@@ -172,14 +200,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
 
         // Find "gemini:gemini-3.1-flash-lite"
         const defaultModelId = "gemini:gemini-3.1-flash-lite";
-        const defaultModel = rawProviders.find(p => p.id === defaultModelId);
+        const defaultModel = rawProviders.find((p) => p.id === defaultModelId);
 
         let sortedProviders = [...rawProviders];
         if (defaultModel) {
           // Filter it out and unshift to the very top as default
           sortedProviders = [
             defaultModel,
-            ...rawProviders.filter(p => p.id !== defaultModelId)
+            ...rawProviders.filter((p) => p.id !== defaultModelId),
           ];
         }
 
@@ -249,45 +277,63 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       const trailingSpace = match[2];
       const mentionText = fullToken.substring(1).toLowerCase();
 
-      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
-        const cleanName = getCleanModelName(p.id).toLowerCase();
-        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-      });
+      const isValidModel =
+        mentionText === "velora" ||
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return (
+            cleanName === mentionText || p.id.toLowerCase() === mentionText
+          );
+        });
 
-      const isPartialMatch = !trailingSpace && !isValidModel && availableProviders.some((p) => {
-        const cleanName = getCleanModelName(p.id).toLowerCase();
-        return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
-      });
+      const isPartialMatch =
+        !trailingSpace &&
+        !isValidModel &&
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return (
+            cleanName.startsWith(mentionText) ||
+            p.id.toLowerCase().startsWith(mentionText)
+          );
+        });
 
-      const isUserMatch = mentionText === "everyone" || members.some(m => m.username.toLowerCase() === mentionText);
-      const isUserPartialMatch = !trailingSpace && !isUserMatch && ("everyone".startsWith(mentionText) || members.some(m => m.username.toLowerCase().startsWith(mentionText)));
+      const isUserMatch =
+        mentionText === "everyone" ||
+        members.some((m) => m.username.toLowerCase() === mentionText);
+      const isUserPartialMatch =
+        !trailingSpace &&
+        !isUserMatch &&
+        ("everyone".startsWith(mentionText) ||
+          members.some((m) =>
+            m.username.toLowerCase().startsWith(mentionText),
+          ));
 
       if (isValidModel) {
         parts.push(
           <span key={match.index} className="text-emerald-400 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isPartialMatch) {
         parts.push(
           <span key={match.index} className="text-emerald-400/60 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isUserMatch) {
         parts.push(
           <span key={match.index} className="text-orange-400 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isUserPartialMatch) {
         parts.push(
           <span key={match.index} className="text-orange-400/60 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else {
@@ -309,10 +355,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     let count = 0;
     for (const m of mentions) {
       const mentionText = m.substring(1).toLowerCase();
-      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
-        const cleanName = getCleanModelName(p.id).toLowerCase();
-        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-      });
+      const isValidModel =
+        mentionText === "velora" ||
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return (
+            cleanName === mentionText || p.id.toLowerCase() === mentionText
+          );
+        });
       if (isValidModel) {
         count++;
       }
@@ -425,7 +475,10 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSelectMention = (mentionName: string, type: "user" | "model" | "everyone") => {
+  const handleSelectMention = (
+    mentionName: string,
+    type: "user" | "model" | "everyone",
+  ) => {
     if (!textareaRef.current) return;
 
     const selectionStart = textareaRef.current.selectionStart;
@@ -438,7 +491,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
         const textBeforeAt = input.substring(0, lastAtPos);
         const textAfterAt = input.substring(selectionStart);
         const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
-        const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+        const otherMentions: string[] =
+          textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
 
         const hasAnotherModel = otherMentions.some((m) => {
           const mentionText = m.substring(1).toLowerCase();
@@ -446,7 +500,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
             mentionText === "velora" ||
             availableProviders.some((p) => {
               const cleanName = getCleanModelName(p.id).toLowerCase();
-              return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+              return (
+                cleanName === mentionText || p.id.toLowerCase() === mentionText
+              );
             })
           );
         });
@@ -459,7 +515,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       }
 
       const insertText = `@${mentionName} `;
-      const newInput = input.substring(0, lastAtPos) + insertText + textAfterCursor;
+      const newInput =
+        input.substring(0, lastAtPos) + insertText + textAfterCursor;
       setInput(newInput);
       setShowModelDropdown(false);
       setFilterText("");
@@ -474,7 +531,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
     }
   };
 
-  const filteredUsers = filterText ? members.filter((m) => m.username.toLowerCase().includes(filterText)) : members;
+  const filteredUsers = filterText
+    ? members.filter((m) => m.username.toLowerCase().includes(filterText))
+    : members;
   const filteredModels = availableProviders.filter((p) => {
     const cleanModelName = getCleanModelName(p.id).toLowerCase();
     const searchString = `${cleanModelName} ${p.name}`.toLowerCase();
@@ -484,9 +543,30 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
   const isEveryoneMatch = "everyone".includes(filterText);
 
   const dropdownOptions = [
-    ...(isEveryoneMatch ? [{ type: "everyone" as const, id: "everyone", name: "everyone", originalName: "everyone", avatar: undefined }] : []),
-    ...filteredUsers.map(m => ({ type: "user" as const, id: m.userId, name: m.username, originalName: m.username, avatar: m.userImage })),
-    ...filteredModels.map(p => ({ type: "model" as const, id: p.id, name: getCleanModelName(p.id), originalName: p.name }))
+    ...(isEveryoneMatch
+      ? [
+          {
+            type: "everyone" as const,
+            id: "everyone",
+            name: "everyone",
+            originalName: "everyone",
+            avatar: undefined,
+          },
+        ]
+      : []),
+    ...filteredUsers.map((m) => ({
+      type: "user" as const,
+      id: m.userId,
+      name: m.username,
+      originalName: m.username,
+      avatar: m.userImage,
+    })),
+    ...filteredModels.map((p) => ({
+      type: "model" as const,
+      id: p.id,
+      name: getCleanModelName(p.id),
+      originalName: p.name,
+    })),
   ];
 
   // Clamp activeIndex on filter change
@@ -512,13 +592,19 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
+        setActiveIndex(
+          (prev) =>
+            (prev - 1 + dropdownOptions.length) % dropdownOptions.length,
+        );
         return;
       }
       if (e.key === "Tab") {
         e.preventDefault();
         if (e.shiftKey) {
-          setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
+          setActiveIndex(
+            (prev) =>
+              (prev - 1 + dropdownOptions.length) % dropdownOptions.length,
+          );
         } else {
           setActiveIndex((prev) => (prev + 1) % dropdownOptions.length);
         }
@@ -590,8 +676,8 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
       >
         {/* Model dropdown popover */}
         {showModelDropdown && dropdownOptions.length > 0 && (
-          <div className="absolute bottom-full left-4 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
-            <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+          <div className="absolute bottom-full left-4 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-zinc-800/60 bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
+            <div className="mb-1.5 flex items-center justify-between border-b border-zinc-800/40 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <Sparkles size={10} className="text-emerald-400" />
                 Choose Mention
@@ -599,7 +685,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               <button
                 type="button"
                 onClick={() => setShowModelDropdown(false)}
-                className="text-slate-600 hover:text-white transition-colors text-[10px]"
+                className="text-zinc-600 hover:text-white transition-colors text-[10px]"
               >
                 ✕
               </button>
@@ -614,10 +700,11 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     type="button"
                     onClick={() => handleSelectMention(opt.name, opt.type)}
                     data-active={isActive}
-                    className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${isActive
+                    className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
+                      isActive
                         ? "bg-white text-black font-semibold shadow-md shadow-white/5"
-                        : "text-slate-400 hover:bg-white/5 hover:text-white"
-                      }`}
+                        : "text-zinc-400 hover:bg-white/5 hover:text-white"
+                    }`}
                   >
                     {opt.type === "model" ? (
                       getProviderIcon(opt.id, 12)
@@ -626,15 +713,17 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                         @
                       </div>
                     ) : opt.avatar ? (
-                      <img src={opt.avatar} alt={opt.name} className="w-4 h-4 rounded-full object-cover shrink-0" />
+                      <img
+                        src={opt.avatar}
+                        alt={opt.name}
+                        className="w-4 h-4 rounded-full object-cover shrink-0"
+                      />
                     ) : (
                       <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[8px] font-bold shrink-0">
                         {opt.name.charAt(0).toUpperCase()}
                       </div>
                     )}
-                    <span className="truncate capitalize">
-                      @{opt.name}
-                    </span>
+                    <span className="truncate capitalize">@{opt.name}</span>
                   </button>
                 );
               })}
@@ -642,7 +731,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
           </div>
         )}
 
-        <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+        <div className="group relative flex flex-col gap-0 rounded-3xl border border-zinc-800/60 bg-zinc-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
           {/* Top Label */}
           <div className="flex flex-wrap items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3">
             <div className="flex items-center gap-1.5 lg:gap-2 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-emerald-300">
@@ -668,11 +757,14 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isUploading}
-                  className="flex items-center gap-1.5 lg:gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-slate-400 lg:text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 lg:gap-2 rounded-lg border border-zinc-800/60 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-zinc-400 lg:text-zinc-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50 cursor-pointer"
                   aria-label="Upload image"
                 >
                   {isUploading ? (
-                    <Loader2 size={12} className="animate-spin text-white shrink-0" />
+                    <Loader2
+                      size={12}
+                      className="animate-spin text-white shrink-0"
+                    />
                   ) : (
                     <Paperclip size={12} className="shrink-0" />
                   )}
@@ -680,18 +772,18 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 </button>
               </>
             )}
-            <div className="hidden lg:block text-[10px] text-slate-500 font-semibold uppercase tracking-widest">
+            <div className="hidden lg:block text-[10px] text-zinc-500 font-semibold uppercase tracking-widest">
               Type @ to mention users or AI models
             </div>
           </div>
 
           {/* Attachment Previews */}
           {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-white/5">
+            <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-zinc-800/40">
               {attachments.map((att, i) => (
                 <div
                   key={att.url}
-                  className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                  className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5"
                 >
                   <img
                     src={att.url}
@@ -713,9 +805,9 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
           {/* Document Previews */}
           {attachedFile && (
             <div className="flex flex-wrap gap-2 px-4 py-2">
-              <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
-                <FileText size={20} className="text-slate-300 shrink-0" />
-                <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+              <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5 flex flex-col items-center justify-center">
+                <FileText size={20} className="text-zinc-300 shrink-0" />
+                <span className="mt-1 line-clamp-2 text-[9px] text-zinc-400 text-center">
                   {attachedFile.name}
                 </span>
                 <button
@@ -734,7 +826,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               {/* Backdrop highlight overlay */}
               <div
                 ref={backdropRef}
-                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-slate-100 bg-transparent"
+                className="absolute inset-0 pointer-events-none select-none overflow-y-auto whitespace-pre-wrap break-words px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-zinc-100 bg-transparent"
                 style={sharedTextStyles}
               >
                 {highlightMentions(input)}
@@ -770,7 +862,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     ? `Cooling down... Please wait ${cooldown}s`
                     : "Message group..."
                 }
-                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-slate-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 block`}
+                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-zinc-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 block`}
                 style={sharedTextStyles}
               />
             </div>
@@ -786,10 +878,11 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                     start();
                   }
                 }}
-                className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${isListening
+                className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
+                  isListening
                     ? "bg-rose-500/20 text-rose-400"
-                    : "text-slate-500 hover:bg-white/5 hover:text-white"
-                  }`}
+                    : "text-zinc-500 hover:bg-white/5 hover:text-white"
+                }`}
                 aria-label="Voice input"
               >
                 {isListening && !isSpeaking && (
@@ -816,7 +909,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
                 <button
                   type="button"
                   onClick={onStop}
-                  className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
+                  className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
                   aria-label="Stop generation"
                 >
                   <Square
@@ -828,13 +921,26 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({ onSubmit, isStreaming =
               ) : (
                 <button
                   type="submit"
-                  disabled={isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)}
-                  className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${isSending || isUploading || cooldown > 0 || (!input.trim() && attachments.length === 0)
-                      ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                      : "bg-white text-slate-900 hover:bg-slate-200 cursor-pointer"
-                    }`}
-                  aria-label={isSending || isUploading ? "Sending..." : "Send message"}
-                  title={isSending || isUploading ? "Sending..." : "Send message"}
+                  disabled={
+                    isSending ||
+                    isUploading ||
+                    cooldown > 0 ||
+                    (!input.trim() && attachments.length === 0)
+                  }
+                  className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
+                    isSending ||
+                    isUploading ||
+                    cooldown > 0 ||
+                    (!input.trim() && attachments.length === 0)
+                      ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                      : "bg-white text-zinc-900 hover:bg-zinc-200 cursor-pointer"
+                  }`}
+                  aria-label={
+                    isSending || isUploading ? "Sending..." : "Send message"
+                  }
+                  title={
+                    isSending || isUploading ? "Sending..." : "Send message"
+                  }
                 >
                   {isSending || isUploading ? (
                     <Loader2 size={18} className="animate-spin" />
