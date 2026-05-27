@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useUser } from "@clerk/react";
+import { Link } from "react-router-dom";
 import Loading from "@/features/chat/components/Loading";
 import McpAdminTab from "@/features/admin/components/McpAdminTab";
 import { api } from "@/lib/api";
@@ -529,13 +530,13 @@ const Admin: React.FC = () => {
           <p className="text-slate-400 text-sm leading-relaxed mb-6">
             You do not have the required administrative permissions to access the Velora analytics dashboard. Please sign in with an administrator account.
           </p>
-          <a
-            href="/chat"
+          <Link
+            to="/chat"
             className="inline-flex items-center gap-2 bg-white text-black px-6 py-3.5 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl shadow-black/20"
           >
             <ArrowLeft size={14} strokeWidth={2.5} />
             <span>Return to Chat</span>
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -582,13 +583,13 @@ const Admin: React.FC = () => {
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
             </button>
 
-            <a
-              href="/chat"
+            <Link
+              to="/chat"
               className="flex items-center gap-2 bg-slate-900 border border-white/5 hover:border-indigo-500/20 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-300 hover:text-white transition-all shadow-xl hover:scale-[1.02]"
             >
               <ArrowLeft size={16} strokeWidth={2.5} />
               <span>Back to Chat</span>
-            </a>
+            </Link>
           </div>
         </div>
 
