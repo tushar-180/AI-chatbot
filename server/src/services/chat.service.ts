@@ -266,6 +266,7 @@ const buildPromptMessages = async (
   webSearchEnabled = false,
   provider?: string,
   projectId?: string,
+  currentChatId?: string,
 ) => {
   if (projectId) {
     return await buildProjectContext(
@@ -275,6 +276,7 @@ const buildPromptMessages = async (
       latestUserMessage,
       webSearchEnabled,
       provider,
+      currentChatId,
     );
   }
   const isGemini = provider?.startsWith("gemini") ?? false;
@@ -450,6 +452,7 @@ async function* streamAssistantResponse(
       : Boolean(lastUserMessage?.metadata?.webSearchEnabled),
     provider,
     chat.projectId ? String(chat.projectId) : undefined,
+    chatId,
   );
 
   let assistantMessageDoc;
@@ -771,6 +774,7 @@ export const chatService = {
         webSearchEnabled,
         provider,
         chat.projectId ? String(chat.projectId) : undefined,
+        chatId,
       );
 
       let reply = "";
