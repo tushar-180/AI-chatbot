@@ -144,10 +144,11 @@ export class GroupChatService {
       metadata: msg.metadata,
       attachments: msg.attachments || [],
       createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt || msg.createdAt,
     }));
 
     if (groupMessages.length > 0) {
-      await GroupMessage.insertMany(groupMessages);
+      await GroupMessage.insertMany(groupMessages, { timestamps: false });
     }
 
     return await this.populateGroupMembers(groupChat);
