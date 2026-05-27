@@ -35,8 +35,8 @@ const getStatusMeta = (server: McpServerConfig) => {
     return {
       label: "Disabled",
       detail: "Stopped",
-      dotClass: "bg-slate-600",
-      badgeClass: "border-slate-700/70 bg-slate-800/70 text-slate-400"
+      dotClass: "bg-zinc-600",
+      badgeClass: "border-zinc-800/80 bg-zinc-800/50 text-zinc-400"
     };
   }
 
@@ -58,9 +58,9 @@ const getStatusMeta = (server: McpServerConfig) => {
 };
 
 const ConfigRow = ({ label, value }: { label: string; value: string }) => (
-  <div className="rounded-lg border border-white/5 bg-slate-900/40 p-3">
-    <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">{label}</span>
-    <span className="mt-1 block break-all font-mono text-xs font-semibold leading-relaxed text-slate-200">
+  <div className="rounded-lg border border-zinc-800/40 bg-zinc-900/40 p-3">
+    <span className="block text-[10px] font-bold uppercase tracking-widest text-zinc-500">{label}</span>
+    <span className="mt-1 block break-all font-mono text-xs font-semibold leading-relaxed text-zinc-200">
       {value || "Not configured"}
     </span>
   </div>
@@ -79,13 +79,13 @@ const ParameterBadge = ({
     className={`inline-flex max-w-full items-center rounded-md border px-2 py-1 font-mono text-[10px] ${
       required
         ? "border-sky-400/20 bg-sky-400/10 text-sky-300"
-        : "border-white/5 bg-slate-950/70 text-slate-400"
+        : "border-zinc-800/40 bg-zinc-950/70 text-zinc-400"
     }`}
     title={`${name}: ${property.type || "any"}${required ? " (required)" : ""}${property.description ? ` - ${property.description}` : ""}`}
   >
     <span className="truncate">{name}</span>
     {required ? "*" : ""}
-    <span className="ml-1 shrink-0 text-slate-500">({property.type || "any"})</span>
+    <span className="ml-1 shrink-0 text-zinc-500">({property.type || "any"})</span>
   </span>
 );
 
@@ -95,7 +95,7 @@ const ToolCard = ({ tool }: { tool: McpTool }) => {
   const parameterEntries = Object.entries(properties);
 
   return (
-    <div className="min-w-0 w-full rounded-lg border border-white/5 bg-slate-900/40 p-3 transition hover:border-sky-400/20">
+    <div className="min-w-0 w-full rounded-lg border border-zinc-800/40 bg-zinc-900/40 p-3 transition hover:border-sky-400/20">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-300">
           <Wrench size={14} />
@@ -104,14 +104,14 @@ const ToolCard = ({ tool }: { tool: McpTool }) => {
       </div>
 
       {tool.description && (
-        <p className="mt-2 line-clamp-3 text-[11px] font-medium leading-relaxed text-slate-400">
+        <p className="mt-2 line-clamp-3 text-[11px] font-medium leading-relaxed text-zinc-400">
           {tool.description}
         </p>
       )}
 
       {parameterEntries.length > 0 && (
-        <div className="mt-3 border-t border-white/5 pt-3 min-w-0">
-          <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <div className="mt-3 border-t border-zinc-800/40 pt-3 min-w-0">
+          <span className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-zinc-500">
             Parameters
           </span>
           <div className="flex flex-wrap gap-1.5 min-w-0">
@@ -161,7 +161,7 @@ const McpServerCard = ({
   return (
     <article
       ref={cardRef}
-      className="rounded-lg border border-white/5 bg-slate-950/70 shadow-xl shadow-black/10 transition hover:border-white/10"
+      className="rounded-lg border border-zinc-800/40 bg-zinc-950/70 shadow-xl shadow-black/10 transition hover:border-zinc-700/60"
     >
       <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
@@ -183,7 +183,7 @@ const McpServerCard = ({
                 {status.label}
               </span>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500">
               <span>{server.type} transport</span>
               <span>/</span>
               <span>{tools.length} tools</span>
@@ -199,13 +199,13 @@ const McpServerCard = ({
             onClick={() => onToggleServer(server.name, !server.enabled)}
             disabled={isActionLoading}
             className={`relative inline-flex h-7 w-12 items-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60 ${
-              server.enabled ? "border-emerald-400/30 bg-emerald-500/80" : "border-white/10 bg-slate-800"
+              server.enabled ? "border-emerald-400/30 bg-emerald-500/80" : "border-zinc-800/40 bg-zinc-800"
             }`}
             aria-label={`${server.enabled ? "Disable" : "Enable"} ${server.name}`}
             title={`${server.enabled ? "Disable" : "Enable"} server`}
           >
             <span
-              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-slate-900 shadow transition ${
+              className={`inline-flex h-5 w-5 items-center justify-center rounded-full bg-white text-zinc-900 shadow transition ${
                 server.enabled ? "translate-x-5" : "translate-x-1"
               }`}
             >
@@ -218,7 +218,7 @@ const McpServerCard = ({
               type="button"
               onClick={() => onReconnect(server.name)}
               disabled={isActionLoading}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 transition hover:border-amber-400/20 hover:bg-amber-400/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800/40 bg-white/5 text-zinc-400 transition hover:border-amber-400/20 hover:bg-amber-400/10 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
               aria-label={`Reconnect ${server.name}`}
               title="Force reconnect / restart server"
             >
@@ -229,7 +229,7 @@ const McpServerCard = ({
           <button
             type="button"
             onClick={() => onEdit(server)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 transition hover:border-sky-400/20 hover:bg-sky-400/10 hover:text-sky-300"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800/40 bg-white/5 text-zinc-400 transition hover:border-sky-400/20 hover:bg-sky-400/10 hover:text-sky-300"
             aria-label={`Edit ${server.name}`}
             title="Edit configuration"
           >
@@ -239,7 +239,7 @@ const McpServerCard = ({
           <button
             type="button"
             onClick={() => onDelete(server.name)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-300"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800/40 bg-white/5 text-zinc-400 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-300"
             aria-label={`Delete ${server.name}`}
             title="Delete integration"
           >
@@ -249,7 +249,7 @@ const McpServerCard = ({
           <button
             type="button"
             onClick={() => onToggleExpand(server.name)}
-            className="flex h-9 items-center gap-2 rounded-lg border border-white/5 bg-white/5 px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 transition hover:border-white/10 hover:bg-white/10 hover:text-white"
+            className="flex h-9 items-center gap-2 rounded-lg border border-zinc-800/40 bg-white/5 px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition hover:border-zinc-700/60 hover:bg-white/10 hover:text-white"
             aria-expanded={isExpanded}
           >
             <span>{isExpanded ? "Hide" : "Details"}</span>
@@ -262,7 +262,7 @@ const McpServerCard = ({
         <div className="border-t border-white/5 p-4 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
             <div className="space-y-3">
-              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                 <ServerIcon size={13} className="text-sky-300" />
                 <span>Configuration</span>
               </div>
@@ -277,9 +277,9 @@ const McpServerCard = ({
               )}
 
               {envEntries.length > 0 && (
-                <div className="rounded-lg border border-white/5 bg-slate-900/40 p-3">
+                <div className="rounded-lg border border-zinc-800/40 bg-zinc-900/40 p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
                       Environment
                     </span>
                     <button
@@ -297,8 +297,8 @@ const McpServerCard = ({
                         key={key}
                         className="flex items-center justify-between gap-3 border-b border-white/5 pb-2 text-xs last:border-0 last:pb-0"
                       >
-                        <span className="min-w-0 truncate font-mono font-bold text-slate-400">{key}</span>
-                        <span className="max-w-[55%] truncate text-right font-mono font-semibold text-slate-300">
+                        <span className="min-w-0 truncate font-mono font-bold text-zinc-400">{key}</span>
+                        <span className="max-w-[55%] truncate text-right font-mono font-semibold text-zinc-300">
                           {envVisible ? String(value) : "********"}
                         </span>
                       </div>
@@ -310,19 +310,19 @@ const McpServerCard = ({
 
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
                   <Activity size={13} className="text-emerald-300" />
                   <span>Exposed Tools</span>
                 </div>
-                <span className="rounded-md border border-white/5 bg-white/5 px-2 py-1 font-mono text-[10px] font-bold text-slate-300">
+                <span className="rounded-md border border-zinc-800/40 bg-white/5 px-2 py-1 font-mono text-[10px] font-bold text-zinc-300">
                   {tools.length}
                 </span>
               </div>
 
               {tools.length === 0 ? (
-                <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-slate-900/20 p-6 text-center">
-                  <Wrench size={20} className="mb-2 text-slate-700" />
-                  <p className="max-w-sm text-[11px] font-bold uppercase tracking-widest text-slate-500">
+                <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-zinc-800/40 bg-zinc-900/20 p-6 text-center">
+                  <Wrench size={20} className="mb-2 text-zinc-700" />
+                  <p className="max-w-sm text-[11px] font-bold uppercase tracking-widest text-zinc-500">
                     No active tools loaded for this server.
                   </p>
                 </div>
@@ -343,7 +343,7 @@ const McpServerCard = ({
                 onToggleExpand(server.name);
                 cardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
               }}
-              className="flex h-9 items-center gap-2 rounded-lg border border-white/5 bg-slate-900/50 hover:bg-slate-900/80 px-4 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition hover:border-indigo-500/20 w-full justify-center sm:w-auto cursor-pointer"
+              className="flex h-9 items-center gap-2 rounded-lg border border-zinc-800/40 bg-zinc-900/50 hover:bg-zinc-900/80 px-4 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition hover:border-indigo-500/20 w-full justify-center sm:w-auto cursor-pointer"
             >
               <span>Collapse Details</span>
               <ChevronDown size={14} className="rotate-180" />

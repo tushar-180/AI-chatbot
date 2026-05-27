@@ -110,7 +110,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
       <span>
         {parts.map((part, i) =>
           part.toLowerCase() === term.toLowerCase() ? (
-            <span key={i} className="text-emerald-400 font-bold bg-emerald-400/10 px-0.5 rounded">
+            <span key={i} className="font-bold underline bg-zinc-100 dark:bg-white/10 px-0.5 rounded text-zinc-900 dark:text-white">
               {part}
             </span>
           ) : (
@@ -128,20 +128,20 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
         onClick={handleClose}
       />
       
-      <div className="relative w-full max-w-2xl bg-slate-900/90 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 backdrop-blur-xl">
-        <div className="relative flex items-center border-b border-white/5 px-6 py-4">
-          <Search size={20} className="text-slate-500 mr-4" />
+      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/60 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 backdrop-blur-xl text-zinc-900 dark:text-white">
+        <div className="relative flex items-center border-b border-zinc-100 dark:border-zinc-900 px-6 py-4">
+          <Search size={20} className="text-zinc-400 dark:text-zinc-500 mr-4" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search conversations, messages, and more..."
-            className="flex-1 bg-transparent border-none outline-none text-white text-lg placeholder:text-slate-600"
+            className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-white text-lg placeholder:text-zinc-400 dark:placeholder:text-zinc-600"
           />
           <button 
             onClick={handleClose}
-            className="p-1.5 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white transition-all"
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -150,13 +150,13 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
         <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center justify-center p-12 gap-3">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500/20 border-t-emerald-500" />
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-600">Searching...</p>
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-200 dark:border-zinc-800 border-t-zinc-900 dark:border-t-white" />
+              <p className="text-xs font-bold uppercase tracking-widest text-zinc-450 dark:text-zinc-500">Searching...</p>
             </div>
           ) : query && results.length === 0 ? (
             <div className="flex flex-col items-center justify-center p-12 text-center">
-              <p className="text-slate-400 font-medium mb-1">No results found for "{query}"</p>
-              <p className="text-sm text-slate-600">Try searching for something else</p>
+              <p className="text-zinc-500 dark:text-zinc-400 font-medium mb-1">No results found for "{query}"</p>
+              <p className="text-sm text-zinc-400 dark:text-zinc-650">Try searching for something else</p>
             </div>
           ) : results.length > 0 ? (
             <div className="p-3">
@@ -169,22 +169,22 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                     selectChat(result._id, query);
                     handleClose();
                   }}
-                  className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all group text-left mb-1 last:mb-0 border ${
+                  className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all group text-left mb-1 last:mb-0 border cursor-pointer ${
                     activeIndex === index
-                      ? "bg-white/5 border-emerald-500/25 text-emerald-400"
-                      : "border-transparent hover:bg-white/5 text-slate-400 hover:text-white"
+                      ? "bg-zinc-50 dark:bg-white/5 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-white"
+                      : "border-transparent hover:bg-zinc-50 dark:hover:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white"
                   }`}
                 >
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${activeIndex === index ? "bg-emerald-500/10" : "bg-slate-800 group-hover:bg-emerald-500/10"}`}>
-                    <MessageSquare size={18} className={`transition-colors ${activeIndex === index ? "text-emerald-400" : "text-slate-400 group-hover:text-emerald-400"}`} />
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${activeIndex === index ? "bg-zinc-200 dark:bg-white/10" : "bg-zinc-100 dark:bg-zinc-900 group-hover:bg-zinc-200 dark:group-hover:bg-white/10"}`}>
+                    <MessageSquare size={18} className={`transition-colors ${activeIndex === index ? "text-zinc-900 dark:text-white" : "text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-900 dark:group-hover:text-white"}`} />
                   </div>
                   
                   <div className="flex-1 min-w-0 py-0.5">
                     <div className="flex items-center justify-between gap-4 mb-1">
-                      <h4 className={`font-semibold truncate transition-colors ${activeIndex === index ? "text-emerald-400" : "text-white group-hover:text-emerald-400"}`}>
+                      <h4 className={`font-semibold truncate transition-colors ${activeIndex === index ? "text-zinc-900 dark:text-white" : "text-zinc-900 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white"}`}>
                         {highlightMatch(result.title || "Untitled Session", query)}
                       </h4>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600 shrink-0">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-650 shrink-0">
                         {result.updatedAt
                           ? new Date(result.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })
                           : ""}
@@ -192,7 +192,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                     </div>
                     
                     {result.snippet && (
-                      <p className="text-sm text-slate-400 line-clamp-2 leading-relaxed">
+                      <p className="text-sm text-zinc-500 dark:text-zinc-450 line-clamp-2 leading-relaxed">
                         {highlightMatch(result.snippet, query)}
                       </p>
                     )}
@@ -202,7 +202,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
             </div>
           ) : (
             <div className="p-8 text-center">
-              <div className="flex items-center justify-center gap-2 text-slate-600 text-sm mb-4">
+              <div className="flex items-center justify-center gap-2 text-zinc-450 dark:text-zinc-600 text-sm mb-4">
                 <Clock size={14} />
                 <span>Recent Searches</span>
               </div>
@@ -211,7 +211,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                   <button 
                     key={tag}
                     onClick={() => setQuery(tag)}
-                    className="px-4 py-2 rounded-xl bg-white/5 border border-white/5 text-slate-400 text-xs font-bold hover:bg-white/10 hover:text-white transition-all"
+                    className="px-4 py-2 rounded-xl bg-zinc-100/50 dark:bg-white/5 border border-zinc-200/50 dark:border-white/5 text-zinc-500 dark:text-zinc-400 text-xs font-bold hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
                   >
                     {tag}
                   </button>
@@ -221,19 +221,19 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
           )}
         </div>
 
-        <div className="px-6 py-3 border-t border-white/5 bg-slate-900/50 flex items-center justify-between">
+        <div className="px-6 py-3 border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50 dark:bg-zinc-900/30 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-              <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400 font-sans">Enter</kbd>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-450 dark:text-zinc-600 uppercase tracking-widest">
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 font-sans">Enter</kbd>
               <span>to select</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
-              <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-slate-400 font-sans">Esc</kbd>
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-450 dark:text-zinc-600 uppercase tracking-widest">
+              <kbd className="px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 text-zinc-500 dark:text-zinc-400 font-sans">Esc</kbd>
               <span>to close</span>
             </div>
           </div>
           
-          <div className="text-[10px] font-bold text-emerald-500/60 uppercase tracking-[0.2em]">
+          <div className="text-[10px] font-bold text-zinc-900 dark:text-white/60 uppercase tracking-[0.2em]">
             Velora Search
           </div>
         </div>

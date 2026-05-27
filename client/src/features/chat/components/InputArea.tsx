@@ -70,10 +70,10 @@ export interface InputAreaProps {
     allowed: boolean;
     scope: "ok" | "global" | "user" | "cooldown" | "monthly";
     reason?:
-    | "global_quota_exceeded"
-    | "user_quota_exceeded"
-    | "cooldown_active"
-    | "monthly_credits_exhausted";
+      | "global_quota_exceeded"
+      | "user_quota_exceeded"
+      | "cooldown_active"
+      | "monthly_credits_exhausted";
     message?: string;
     retryAfterMs?: number;
   } | null;
@@ -130,7 +130,7 @@ const WebSearchToggle = ({
                 ${
                   enabled
                     ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20 hover:text-emerald-200"
-                    : "border-white/10 bg-white/5 text-slate-400 lg:text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                    : "border-zinc-800/60 bg-white/5 text-zinc-400 lg:text-zinc-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
                 }
                 ${disabled ? "opacity-40 cursor-not-allowed" : ""}
             `}
@@ -187,7 +187,7 @@ const ModelSelector = ({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-slate-400 lg:text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white cursor-pointer"
+            className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-zinc-800/60 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-zinc-400 lg:text-zinc-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white cursor-pointer"
           >
             {getProviderIcon(selectedProvider, 12)}
             <span className="max-w-[100px] lg:max-w-none truncate">
@@ -195,23 +195,24 @@ const ModelSelector = ({
             </span>
             <ChevronDown
               size={10}
-              className="ml-0.5 text-slate-500 transition-colors"
+              className="ml-0.5 text-zinc-500 transition-colors"
             />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
           side="top"
-          className="w-56 rounded-xl border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl"
+          className="w-56 rounded-xl border-zinc-800/60 bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl"
         >
           {availableProviders.map((p) => (
             <DropdownMenuItem
               key={p.id}
               onClick={() => onProviderChange(p.id)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${selectedProvider === p.id
+              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                selectedProvider === p.id
                   ? "bg-white text-black"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white"
-                }`}
+                  : "text-zinc-400 hover:bg-white/5 hover:text-white"
+              }`}
             >
               {getProviderIcon(p.id, 12)}
               <span className="capitalize">{getModelOnlyName(p.name)}</span>
@@ -232,7 +233,7 @@ const ModelSelector = ({
                 : quotaStatus.scope === "user"
                   ? "Daily user limit reached"
                   : quotaStatus.scope === "monthly" ||
-                    quotaStatus.reason === "monthly_credits_exhausted"
+                      quotaStatus.reason === "monthly_credits_exhausted"
                     ? "Monthly credits exhausted"
                     : "Cooldown active"
               : undefined
@@ -483,7 +484,7 @@ const InputArea = ({
     <div className="sticky bottom-0 z-30 pb-8 px-4 lg:px-10 not-selectable">
       {isArchived ? (
         <div className="mx-auto max-w-4xl  px-4 lg:px-0">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 rounded-2xl border border-white/10 bg-slate-900/80 p-3 lg:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 rounded-2xl border border-zinc-800/60 bg-zinc-900/80 p-3 lg:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 backdrop-blur-2xl">
             <div className="flex items-center gap-4">
               <div className="h-10 w-10 shrink-0 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
                 <Archive size={20} />
@@ -492,7 +493,7 @@ const InputArea = ({
                 <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.15em] mb-0.5">
                   Archived Session
                 </h4>
-                <p className="text-[10px] text-slate-500 font-medium leading-tight">
+                <p className="text-[10px] text-zinc-500 font-medium leading-tight">
                   This conversation is preserved in the vault.
                 </p>
               </div>
@@ -512,7 +513,7 @@ const InputArea = ({
             onSubmit={handleFormSubmit}
             className="mx-auto max-w-4xl relative "
           >
-            <div className="group relative flex flex-col gap-0 rounded-3xl border border-white/10 bg-slate-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
+            <div className="group relative flex flex-col gap-0 rounded-3xl border border-zinc-800/60 bg-zinc-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
               <ComposerQuotePreview />
 
               <ModelSelector
@@ -535,7 +536,7 @@ const InputArea = ({
                     return (
                       <div
                         key={`${att.url}-${i}`}
-                        className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                        className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5"
                       >
                         {isImage ? (
                           <img
@@ -547,10 +548,10 @@ const InputArea = ({
                           <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
                             <Icon
                               size={20}
-                              className="text-slate-300 shrink-0"
+                              className="text-zinc-300 shrink-0"
                             />
 
-                            <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
+                            <span className="mt-1 line-clamp-2 text-[9px] text-zinc-400">
                               {att.name}
                             </span>
                           </div>
@@ -570,9 +571,9 @@ const InputArea = ({
               )}
               {attachedFile && (
                 <div className="flex flex-wrap gap-2 px-4 py-2">
-                  <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
-                    <FileText size={20} className="text-slate-300 shrink-0" />
-                    <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                  <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5 flex flex-col items-center justify-center">
+                    <FileText size={20} className="text-zinc-300 shrink-0" />
+                    <span className="mt-1 line-clamp-2 text-[9px] text-zinc-400 text-center">
                       {attachedFile.name}
                     </span>
                     <button
@@ -600,7 +601,7 @@ const InputArea = ({
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full text-slate-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
+                    className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-white/5 transition-all duration-300 disabled:opacity-50 cursor-pointer"
                     aria-label="Upload image"
                   >
                     {isUploading ? (
@@ -643,7 +644,7 @@ const InputArea = ({
                       });
                     }
                   }}
-                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent pl-1 pr-2 lg:pl-0 lg:pr-3 py-2 text-[0.95rem] lg:text-[1rem] leading-5 lg:leading-[1.5rem] text-slate-100 placeholder-slate-600 outline-none overflow-y-auto`}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent pl-1 pr-2 lg:pl-0 lg:pr-3 py-2 text-[0.95rem] lg:text-[1rem] leading-5 lg:leading-[1.5rem] text-zinc-100 placeholder-zinc-600 outline-none overflow-y-auto`}
                 />
                 <div className="flex items-end gap-1.5 lg:gap-2">
                   {/* Mic button */}
@@ -659,7 +660,7 @@ const InputArea = ({
                     className={`relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full transition-all duration-300 lg:h-10 lg:w-10 cursor-pointer ${
                       isListening
                         ? "bg-rose-500/20 text-rose-400"
-                        : "text-slate-500 hover:bg-white/5 hover:text-white"
+                        : "text-zinc-500 hover:bg-white/5 hover:text-white"
                     }`}
                     aria-label="Voice input"
                   >
@@ -688,7 +689,7 @@ const InputArea = ({
                     <button
                       type="button"
                       onClick={onStop}
-                      className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
+                      className="flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full bg-white text-zinc-900 hover:bg-rose-50 transition-all duration-300 group cursor-pointer"
                       aria-label="Stop generation"
                     >
                       <Square
@@ -716,8 +717,8 @@ const InputArea = ({
                         (!input.trim() &&
                           attachments.length === 0 &&
                           !selectionContext)
-                          ? "bg-slate-800 text-slate-600 cursor-not-allowed"
-                          : "bg-white text-slate-900 hover:bg-slate-200"
+                          ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                          : "bg-white text-zinc-900 hover:bg-zinc-200"
                       }`}
                       aria-label={loading ? "Sending..." : "Send message"}
                       title={loading ? "Sending..." : "Send message"}

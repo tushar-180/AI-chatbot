@@ -49,13 +49,13 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
  
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712] not-selectable">
+    <header className="sticky top-0 z-40 w-full border-b border-zinc-800/40 bg-[#09090b] not-selectable">
       <div className="mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Left Section */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-500 hover:text-white lg:hidden"
           >
             <Menu size={16} />
           </button>
@@ -73,7 +73,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
                   navigate("/chat");
                 }
               }}
-              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-all"
+              className="hidden lg:flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-500 hover:text-white hover:bg-white/10 transition-all"
               title={activeProjectId ? "Back to project" : "Back to new chat"}
             >
               <ChevronLeft size={16} />
@@ -113,7 +113,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
               className={
                 isTemporaryChatActive
                   ? "group relative flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-950/20 text-emerald-400 backdrop-blur-md transition hover:bg-emerald-500/25 hover:text-emerald-200 hover:border-emerald-500/40 active:scale-[0.95] shadow-[0_0_12px_rgba(16,185,129,0.15)] cursor-pointer"
-                  : "group relative flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-white/5 text-slate-400 backdrop-blur-md transition hover:bg-white/10 hover:text-white hover:border-white/10 active:scale-[0.95] cursor-pointer"
+                  : "group relative flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800/40 bg-white/5 text-zinc-400 backdrop-blur-md transition hover:bg-white/10 hover:text-white hover:border-zinc-800/60 active:scale-[0.95] cursor-pointer"
               }
               title={isTemporaryChatActive ? "Exit Temporary Chat" : "Start Temporary Chat"}
             >
@@ -122,7 +122,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
                 className={
                   isTemporaryChatActive
                     ? "text-emerald-400 animate-pulse"
-                    : "text-slate-400 group-hover:text-white transition-colors"
+                    : "text-zinc-400 group-hover:text-white transition-colors"
                 }
               />
             </button>
@@ -131,7 +131,7 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
           {currentChatId && (
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
               aria-label="Share chat"
             >
               <Share2 size={16} />
