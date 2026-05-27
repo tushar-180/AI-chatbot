@@ -35,7 +35,7 @@ function formatRelativeTime(isoString: string) {
 
 function ProjectIcon() {
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 transition-transform duration-200 group-hover:scale-105">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-700/40 bg-zinc-800/50 text-zinc-400 transition-transform duration-200 group-hover:scale-105 group-hover:text-zinc-200">
       <Folder size={16} />
     </div>
   );
@@ -56,11 +56,11 @@ function ProjectRow({ project, onSelect, onRename, onDelete }: ProjectRowProps) 
   return (
     <div
       onClick={onSelect}
-      className="group flex cursor-pointer items-center justify-between rounded-2xl border-b border-white/5 p-4 transition-all duration-200 hover:bg-white/2 last:border-b-0"
+      className="group flex cursor-pointer items-center justify-between rounded-2xl border-b border-zinc-800/50 p-4 transition-all duration-200 hover:bg-zinc-800/30 last:border-b-0"
     >
       <div className="flex min-w-0 flex-1 items-center gap-3.5">
         <ProjectIcon />
-        <span className="truncate font-display text-[13.5px] font-semibold capitalize text-slate-100 transition-colors group-hover:text-white">
+        <span className="truncate font-display text-[13.5px] font-semibold capitalize text-zinc-200 transition-colors group-hover:text-white">
           {project.name}
         </span>
       </div>
@@ -76,17 +76,17 @@ function ProjectRow({ project, onSelect, onRename, onDelete }: ProjectRowProps) 
                 <MoreVertical size={16} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
+            <DropdownMenuContent align="end" className="w-40 rounded-2xl border border-zinc-800/60 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-xl">
               <DropdownMenuItem
                 onClick={(e) => onRename(e, project._id, project.name)}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white cursor-pointer"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-zinc-800/60 hover:text-white cursor-pointer"
               >
                 <Edit2 size={12} />
                 <span>Rename</span>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={(e) => onDelete(e, project._id)}
-                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 cursor-pointer"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-zinc-800/60 hover:text-red-400 cursor-pointer"
               >
                 <Trash2 size={12} />
                 <span>Delete</span>
@@ -95,7 +95,7 @@ function ProjectRow({ project, onSelect, onRename, onDelete }: ProjectRowProps) 
           </DropdownMenu>
         </div>
 
-        <span className="min-w-[70px] shrink-0 text-right text-[12.5px] font-semibold text-slate-500">
+        <span className="min-w-[70px] shrink-0 text-right text-[12.5px] font-semibold text-zinc-500">
           {formatRelativeTime(project.updatedAt)}
         </span>
       </div>
@@ -122,7 +122,7 @@ function ProjectsTable({
 }: ProjectsTableProps) {
   if (projects.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-white/5 bg-white/1 py-20 text-center text-xs font-semibold uppercase tracking-widest text-slate-500">
+      <div className="rounded-2xl border border-dashed border-zinc-800/50 bg-zinc-900/20 py-20 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
         No projects found
       </div>
     );
@@ -130,12 +130,12 @@ function ProjectsTable({
 
   return (
     <div className="flex w-full flex-col">
-      <div className="flex select-none items-center justify-between border-b border-white/5 px-4 pb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
+      <div className="flex select-none items-center justify-between border-b border-zinc-800/50 px-4 pb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">
         <span>Name</span>
         <span className="min-w-[70px] text-right">Modified</span>
       </div>
 
-      <div className="mt-2 flex flex-col overflow-hidden rounded-3xl border border-white/5 bg-slate-900/10 divide-y divide-white/5">
+      <div className="mt-2 flex flex-col overflow-hidden rounded-2xl border border-zinc-800/50 bg-zinc-900/20 divide-y divide-zinc-800/50">
         {projects.map((project) => (
           <ProjectRow
             key={project._id}
@@ -158,7 +158,7 @@ function NewProjectButton({ onClick }: NewProjectButtonProps) {
   return (
     <button
       onClick={onClick}
-      className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-4 text-xs font-bold uppercase tracking-[0.1em] text-slate-950 shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-400"
+      className="flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-zinc-100 px-4 text-xs font-bold uppercase tracking-[0.1em] text-zinc-900 transition-all hover:bg-white"
     >
       <Plus size={14} strokeWidth={3} />
       <span>New</span>
@@ -380,7 +380,7 @@ export default function ProjectsPage() {
 
 
   return (
-    <div className="min-h-screen flex-1 overflow-y-auto bg-slate-950 p-4 lg:p-10 text-slate-100">
+    <div className="min-h-screen flex-1 overflow-y-auto bg-[#09090b] p-4 lg:p-10 text-zinc-100">
       <div className="mx-auto flex max-w-[1100px] flex-col px-2 pb-16 pt-6 lg:px-8 lg:pb-20 lg:pt-10">
         <div className="flex flex-col gap-10">
           {!projectId && (

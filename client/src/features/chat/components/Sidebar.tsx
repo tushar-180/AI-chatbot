@@ -216,7 +216,7 @@ const SidebarItem = memo(
         className={`group flex items-center justify-between gap-3 rounded-2xl px-3 py-3 text-[13px] transition-all cursor-pointer border not-selectable ${
           isActive
             ? "bg-white text-black border-white shadow-[0_15px_35px_-5px_rgba(255,255,255,0.15)] scale-[1.02] z-10"
-            : "text-slate-400 border-white/5 hover:bg-slate-800/50 hover:text-white hover:border-transparent"
+            : "text-zinc-400 border-zinc-800/40 hover:bg-zinc-800/50 hover:text-white hover:border-transparent"
         } ${isSelected ? "border-emerald-500/50! bg-emerald-500/5" : ""} ${
           isEditing ? "cursor-default" : "cursor-pointer"
         }`}
@@ -227,7 +227,7 @@ const SidebarItem = memo(
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-all ${
                 isSelected
                   ? "border-emerald-500 bg-emerald-500 text-white"
-                  : "border-slate-700 bg-transparent"
+                  : "border-zinc-700 bg-transparent"
               }`}
             >
               {isSelected && <Check size={10} strokeWidth={4} />}
@@ -250,7 +250,7 @@ const SidebarItem = memo(
                 {group.members.slice(0, 2).map((member) => (
                   <Avatar
                     key={member.userId}
-                    className="h-5 w-5 ring-1 ring-slate-950"
+                    className="h-5 w-5 ring-1 ring-zinc-950"
                   >
                     {member.userImage && (
                       <AvatarImage
@@ -265,7 +265,7 @@ const SidebarItem = memo(
                   </Avatar>
                 ))}
                 {group.members.length > 2 && (
-                  <AvatarGroupCount className="h-5 w-5 text-[8px] bg-emerald-500/10 text-emerald-500 ring-1 ring-slate-950 font-bold border-none">
+                  <AvatarGroupCount className="h-5 w-5 text-[8px] bg-emerald-500/10 text-emerald-500 ring-1 ring-zinc-950 font-bold border-none">
                     +{group.members.length - 2}
                   </AvatarGroupCount>
                 )}
@@ -310,7 +310,7 @@ const SidebarItem = memo(
                   className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
                     isActive
                       ? "text-black/70 hover:bg-black/5"
-                      : "text-slate-300 hover:bg-white/10"
+                      : "text-zinc-300 hover:bg-white/10"
                   }`}
                   title="Save"
                   aria-label="Save rename"
@@ -325,7 +325,7 @@ const SidebarItem = memo(
                   className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
                     isActive
                       ? "text-black/40 hover:bg-black/5"
-                      : "text-slate-500 hover:bg-white/10"
+                      : "text-zinc-500 hover:bg-white/10"
                   }`}
                   title="Cancel"
                   aria-label="Cancel rename"
@@ -343,7 +343,7 @@ const SidebarItem = memo(
                   className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all outline-none ${
                     isActive
                       ? "text-black/40 hover:text-black"
-                      : "text-slate-700 hover:text-white opacity-0 group-hover:opacity-100"
+                      : "text-zinc-700 hover:text-white opacity-0 group-hover:opacity-100"
                   }`}
                   aria-label="Session options"
                   title="Session options"
@@ -354,7 +354,7 @@ const SidebarItem = memo(
                 {showMenu && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className={`absolute right-0 z-50 w-40 rounded-2xl border border-white/5 bg-slate-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 outline-none ${
+                    className={`absolute right-0 z-50 w-40 rounded-2xl border border-zinc-800/40 bg-zinc-900/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-200 outline-none ${
                       openUpwards
                         ? "bottom-full mb-2 origin-bottom-right"
                         : "top-full mt-2 origin-top-right"
@@ -368,7 +368,7 @@ const SidebarItem = memo(
                             setIsShareModalOpen(true);
                             setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <Share size={12} />
                           <span>Share</span>
@@ -380,7 +380,7 @@ const SidebarItem = memo(
                             setIsGroupModalOpen(true);
                             setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <Users size={12} />
                           <span>Create Group</span>
@@ -388,7 +388,7 @@ const SidebarItem = memo(
 
                         <button
                           onClick={handleStartEdit}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <Edit2 size={12} />
                           <span>Rename</span>
@@ -400,7 +400,7 @@ const SidebarItem = memo(
                             if (onMoveToProject) onMoveToProject(item._id);
                             setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <Folder size={12} />
                           <span>Move to Project</span>
@@ -413,7 +413,7 @@ const SidebarItem = memo(
                               onUnarchive(item._id);
                               setShowMenu(false);
                             }}
-                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                           >
                             <ArchiveRestore size={12} />
                             <span>Unarchive</span>
@@ -427,7 +427,7 @@ const SidebarItem = memo(
                                   onUnpin(item._id);
                                   setShowMenu(false);
                                 }}
-                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                               >
                                 <PinOff size={12} className="rotate-[-35deg]" />
                                 <span>Unpin</span>
@@ -439,7 +439,7 @@ const SidebarItem = memo(
                                   onPin(item._id);
                                   setShowMenu(false);
                                 }}
-                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                               >
                                 <Pin size={12} className="rotate-[-35deg]" />
                                 <span>Pin</span>
@@ -451,7 +451,7 @@ const SidebarItem = memo(
                                 onArchive(item._id);
                                 setShowMenu(false);
                               }}
-                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-amber-400 transition-all outline-none"
+                              className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-amber-400 transition-all outline-none"
                             >
                               <Archive size={12} />
                               <span>Archive</span>
@@ -469,7 +469,7 @@ const SidebarItem = memo(
                             setIsGroupLinkModalOpen(true);
                             setShowMenu(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <LinkIcon size={12} />
                           <span>Group Link</span>
@@ -477,7 +477,7 @@ const SidebarItem = memo(
 
                         <button
                           onClick={handleStartEdit}
-                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                         >
                           <Edit2 size={12} />
                           <span>Rename</span>
@@ -490,7 +490,7 @@ const SidebarItem = memo(
                               onUnpin(item._id);
                               setShowMenu(false);
                             }}
-                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                           >
                             <PinOff size={12} className="rotate-[-35deg]" />
                             <span>Unpin</span>
@@ -502,7 +502,7 @@ const SidebarItem = memo(
                               onPin(item._id);
                               setShowMenu(false);
                             }}
-                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-white transition-all outline-none"
+                            className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-white transition-all outline-none"
                           >
                             <Pin size={12} className="rotate-[-35deg]" />
                             <span>Pin</span>
@@ -517,7 +517,7 @@ const SidebarItem = memo(
                         setShowMenu(false);
                         onDelete(item._id, item.itemType);
                       }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-slate-300 hover:bg-white/5 hover:text-red-400 transition-all outline-none"
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold uppercase tracking-widest text-zinc-300 hover:bg-white/5 hover:text-red-400 transition-all outline-none"
                     >
                       <Trash2 size={12} />
                       <span>
@@ -1145,7 +1145,7 @@ const Sidebar = () => {
 
       <aside
         className={`
-        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 sm:w-64 md:w-72 lg:w-80 flex-col gap-5 border-r border-white/5 bg-slate-950 p-6 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:max-h-screen lg:overflow-hidden shrink-0
+        not-selectable fixed inset-y-0 left-0 z-50 flex h-full w-72 sm:w-64 md:w-72 lg:w-80 flex-col gap-5 border-r border-zinc-800/40 bg-zinc-950 p-6 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 lg:max-h-screen lg:overflow-hidden shrink-0
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}
       >
@@ -1164,7 +1164,7 @@ const Sidebar = () => {
 
             <button
               onClick={() => setSidebarOpen(false)}
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-slate-500 hover:text-white lg:hidden"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-zinc-500 hover:text-white lg:hidden"
               aria-label="Close sidebar"
               title="Close sidebar"
             >
@@ -1186,7 +1186,7 @@ const Sidebar = () => {
                 createChat();
                 setSidebarOpen(false);
               }}
-              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-slate-100 shadow-xl shadow-black/20"
+              className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-black transition-all hover:bg-zinc-100 shadow-xl shadow-black/20"
             >
               <Plus size={16} strokeWidth={3} />
               <span>New Chat</span>
@@ -1195,7 +1195,7 @@ const Sidebar = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 onClick={() => setGalleryOpen(true)}
-                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
+                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
               >
                 <ImageIcon
                   size={14}
@@ -1209,7 +1209,7 @@ const Sidebar = () => {
                   setSidebarOpen(false);
                   navigate("/projects");
                 }}
-                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/5 bg-white/3 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
+                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
               >
                 <Folder
                   size={14}
@@ -1223,15 +1223,18 @@ const Sidebar = () => {
           <div className="px-2">
             <button
               onClick={() => setSearchModalOpen(true)}
-              className="w-full relative group flex items-center bg-white/3 border border-white/5 rounded-xl py-2.5 px-3 text-[12px] text-slate-400 transition-all hover:bg-white/5 hover:text-slate-200"
+              className="w-full relative group flex items-center bg-zinc-900/30 border border-zinc-800/40 rounded-xl py-2.5 px-3 text-[12px] text-zinc-400 transition-all hover:bg-white/5 hover:text-zinc-200"
             >
-              <Search size={14} className="mr-3 text-slate-400 group-hover:text-slate-200 transition-colors" />
+              <Search
+                size={14}
+                className="mr-3 text-zinc-400 group-hover:text-zinc-200 transition-colors"
+              />
               <span>Search conversations...</span>
               <div className="ml-auto flex items-center gap-1 opacity-40">
-                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-zinc-800/60 font-sans text-[10px]">
                   ⌘
                 </kbd>
-                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-sans text-[10px]">
+                <kbd className="px-1 py-0.5 rounded bg-white/5 border border-zinc-800/60 font-sans text-[10px]">
                   K
                 </kbd>
               </div>
@@ -1251,10 +1254,10 @@ const Sidebar = () => {
                 className="flex items-center gap-2 cursor-pointer group focus:outline-none h-6 min-w-[120px]"
                 aria-label="Toggle session history"
               >
-                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-400 group-hover:text-slate-200 transition-colors">
+                <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400 group-hover:text-zinc-200 transition-colors">
                   {viewingArchived ? "Archived Chats" : "Session History"}
                 </span>
-                <span className="text-slate-700 text-xs group-hover:text-white transition">
+                <span className="text-zinc-700 text-xs group-hover:text-white transition">
                   {showRecent ? (
                     <ChevronUp size={14} />
                   ) : (
@@ -1271,7 +1274,7 @@ const Sidebar = () => {
                         className={`flex h-6 w-6 items-center justify-center rounded-lg transition-all ${
                           hasActiveHistoryFilter
                             ? "bg-emerald-500/10 text-emerald-400"
-                            : "text-slate-400 hover:bg-white/5 hover:text-white"
+                            : "text-zinc-400 hover:bg-white/5 hover:text-white"
                         }`}
                         title="Filter history"
                         aria-label="Filter history"
@@ -1281,9 +1284,9 @@ const Sidebar = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="end"
-                      className="w-56 rounded-2xl border border-white/10 bg-slate-950 p-2 text-slate-200 shadow-2xl shadow-black/40"
+                      className="w-56 rounded-2xl border border-zinc-800/60 bg-zinc-950 p-2 text-zinc-200 shadow-2xl shadow-black/40"
                     >
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                         Show
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1308,7 +1311,7 @@ const Sidebar = () => {
 
                       <DropdownMenuSeparator className="bg-white/10" />
 
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                         Sort by
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1339,7 +1342,7 @@ const Sidebar = () => {
 
                       <DropdownMenuSeparator className="bg-white/10" />
 
-                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                      <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-400">
                         Order
                       </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
@@ -1360,7 +1363,7 @@ const Sidebar = () => {
                         <>
                           <DropdownMenuSeparator className="bg-white/10" />
                           <DropdownMenuItem
-                            className="text-xs text-slate-400 focus:bg-white/5 focus:text-white"
+                            className="text-xs text-zinc-400 focus:bg-white/5 focus:text-white"
                             onSelect={() => {
                               setHistoryTypeFilter("all");
                               setHistorySortBy("updatedAt");
@@ -1391,8 +1394,8 @@ const Sidebar = () => {
                       isSelectionMode
                         ? "bg-emerald-500/10 text-emerald-400"
                         : visibleSelectableIds.length === 0
-                          ? "text-slate-800 cursor-not-allowed"
-                          : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          ? "text-zinc-800 cursor-not-allowed"
+                          : "text-zinc-400 hover:bg-white/5 hover:text-white"
                     }`}
                     disabled={visibleSelectableIds.length === 0}
                     aria-label={
@@ -1458,7 +1461,7 @@ const Sidebar = () => {
                         setIsSelectionMode(false);
                         setSelectedIds(new Set());
                       }}
-                      className="text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:text-white transition-all"
+                      className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-white transition-all"
                     >
                       Cancel
                     </button>
@@ -1473,8 +1476,8 @@ const Sidebar = () => {
               >
                 <div className="flex flex-col gap-3">
                   {unifiedList.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-white/5 bg-white/1 p-10 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-800">
+                    <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-800/40 bg-white/1 p-10 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-800">
                         {hasActiveHistoryFilter ? "No Matches" : "Empty"}
                       </p>
                     </div>
@@ -1554,20 +1557,23 @@ const Sidebar = () => {
         </>
 
         {/* Profile Section */}
-        <div className="mt-auto pt-3 border-t border-white/5 relative">
+        <div className="mt-auto pt-3 border-t border-zinc-800/40 relative">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 w-full p-2 rounded-2xl transition-all group text-left border border-transparent hover:bg-slate-800/50 data-[state=open]:bg-white/10 outline-none focus:ring-0">
+              <button className="flex items-center gap-3 w-full p-2 rounded-2xl transition-all group text-left border border-transparent hover:bg-zinc-800/50 data-[state=open]:bg-white/10 outline-none focus:ring-0">
                 <div
                   className={`h-9 w-9 rounded-xl overflow-hidden transition-all shadow-inner ${
                     isAdmin
                       ? "border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.3)] ring-1 ring-amber-500/20"
-                      : "border border-white/5"
+                      : "border border-zinc-800/40"
                   }`}
                 >
                   {dbUser?.imageUrl || user?.imageUrl ? (
                     <img
-                      src={optimizeImageUrl(dbUser?.imageUrl || user?.imageUrl, 80)}
+                      src={optimizeImageUrl(
+                        dbUser?.imageUrl || user?.imageUrl,
+                        80,
+                      )}
                       alt={
                         dbUser?.firstName
                           ? `${dbUser.firstName} ${dbUser.lastName || ""}`
@@ -1576,8 +1582,8 @@ const Sidebar = () => {
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="h-full w-full bg-slate-800 flex items-center justify-center">
-                      <User size={16} className="text-slate-500" />
+                    <div className="h-full w-full bg-zinc-800 flex items-center justify-center">
+                      <User size={16} className="text-zinc-500" />
                     </div>
                   )}
                 </div>
@@ -1600,7 +1606,7 @@ const Sidebar = () => {
                 </div>
                 <MoreVertical
                   size={16}
-                  className="text-slate-400 group-hover:text-white transition-colors group-data-[state=open]:text-white"
+                  className="text-zinc-400 group-hover:text-white transition-colors group-data-[state=open]:text-white"
                 />
               </button>
             </DropdownMenuTrigger>
@@ -1609,7 +1615,7 @@ const Sidebar = () => {
               side="top"
               align="start"
               sideOffset={12}
-              className="w-72 bg-slate-900/95 backdrop-blur-xl border border-white/5 p-1.5 animate-in fade-in zoom-in-95 duration-200 outline-none focus:ring-0"
+              className="w-72 bg-zinc-900/95 backdrop-blur-xl border border-zinc-800/40 p-1.5 animate-in fade-in zoom-in-95 duration-200 outline-none focus:ring-0"
             >
               {isAdmin && (
                 <DropdownMenuItem
@@ -1626,9 +1632,9 @@ const Sidebar = () => {
                   setSettingsTab("general");
                   setSettingsOpen(true);
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
-                <User size={16} className="text-slate-400" />
+                <User size={16} className="text-zinc-400" />
                 <span>Profile</span>
               </DropdownMenuItem>
 
@@ -1637,9 +1643,9 @@ const Sidebar = () => {
                   setSettingsTab("personalization");
                   setSettingsOpen(true);
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
-                <Sparkles size={16} className="text-slate-400" />
+                <Sparkles size={16} className="text-zinc-400" />
                 <span>Personalization</span>
               </DropdownMenuItem>
 
@@ -1648,17 +1654,17 @@ const Sidebar = () => {
                   setSettingsTab("general");
                   setSettingsOpen(true);
                 }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                className="flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
-                <Settings size={16} className="text-slate-400" />
+                <Settings size={16} className="text-zinc-400" />
                 <span>Settings</span>
               </DropdownMenuItem>
 
               <DropdownMenuItem
                 onClick={() => setShortcutsOpen(true)}
-                className="hidden lg:flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
+                className="hidden lg:flex items-center gap-3 rounded-xl px-4 py-3 text-[11px] font-bold uppercase tracking-[0.15em] text-zinc-300 focus:bg-white/5 focus:text-white transition-all cursor-pointer"
               >
-                <Keyboard size={16} className="text-slate-400" />
+                <Keyboard size={16} className="text-zinc-400" />
                 <span>Keyboard Shortcuts</span>
               </DropdownMenuItem>
 

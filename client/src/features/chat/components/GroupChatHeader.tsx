@@ -54,13 +54,13 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
   if (!group) return null;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/5 bg-[#030712] not-selectable">
+    <header className="sticky top-0 z-40 w-full border-b border-zinc-800/40 bg-[#09090b] not-selectable">
       <div className="mx-auto flex h-14 items-center justify-between px-6 md:px-8">
         {/* Left Section */}
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <button
             onClick={onMenuClick}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-500 hover:text-white lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-500 hover:text-white lg:hidden"
           >
             <Menu size={16} />
           </button>
@@ -73,7 +73,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
               </h1>
             </div>
             <div className="h-1 hidden md:flex w-1 rounded-full bg-white/20" />
-            <span className="hidden md:flex text-[10px] font-medium uppercase tracking-widest text-slate-500">
+            <span className="hidden md:flex text-[10px] font-medium uppercase tracking-widest text-zinc-500">
               {group.members.length} Members
             </span>
           </div>
@@ -83,7 +83,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
         <div className="flex items-center justify-end gap-3">
           <button
             onClick={() => setShowMembers(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-emerald-400"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-emerald-400"
             title="Group Members"
           >
             <Users size={16} />
@@ -91,7 +91,7 @@ const GroupChatHeader: React.FC<GroupChatHeaderProps> = ({ onMenuClick, groupId 
 
           <button
             onClick={() => setShowLeaveConfirm(true)}
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-slate-400 transition hover:bg-rose-500/10 hover:text-rose-400"
+            className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-400 transition hover:bg-rose-500/10 hover:text-rose-400"
             title="Leave Group"
           >
             <LogOut size={16} />

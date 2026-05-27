@@ -60,7 +60,7 @@ const GalleryModal = ({ isOpen, onClose }: GalleryModalProps) => {
       {/* Modal Content */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className="relative flex h-full max-h-[800px] w-full max-w-5xl flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#030712] shadow-2xl"
+        className="relative flex h-full max-h-[800px] w-full max-w-5xl flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#09090b] shadow-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/5 px-8 py-6">
