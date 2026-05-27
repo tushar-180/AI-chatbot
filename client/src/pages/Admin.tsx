@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useUser } from "@clerk/react";
+import { Link } from "react-router-dom";
 import Loading from "@/features/chat/components/Loading";
 import McpAdminTab from "@/features/admin/components/McpAdminTab";
 import { api } from "@/lib/api";
@@ -103,7 +104,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
     if (m.includes("nvidia") || m.includes("nemotron")) return "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.4)]";
     if (m.includes("openai") || m.includes("gpt")) return "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.4)]";
     if (m.includes("deepseek")) return "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.4)]";
-    return "bg-slate-400 shadow-[0_0_8px_rgba(148,163,184,0.4)]";
+    return "bg-zinc-400 shadow-[0_0_8px_rgba(148,163,184,0.4)]";
   };
 
   
@@ -113,7 +114,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
       {listData.map((item) => (
         <div
           key={item.fullName}
-          className="p-4 rounded-2.5xl border border-white/5 bg-slate-900/20 hover:bg-slate-900/40 transition-all duration-300 flex flex-col gap-3 group"
+          className="p-4 rounded-2.5xl border border-white/5 bg-zinc-900/20 hover:bg-zinc-900/40 transition-all duration-300 flex flex-col gap-3 group"
         >
           <div className="flex items-center justify-between min-w-0">
             <div className="flex items-center gap-3 min-w-0">
@@ -122,7 +123,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
                 <p className="text-sm font-bold text-white truncate leading-tight">
                   {item.name}
                 </p>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">
                   {item.messages.toLocaleString()} queries loaded
                 </p>
               </div>
@@ -131,7 +132,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
               <p className="text-sm font-mono font-black text-white">
                 {item.percent.toFixed(1)}%
               </p>
-              <p className="text-xs font-mono text-slate-400 mt-0.5">
+              <p className="text-xs font-mono text-zinc-400 mt-0.5">
                 {item.value ? item.value.toLocaleString() : 0} tkns
               </p>
             </div>
@@ -150,7 +151,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
           </div>
 
           {/* Stacked ratio bar showing input vs output */}
-          <div className="w-full h-1.5 bg-slate-800/40 rounded-full overflow-hidden flex">
+          <div className="w-full h-1.5 bg-zinc-800/40 rounded-full overflow-hidden flex">
             <div
               className="h-full bg-sky-500/80"
               style={{ width: `${item.value > 0 ? (item.promptTokens / item.value) * 100 : 0}%`, transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)" }}
@@ -192,10 +193,10 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-slate-950/95 border border-white/10 backdrop-blur-md px-5 py-4 rounded-3xl shadow-2xl flex flex-col gap-1.5 animate-in fade-in leading-relaxed select-none">
+        <div className="bg-zinc-950/95 border border-white/10 backdrop-blur-md px-5 py-4 rounded-3xl shadow-2xl flex flex-col gap-1.5 animate-in fade-in leading-relaxed select-none">
           <p className="text-sm font-black text-white uppercase tracking-wider">{data.name}</p>
           <div className="h-[1px] w-full bg-white/5 my-0.5" />
-          <p className="text-xs text-slate-300 font-semibold font-sans flex items-center justify-between gap-4">
+          <p className="text-xs text-zinc-300 font-semibold font-sans flex items-center justify-between gap-4">
             <span>Messages:</span>
             <span className="font-mono text-white font-bold">{data.messages.toLocaleString()}</span>
           </p>
@@ -219,14 +220,14 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
   };
 
   return (
-    <div className="bg-slate-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6 w-full">
+    <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6 w-full">
       <div className="flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
           <Activity size={16} />
         </div>
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">Payload Comparison Bar</h3>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold font-sans">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold font-sans">
             Queries (Left Axis) vs Token Load (Right Axis)
           </p>
         </div>
@@ -234,8 +235,8 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
 
       {barData.length === 0 ? (
         <div className="h-48 flex flex-col items-center justify-center text-center border border-dashed border-white/5 rounded-2xl">
-          <Activity size={20} className="text-slate-700 mb-2 animate-pulse" />
-          <p className="text-[10px] uppercase font-bold tracking-wider text-slate-600">No telemetry data</p>
+          <Activity size={20} className="text-zinc-700 mb-2 animate-pulse" />
+          <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-600">No telemetry data</p>
         </div>
       ) : (
         <div className="h-72 w-full pr-2 select-none min-w-0">
@@ -314,13 +315,13 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
       <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-4">
         <div className="flex items-center gap-2.5">
           <span className="h-3 w-3 rounded-full bg-sky-400 shrink-0 shadow-[0_0_6px_rgba(56,189,248,0.5)]" />
-          <span className="text-xs text-slate-400 font-bold font-sans">
+          <span className="text-xs text-zinc-400 font-bold font-sans">
             Total Queries: <span className="text-white font-mono font-black ml-1">{stats.totalMessagesCount?.toLocaleString() || 0}</span>
           </span>
         </div>
         <div className="flex items-center gap-2.5">
           <span className="h-3 w-3 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
-          <span className="text-xs text-slate-400 font-bold font-sans">
+          <span className="text-xs text-zinc-400 font-bold font-sans">
             Total Tokens: <span className="text-white font-mono font-black ml-1">{stats.totalTokens?.toLocaleString() || 0}</span>
           </span>
         </div>
@@ -343,21 +344,21 @@ const ModelEfficiencyList: React.FC<{ usage: GlobalModelUse[] }> = ({ usage }) =
   }, [usage]);
 
   return (
-    <div className="bg-slate-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6">
+    <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
           <Zap size={16} />
         </div>
         <div>
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">Conversational Density</h3>
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Average tokens consumed per message exchange</p>
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">Average tokens consumed per message exchange</p>
         </div>
       </div>
 
       {sortedByDensity.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center py-12 text-center border border-dashed border-white/5 rounded-2xl">
-          <Activity size={20} className="text-slate-700 mb-2 animate-pulse" />
-          <p className="text-[10px] uppercase font-bold tracking-wider text-slate-600">No telemetry loaded</p>
+          <Activity size={20} className="text-zinc-700 mb-2 animate-pulse" />
+          <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-600">No telemetry loaded</p>
         </div>
       ) : (
         <div className="space-y-3.5">
@@ -365,20 +366,20 @@ const ModelEfficiencyList: React.FC<{ usage: GlobalModelUse[] }> = ({ usage }) =
             return (
               <div
                 key={item.model}
-                className="p-3.5 bg-slate-900/20 border border-white/5 hover:border-white/10 hover:bg-slate-900/30 rounded-2xl flex items-center justify-between transition-all duration-300 group"
+                className="p-3.5 bg-zinc-900/20 border border-white/5 hover:border-white/10 hover:bg-zinc-900/30 rounded-2xl flex items-center justify-between transition-all duration-300 group"
               >
                 <div className="min-w-0">
                   <span className="text-xs font-bold text-white block truncate max-w-[220px]">
                     {getModelShortName(item.model)}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-500 block mt-0.5 font-bold uppercase tracking-wider">
+                  <span className="text-[10px] font-mono text-zinc-500 block mt-0.5 font-bold uppercase tracking-wider">
                     {item.count} messages loaded
                   </span>
                 </div>
                 <div className="text-right shrink-0">
                   <span className="text-xs font-mono font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
                     {item.density.toLocaleString()}{" "}
-                    <span className="text-[9px] font-sans font-medium text-slate-400">tkns/msg</span>
+                    <span className="text-[9px] font-sans font-medium text-zinc-400">tkns/msg</span>
                   </span>
                 </div>
               </div>
@@ -500,12 +501,12 @@ const Admin: React.FC = () => {
 
   const getModelBadgeClass = (model: string) => {
     const m = model.toLowerCase();
-    if (m === "none") return "bg-slate-800/60 text-slate-500 border-slate-700/50";
+    if (m === "none") return "bg-zinc-800/60 text-zinc-500 border-zinc-700/50";
     if (m.includes("gemini")) return "bg-purple-500/10 text-purple-400 border-purple-500/20";
     if (m.includes("nvidia") || m.includes("nemotron")) return "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
     if (m.includes("openai") || m.includes("gpt")) return "bg-sky-500/10 text-sky-400 border-sky-500/20";
     if (m.includes("deepseek")) return "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
-    return "bg-slate-500/10 text-slate-400 border-slate-500/20";
+    return "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
   };
 
   // Find max active values for relative visual progress indicators
@@ -520,22 +521,22 @@ const Admin: React.FC = () => {
 
   if (!stats) {
     return (
-      <div className="min-h-screen bg-[#030712] flex flex-col items-center justify-center gap-6 p-4 text-center relative overflow-hidden">
+      <div className="min-h-screen bg-[#09090b] flex flex-col items-center justify-center gap-6 p-4 text-center relative overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-rose-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-        <div className="p-8 bg-slate-900/40 backdrop-blur-2xl border border-rose-500/20 rounded-3xl max-w-md shadow-2xl">
+        <div className="p-8 bg-zinc-900/40 backdrop-blur-2xl border border-rose-500/20 rounded-3xl max-w-md shadow-2xl">
           <Brain className="w-12 h-12 text-rose-500 mx-auto mb-4" />
           <h2 className="text-xl font-display font-bold text-white mb-2">Access Denied</h2>
-          <p className="text-slate-400 text-sm leading-relaxed mb-6">
+          <p className="text-zinc-400 text-sm leading-relaxed mb-6">
             You do not have the required administrative permissions to access the Velora analytics dashboard. Please sign in with an administrator account.
           </p>
-          <a
-            href="/chat"
-            className="inline-flex items-center gap-2 bg-white text-black px-6 py-3.5 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-slate-200 transition-all shadow-xl shadow-black/20"
+          <Link
+            to="/chat"
+            className="inline-flex items-center gap-2 bg-white text-black px-6 py-3.5 rounded-2xl text-[11px] font-bold uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl shadow-black/20"
           >
             <ArrowLeft size={14} strokeWidth={2.5} />
             <span>Return to Chat</span>
-          </a>
+          </Link>
         </div>
       </div>
     );
@@ -544,7 +545,7 @@ const Admin: React.FC = () => {
   const activeModelsCount = stats.globalModelUsage.length;
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-200 flex flex-col relative overflow-x-hidden p-6 md:p-10 animate-in fade-in">
+    <div className="min-h-screen bg-[#09090b] text-zinc-200 flex flex-col relative overflow-x-hidden p-6 md:p-10 animate-in fade-in">
       {/* Glow animations */}
       <div className="absolute top-0 right-1/4 w-[600px] h-[600px] bg-indigo-600/5 rounded-full blur-[150px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-0 left-10 w-[500px] h-[500px] bg-emerald-500/5 rounded-full blur-[150px] pointer-events-none" />
@@ -566,7 +567,7 @@ const Admin: React.FC = () => {
             <h1 className="text-3xl font-display font-bold text-white tracking-tight flex items-center gap-3">
               Admin Dashboard
             </h1>
-            <p className="text-xs font-semibold text-slate-400">
+            <p className="text-xs font-semibold text-zinc-400">
               System intelligence, active model shares, and participant insights
             </p>
           </div>
@@ -576,19 +577,19 @@ const Admin: React.FC = () => {
             <button
               onClick={() => fetchStats(true)}
               disabled={syncing}
-              className="flex items-center justify-center h-11 w-11 bg-slate-900 border border-white/5 hover:border-white/10 hover:text-white rounded-xl text-slate-400 disabled:opacity-40 transition-all shadow-xl hover:scale-105"
+              className="flex items-center justify-center h-11 w-11 bg-zinc-900 border border-white/5 hover:border-white/10 hover:text-white rounded-xl text-zinc-400 disabled:opacity-40 transition-all shadow-xl hover:scale-105"
               title="Synchronize stats"
             >
               <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
             </button>
 
-            <a
-              href="/chat"
-              className="flex items-center gap-2 bg-slate-900 border border-white/5 hover:border-indigo-500/20 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-slate-300 hover:text-white transition-all shadow-xl hover:scale-[1.02]"
+            <Link
+              to="/chat"
+              className="flex items-center gap-2 bg-zinc-900 border border-white/5 hover:border-indigo-500/20 px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-widest text-zinc-300 hover:text-white transition-all shadow-xl hover:scale-[1.02]"
             >
               <ArrowLeft size={16} strokeWidth={2.5} />
               <span>Back to Chat</span>
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -596,9 +597,9 @@ const Admin: React.FC = () => {
         {/* Analytics Summary Cards (4 columns) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Card 1: Users */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-indigo-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
+          <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-indigo-500/20 hover:bg-zinc-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Users</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Users</p>
               <h3 className="text-3xl font-display font-bold text-white leading-none group-hover:text-indigo-400 transition-colors">
                 {stats.totalUsersCount}
               </h3>
@@ -609,9 +610,9 @@ const Admin: React.FC = () => {
           </div>
 
           {/* Card 2: Chats */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-sky-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
+          <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-sky-500/20 hover:bg-zinc-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Chats</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Chats</p>
               <h3 className="text-3xl font-display font-bold text-white leading-none group-hover:text-sky-400 transition-colors">
                 {stats.totalChatsCount}
               </h3>
@@ -622,9 +623,9 @@ const Admin: React.FC = () => {
           </div>
 
           {/* Card 3: Total Messages */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-emerald-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
+          <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-emerald-500/20 hover:bg-zinc-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Messages</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Messages</p>
               <h3 className="text-3xl font-display font-bold text-white leading-none group-hover:text-emerald-400 transition-colors">
                 {stats.totalMessagesCount || 0}
               </h3>
@@ -635,9 +636,9 @@ const Admin: React.FC = () => {
           </div>
 
           {/* Card 4: Total Tokens */}
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-purple-500/20 hover:bg-slate-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
+          <div className="bg-zinc-900/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl hover:border-purple-500/20 hover:bg-zinc-900/60 transition-all flex items-center justify-between shadow-2xl hover:scale-[1.02] duration-300 group">
             <div className="space-y-2 min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Tokens</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Total Tokens</p>
               <h3 className="text-2xl font-display font-bold text-white leading-none group-hover:text-purple-400 transition-colors">
                 {(stats.totalTokens || 0).toLocaleString()}
               </h3>
@@ -659,7 +660,7 @@ const Admin: React.FC = () => {
             className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "overview"
                 ? "text-indigo-400 border-indigo-400 font-bold"
-                : "text-slate-500 border-transparent hover:text-slate-300"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
             }`}
           >
             <BarChart3 size={14} className="hidden sm:block shrink-0" />
@@ -671,7 +672,7 @@ const Admin: React.FC = () => {
             className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "users"
                 ? "text-indigo-400 border-indigo-400 font-bold"
-                : "text-slate-500 border-transparent hover:text-slate-300"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
             }`}
           >
             <UserCheck size={14} className="hidden sm:block shrink-0" />
@@ -683,7 +684,7 @@ const Admin: React.FC = () => {
             className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "performance"
                 ? "text-indigo-400 border-indigo-400 font-bold"
-                : "text-slate-500 border-transparent hover:text-slate-300"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
             }`}
           >
             <Zap size={14} className="hidden sm:block shrink-0" />
@@ -695,7 +696,7 @@ const Admin: React.FC = () => {
             className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
               activeTab === "mcp"
                 ? "text-indigo-400 border-indigo-400 font-bold"
-                : "text-slate-500 border-transparent hover:text-slate-300"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
             }`}
           >
             <Sliders size={14} className="hidden sm:block shrink-0" />
@@ -710,14 +711,14 @@ const Admin: React.FC = () => {
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in">
             {/* Model Shares Telemetry List Card Column (2 spans for large and spacious responsive grid display) */}
-            <div className="lg:col-span-2 bg-slate-950 border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6">
+            <div className="lg:col-span-2 bg-zinc-950 border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
                   <BarChart3 size={16} />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">Model Usage Shares</h3>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold font-sans">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold font-sans">
                     Relative platform token volume breakdown
                   </p>
                 </div>
@@ -725,8 +726,8 @@ const Admin: React.FC = () => {
 
               {stats.globalModelUsage.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-20 text-center border border-dashed border-white/5 rounded-2xl">
-                  <Activity size={20} className="text-slate-700 mb-2" />
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-slate-600">
+                  <Activity size={20} className="text-zinc-700 mb-2" />
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-zinc-600">
                     No active models loaded
                   </p>
                 </div>
@@ -740,7 +741,7 @@ const Admin: React.FC = () => {
               <ModelVolumeBarChart usage={stats.globalModelUsage} stats={stats} />
 
               {/* System status details card */}
-              <div className="bg-slate-950/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl flex flex-col gap-4">
+              <div className="bg-zinc-950/40 backdrop-blur-xl border border-white/5 p-6 rounded-3xl flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <Clock size={16} className="text-indigo-400" />
@@ -752,12 +753,12 @@ const Admin: React.FC = () => {
                 </div>
                 <div className="space-y-3.5">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold">Active Adapters</span>
-                    <span className="font-mono text-slate-200 font-bold">{activeModelsCount} active</span>
+                    <span className="text-zinc-400 font-semibold">Active Adapters</span>
+                    <span className="font-mono text-zinc-200 font-bold">{activeModelsCount} active</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold">Avg Msg Load</span>
-                    <span className="font-mono text-slate-200 font-bold">
+                    <span className="text-zinc-400 font-semibold">Avg Msg Load</span>
+                    <span className="font-mono text-zinc-200 font-bold">
                       {stats.totalMessagesCount && stats.totalMessagesCount > 0
                         ? Math.round(stats.totalTokens / stats.totalMessagesCount).toLocaleString()
                         : 0}{" "}
@@ -765,8 +766,8 @@ const Admin: React.FC = () => {
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold">Telemetry Uptime</span>
-                    <span className="font-mono text-slate-200 font-bold">99.98% operational</span>
+                    <span className="text-zinc-400 font-semibold">Telemetry Uptime</span>
+                    <span className="font-mono text-zinc-200 font-bold">99.98% operational</span>
                   </div>
                 </div>
               </div>
@@ -778,7 +779,7 @@ const Admin: React.FC = () => {
             TAB CONTENT: 2. USER DIRECTORY
             ========================================== */}
         {activeTab === "users" && (
-          <div className="bg-slate-950 border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6 animate-in fade-in">
+          <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col gap-6 animate-in fade-in">
             {/* Directory Header and Search Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
               <div className="flex items-center gap-3.5">
@@ -787,7 +788,7 @@ const Admin: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">User Activity Directory</h3>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
                     Active profiles and detailed resource consumption
                   </p>
                 </div>
@@ -800,11 +801,11 @@ const Admin: React.FC = () => {
                   placeholder="Search user profile..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 group-hover:border-white/20 rounded-2xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-slate-500 outline-none focus:border-indigo-500 transition-all font-sans"
+                  className="w-full bg-zinc-900 border border-white/10 group-hover:border-white/20 rounded-2xl py-2.5 pl-10 pr-4 text-xs text-white placeholder-zinc-zinc-500[6:] outline-none focus:border-indigo-500 transition-all font-sans"
                 />
                 <Search
                   size={14}
-                  className="absolute left-3.5 top-3.5 text-slate-500 group-focus-within:text-white transition-colors"
+                  className="absolute left-3.5 top-3.5 text-zinc-500 group-focus-within:text-white transition-colors"
                 />
               </div>
             </div>
@@ -813,7 +814,7 @@ const Admin: React.FC = () => {
             <div className="hidden md:block overflow-x-auto min-h-0 flex-1">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-white/5 text-left text-[10px] font-bold uppercase tracking-wider text-slate-500 pb-4">
+                  <tr className="border-b border-white/5 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500 pb-4">
                     <th
                       className="pb-4 cursor-pointer select-none hover:text-white transition-colors"
                       onClick={() => handleSort("name")}
@@ -862,7 +863,7 @@ const Admin: React.FC = () => {
                     <tr>
                       <td
                         colSpan={5}
-                        className="py-12 text-center text-slate-600 text-xs font-semibold uppercase tracking-widest"
+                        className="py-12 text-center text-zinc-600 text-xs font-semibold uppercase tracking-widest"
                       >
                         No matches found inside database
                       </td>
@@ -894,8 +895,8 @@ const Admin: React.FC = () => {
                                     className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-300"
                                   />
                                 ) : (
-                                  <div className="h-full w-full bg-slate-800 flex items-center justify-center">
-                                    <UserIcon size={14} className="text-slate-500" />
+                                  <div className="h-full w-full bg-zinc-800 flex items-center justify-center">
+                                    <UserIcon size={14} className="text-zinc-500" />
                                   </div>
                                 )}
                               </div>
@@ -908,28 +909,28 @@ const Admin: React.FC = () => {
                                     onChange={(e) =>
                                       handleRoleChange(u.clerkId, e.target.value as "user" | "admin")
                                     }
-                                    className={`bg-slate-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all ${
-                                      u.role === "admin" ? "text-emerald-400" : "text-slate-400"
+                                    className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all ${
+                                      u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
                                     }`}
                                   >
-                                    <option value="user" className="bg-slate-950 text-slate-400 text-[9px] font-bold">
+                                    <option value="user" className="bg-zinc-950 text-zinc-400 text-[9px] font-bold">
                                       User
                                     </option>
-                                    <option value="admin" className="bg-slate-950 text-emerald-400 text-[9px] font-bold">
+                                    <option value="admin" className="bg-zinc-950 text-emerald-400 text-[9px] font-bold">
                                       Admin
                                     </option>
                                   </select>
                                 </div>
-                                <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.email}</p>
+                                <p className="text-[10px] text-zinc-500 truncate mt-0.5">{u.email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-4 hidden sm:table-cell text-xs text-slate-400 font-medium">
+                          <td className="py-4 hidden sm:table-cell text-xs text-zinc-400 font-medium">
                             {joinedDate}
                           </td>
                           <td className="py-4 text-right pr-4 min-w-[140px]">
                             <span className="text-sm font-semibold text-white font-mono">{u.totalChats}</span>
-                            <p className="text-[9px] text-slate-500 font-mono mt-0.5">
+                            <p className="text-[9px] text-zinc-500 font-mono mt-0.5">
                               {totalContribution}% contribution
                             </p>
                             {/* Visual contribution bar */}
@@ -975,7 +976,7 @@ const Admin: React.FC = () => {
             {/* Mobile Card Layout */}
             <div className="md:hidden flex flex-col gap-4">
               {filteredAndSortedUsers.length === 0 ? (
-                <div className="py-12 text-center text-slate-600 text-xs font-semibold uppercase tracking-widest border border-dashed border-white/5 rounded-2xl">
+                <div className="py-12 text-center text-zinc-600 text-xs font-semibold uppercase tracking-widest border border-dashed border-white/5 rounded-2xl">
                   No matches found inside database
                 </div>
               ) : (
@@ -996,7 +997,7 @@ const Admin: React.FC = () => {
                   return (
                     <div
                       key={u.clerkId}
-                      className="p-4 bg-slate-900/20 border border-white/5 rounded-2xl flex flex-col gap-3.5"
+                      className="p-4 bg-zinc-900/20 border border-white/5 rounded-2xl flex flex-col gap-3.5"
                     >
                       {/* Header: User Profile and Role */}
                       <div className="flex items-center justify-between gap-3">
@@ -1009,8 +1010,8 @@ const Admin: React.FC = () => {
                                 className="h-full w-full object-cover"
                               />
                             ) : (
-                              <div className="h-full w-full bg-slate-800 flex items-center justify-center">
-                                <UserIcon size={14} className="text-slate-500" />
+                              <div className="h-full w-full bg-zinc-800 flex items-center justify-center">
+                                <UserIcon size={14} className="text-zinc-500" />
                               </div>
                             )}
                           </div>
@@ -1018,7 +1019,7 @@ const Admin: React.FC = () => {
                             <p className="text-sm font-semibold text-white truncate leading-tight">
                               {`${u.firstName || ""} ${u.lastName || ""}`.trim() || "User"}
                             </p>
-                            <p className="text-[10px] text-slate-500 truncate mt-0.5">{u.email}</p>
+                            <p className="text-[10px] text-zinc-500 truncate mt-0.5">{u.email}</p>
                           </div>
                         </div>
 
@@ -1028,14 +1029,14 @@ const Admin: React.FC = () => {
                           onChange={(e) =>
                             handleRoleChange(u.clerkId, e.target.value as "user" | "admin")
                           }
-                          className={`bg-slate-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
-                            u.role === "admin" ? "text-emerald-400" : "text-slate-400"
+                          className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
+                            u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
                           }`}
                         >
-                          <option value="user" className="bg-slate-950 text-slate-400 text-[9px] font-bold">
+                          <option value="user" className="bg-zinc-950 text-zinc-400 text-[9px] font-bold">
                             User
                           </option>
-                          <option value="admin" className="bg-slate-950 text-emerald-400 text-[9px] font-bold">
+                          <option value="admin" className="bg-zinc-950 text-emerald-400 text-[9px] font-bold">
                             Admin
                           </option>
                         </select>
@@ -1047,10 +1048,10 @@ const Admin: React.FC = () => {
                       {/* Details Section */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Chats / Share</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Chats / Share</p>
                           <p className="text-xs font-mono font-bold text-white leading-none mt-1">
                             {u.totalChats}{" "}
-                            <span className="text-[9px] font-sans font-medium text-slate-500">
+                            <span className="text-[9px] font-sans font-medium text-zinc-500">
                               ({totalContribution}% share)
                             </span>
                           </p>
@@ -1064,7 +1065,7 @@ const Admin: React.FC = () => {
                         </div>
 
                         <div className="space-y-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Favorite Model</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Favorite Model</p>
                           <div className="mt-1">
                             <span
                               className={`inline-block px-2.5 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border ${getModelBadgeClass(
@@ -1080,14 +1081,14 @@ const Admin: React.FC = () => {
                       {/* Tokens Section */}
                       <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-3">
                         <div className="space-y-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Total Tokens</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Total Tokens</p>
                           <p className="text-xs font-mono font-bold text-white mt-1">
                             {u.totalTokens?.toLocaleString() || 0}
                           </p>
                         </div>
 
                         <div className="space-y-1">
-                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Token Mix</p>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Token Mix</p>
                           <div className="flex items-center gap-3 mt-1.5">
                             <span className="text-[9px] text-sky-400/80 font-mono font-semibold flex items-center gap-1" title="Input tokens">
                               <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0"/>
@@ -1102,7 +1103,7 @@ const Admin: React.FC = () => {
                       </div>
 
                       {/* Footer metadata (Joined) */}
-                      <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] font-medium text-slate-500">
+                      <div className="border-t border-white/5 pt-2 flex items-center justify-between text-[9px] font-medium text-zinc-500">
                         <span>Joined: {joinedDate}</span>
                       </div>
                     </div>
@@ -1124,22 +1125,22 @@ const Admin: React.FC = () => {
             </div>
 
             {/* Platform active agents intelligence summary */}
-            <div className="lg:col-span-1 bg-slate-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6">
+            <div className="lg:col-span-1 bg-zinc-950 border border-white/5 rounded-3xl p-6 shadow-2xl flex flex-col gap-6">
               <div className="flex items-center gap-3.5">
                 <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0">
                   <TrendingUp size={16} />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider">Performance Audit</h3>
-                  <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">
                     Provider billing and payload density
                   </p>
                 </div>
               </div>
 
               <div className="space-y-5">
-                <div className="p-4 bg-slate-900/30 border border-white/5 rounded-2xl flex flex-col gap-2">
-                  <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">
+                <div className="p-4 bg-zinc-900/30 border border-white/5 rounded-2xl flex flex-col gap-2">
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">
                     Heaviest Driver
                   </span>
                   <p className="text-base font-display font-bold text-white leading-tight">
@@ -1147,7 +1148,7 @@ const Admin: React.FC = () => {
                       ? getModelShortName(stats.globalModelUsage[0].model)
                       : "No active drivers"}
                   </p>
-                  <p className="text-[10px] text-slate-400 font-medium font-mono">
+                  <p className="text-[10px] text-zinc-400 font-medium font-mono">
                     Consuming{" "}
                     {stats.globalModelUsage.length > 0 ? stats.globalModelUsage[0].tokens.toLocaleString() : 0} tokens
                     globally
@@ -1156,30 +1157,30 @@ const Admin: React.FC = () => {
 
                 <div className="p-4 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex flex-col gap-2.5">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold">Active Models</span>
+                    <span className="text-zinc-400 font-semibold">Active Models</span>
                     <span className="font-mono text-indigo-400 font-bold">{activeModelsCount} loaded</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input Tokens</span>
                     <span className="font-mono text-sky-400 font-bold">
                       {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output Tokens</span>
                     <span className="font-mono text-emerald-400 font-bold">
                       {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
-                    <span className="text-slate-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total Tokens</span>
                     <span className="font-mono text-purple-400 font-bold">
                       {((stats.totalTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[10px] text-slate-500 leading-relaxed text-center font-sans font-semibold px-2">
+                <p className="text-[10px] text-zinc-500 leading-relaxed text-center font-sans font-semibold px-2">
                   Note: Values are calculated in real-time by analyzing message payloads. Prompt tokens represent
                   contexts sent; completion tokens represent replies.
                 </p>

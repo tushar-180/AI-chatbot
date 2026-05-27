@@ -13,10 +13,13 @@ import {
 } from "@/features/chat/hooks/useChatInput";
 import { useChatList } from "@/features/chat/hooks/useChatList";
 import { useWebSearchQuota } from "@/features/chat/hooks/useWebSearchQuota";
-import { Spotlight } from "@/components/ui/spotlight";
+
 import type { WebSource } from "@/features/chat/types/chat.types";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
-import { useTemporaryChat, cleanupTemporaryChatStream } from "@/features/chat/hooks/useTemporaryChat";
+import {
+  useTemporaryChat,
+  cleanupTemporaryChatStream,
+} from "@/features/chat/hooks/useTemporaryChat";
 import { chatService } from "@/features/chat/services/chat.service";
 import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
@@ -104,8 +107,9 @@ const Chat = () => {
   // CRITICAL: Immediately clear messages to prevent leaking between chats.
   useEffect(() => {
     const store = useChatStore.getState();
-    const isNavigatingToActiveStream =
-      Boolean(chatId && store.streamingChatIds[chatId] === true);
+    const isNavigatingToActiveStream = Boolean(
+      chatId && store.streamingChatIds[chatId] === true,
+    );
 
     if (chatId && chatId !== store.currentChatId) {
       setCurrentChat(chatId);
@@ -118,13 +122,7 @@ const Chat = () => {
       setMessages([]);
       setIsNewChat(true);
     }
-  }, [
-    chatId,
-    projectId,
-    setCurrentChat,
-    setMessages,
-    setIsNewChat,
-  ]);
+  }, [chatId, projectId, setCurrentChat, setMessages, setIsNewChat]);
 
   // 1. Manage Message Fetching & Sync
   const { messagesLoading, loadedChatId, messagesError } = useChatMessages({
@@ -191,10 +189,11 @@ const Chat = () => {
     };
   }, []);
 
+  // auto-scroll chat to bottom on new message send
 
-// auto-scroll chat to bottom on new message send
-
-  const messageListRef = useRef<{ instantScrollToBottom: () => void } | null>(null);
+  const messageListRef = useRef<{ instantScrollToBottom: () => void } | null>(
+    null,
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     messageListRef.current?.instantScrollToBottom();
@@ -251,7 +250,7 @@ const Chat = () => {
         pendingState.pendingAttachments || [],
         {
           webSearchEnabled: pendingState.pendingWebSearch ?? webSearchEnabled,
-          attachedFile: pendingState.pendingAttachedFile
+          attachedFile: pendingState.pendingAttachedFile,
         },
       );
     }
@@ -297,25 +296,18 @@ const Chat = () => {
       selection: selectionContext || undefined,
       attachedFile: file,
     });
-    setInput('');
+    setInput("");
   };
 
   return (
-    <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans antialiased">
+    <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-[#09090b] text-zinc-100 font-sans antialiased">
       <main
-        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${isTemporaryChatActive
-            ? "bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/15 via-slate-950 to-slate-950"
-            : "bg-linear-to-br from-[#030712] via-[#0f172a]/40 to-[#030712]"
-          }`}
+        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
+          isTemporaryChatActive
+            ? "bg-[#09090b] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/10 via-[#09090b] to-[#09090b]"
+            : "bg-[#09090b]"
+        }`}
       >
-        {/* Spotlight Component - Positioned correctly */}
-        {!isTemporaryChatActive && (
-          <Spotlight
-            className="-top-40 left-0 md:-top-20 md:left-60 opacity-60"
-            fill="rgba(255, 255, 255, 0.05)"
-          />
-        )}
-
         <div
           className={`flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
         >
@@ -328,7 +320,11 @@ const Chat = () => {
             {(() => {
               const isTransitioning =
                 (chatId || null) !== currentChatId &&
-                !(!chatId && currentChatId !== null && (isStreaming || isCurrentChatLoading));
+                !(
+                  !chatId &&
+                  currentChatId !== null &&
+                  (isStreaming || isCurrentChatLoading)
+                );
               return (
                 <MessageList
                   ref={messageListRef}
@@ -342,8 +338,8 @@ const Chat = () => {
                     isTransitioning
                       ? !chatId
                       : !currentChatId ||
-                      loadedChatId === currentChatId ||
-                      canAutoStartFromSeededMessages
+                        loadedChatId === currentChatId ||
+                        canAutoStartFromSeededMessages
                   }
                   isStreaming={isTransitioning ? false : isStreaming}
                   currentChatId={
@@ -352,12 +348,17 @@ const Chat = () => {
                   isNewChat={isTransitioning ? !chatId : isNewChat}
                   onSuggestionClick={setInput}
                   onEditMessage={(messageId, content, options) =>
-                    editMessage(messageId, content, options?.provider || selectedProvider, {
-                      webSearchEnabled: options?.webSearchEnabled,
-                      attachments: options?.attachments,
-                      attachedFile: options?.attachedFile,
-                      selection: options?.selection,
-                    })
+                    editMessage(
+                      messageId,
+                      content,
+                      options?.provider || selectedProvider,
+                      {
+                        webSearchEnabled: options?.webSearchEnabled,
+                        attachments: options?.attachments,
+                        attachedFile: options?.attachedFile,
+                        selection: options?.selection,
+                      },
+                    )
                   }
                   onEditStart={stopGeneration}
                   onFeedback={(messageId, feedback) => {
@@ -379,7 +380,11 @@ const Chat = () => {
                     }
                   }}
                   onRetryMessage={(messageId, provider, webSearchEnabled) =>
-                    retryMessage(messageId, provider || selectedProvider, webSearchEnabled)
+                    retryMessage(
+                      messageId,
+                      provider || selectedProvider,
+                      webSearchEnabled,
+                    )
                   }
                   onCitationClick={handleCitationClick}
                   onSourcesClick={handleSourcesOpen}
@@ -413,9 +418,6 @@ const Chat = () => {
             />
           </div>
         </div>
-
-        {/* Minimal Noise Overlay for Texture */}
-        <div className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay bg-[url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22/%3E%3C/svg%3E')] z-50" />
       </main>
 
       {selectedSources.length > 0 && (
