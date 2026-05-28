@@ -91,6 +91,8 @@ interface MessageItemProps {
   highlight?: string;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
+  /** Rendered inside the action bar — the ◀ 1/N ▶ generation navigator */
+  generationSwitcher?: React.ReactNode;
 }
 
 /**
@@ -272,6 +274,7 @@ const MessageItem = ({
   highlight,
   onCitationClick,
   onSourcesClick,
+  generationSwitcher,
 }: MessageItemProps) => {
   const { user } = useUser();
   const dbUser = useChatStore((state) => state.dbUser);
@@ -965,6 +968,9 @@ const MessageItem = ({
 
           {!isUser && !isStreaming && (msg.content || isFailed) && (
             <div className="flex items-center gap-1 transition-all duration-200 opacity-100">
+              {/* Generation switcher (◀ 1/N ▶) for retry siblings */}
+              {generationSwitcher}
+
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -1093,6 +1099,9 @@ const MessageItem = ({
 
           {isUser && !isEditing && (
             <div className="flex items-center gap-1 opacity-100 transition-all duration-200">
+              {/* Generation switcher (◀ 1/N ▶) for edit siblings */}
+              {generationSwitcher}
+
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -1137,7 +1146,8 @@ const areEqual = (
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===
     next.message.tokens?.completionTokens &&
-    prev.message.sources === next.message.sources
+    prev.message.sources === next.message.sources &&
+    prev.generationSwitcher === next.generationSwitcher
   );
 };
 

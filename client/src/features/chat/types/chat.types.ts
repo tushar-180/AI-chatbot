@@ -26,6 +26,13 @@ export type Message = {
     };
     createdAt?: string;
     updatedAt?: string;
+    // Branching / versioning fields (mirror of server schema)
+    parentId?: string | null;
+    retryOf?: string | null;
+    editedFrom?: string | null;
+    branchId?: string | null;
+    version?: number;
+    isActive?: boolean;
 };
 
 export type Chat = {

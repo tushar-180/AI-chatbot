@@ -18,6 +18,9 @@ type ChatState = {
   viewingArchived: boolean;
   currentChat: Chat | null;
   dbUser: any | null;
+  // Maps chatId -> branchId -> active messageId chosen by user
+  // Used by GenerationSwitcher to track which generation is shown per branch
+  generationIndexByChatId: Record<string, Record<string, string>>;
   setDbUser: (dbUser: any) => void;
 
   setSidebarOpen: (open: boolean) => void;
@@ -44,6 +47,8 @@ type ChatState = {
     messageId: string,
     feedback: "like" | "dislike" | null,
   ) => void;
+  // Set the active messageId for a branchId in a specific chat
+  setGenerationIndex: (chatId: string, branchId: string, messageId: string) => void;
 };
 
 export const useChatStore = create<ChatState>()(
@@ -64,6 +69,7 @@ export const useChatStore = create<ChatState>()(
       viewingArchived: false,
       currentChat: null,
       dbUser: null,
+      generationIndexByChatId: {},
 
       setDbUser: (dbUser) => set({ dbUser }),
 
@@ -299,6 +305,18 @@ export const useChatStore = create<ChatState>()(
             m.id === messageId ? { ...m, feedback } : m,
           ),
         })),
+
+      // Track which generation (by messageId) is active for each branchId within a chat
+      setGenerationIndex: (chatId, branchId, messageId) =>
+        set((state) => ({
+          generationIndexByChatId: {
+            ...state.generationIndexByChatId,
+            [chatId]: {
+              ...(state.generationIndexByChatId[chatId] ?? {}),
+              [branchId]: messageId,
+            },
+          },
+        })),
     }),
     {
       name: "chat-storage",
@@ -306,7 +324,7 @@ export const useChatStore = create<ChatState>()(
         Object.fromEntries(
           Object.entries(state).filter(
             ([key]) =>
-              !["loading", "isStreaming", "streamingChatId", "loadingChatIds", "streamingChatIds"].includes(key),
+              !["loading", "isStreaming", "streamingChatId", "loadingChatIds", "streamingChatIds", "generationIndexByChatId"].includes(key),
           ),
         ) as ChatState,
     },

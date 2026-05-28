@@ -22,6 +22,8 @@ import type { WebSource, Message } from "../types/chat.types";
 
 import MessageItem from "./MessageItem";
 import { useChatStore } from "../store/useChatStore";
+import { GenerationSwitcher } from "./GenerationSwitcher";
+import { resolveActiveBranch, getSiblingGenerations } from "../utils/branchUtils";
 
 const SUGGESTIONS = [
   {
@@ -83,6 +85,8 @@ interface MessageListProps {
   onFeedback?: (messageId: string, feedback: "like" | "dislike" | null) => void;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
+  // Called after the user switches generation in the GenerationSwitcher
+  onSwitchGeneration?: (newMessage: Message) => void;
 }
 
 const MessageList = forwardRef<
@@ -106,6 +110,7 @@ const MessageList = forwardRef<
       onFeedback,
       onCitationClick,
       onSourcesClick,
+      onSwitchGeneration,
     },
     ref,
   ) => {
@@ -506,24 +511,40 @@ const MessageList = forwardRef<
               </div>
             ) : (
               <>
-                {messages.map((msg, i) => {
+                {/* Resolve active branch: hide inactive retry/edit siblings */}
+                {resolveActiveBranch(messages).map((msg, i, activeMsgs) => {
+                  // Build sibling list for GenerationSwitcher (both user edits and assistant retries)
+                  const siblings = getSiblingGenerations(messages, msg);
+                  const hasSiblings = siblings.length > 1;
+
                   return (
-                    <MessageItem
-                      key={msg.id}
-                      message={msg}
-                      isStreaming={isStreaming && i === messages.length - 1}
-                      onEdit={(content, options) =>
-                        onEditMessage?.(msg.id, content, options)
-                      }
-                      onEditStart={onEditStart}
-                      onRetry={(provider, webSearchEnabled) =>
-                        onRetryMessage?.(msg.id, provider, webSearchEnabled)
-                      }
-                      onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
-                      highlight={highlight || undefined}
-                      onCitationClick={onCitationClick}
-                      onSourcesClick={onSourcesClick}
-                    />
+                    <div key={msg.id || (msg as any)._id || (msg as any).requestId} className="flex flex-col">
+                      <MessageItem
+                        message={msg}
+                        isStreaming={isStreaming && i === activeMsgs.length - 1}
+                        onEdit={(content, options) =>
+                          onEditMessage?.(msg.id, content, options)
+                        }
+                        onEditStart={onEditStart}
+                        onRetry={(provider, webSearchEnabled) =>
+                          onRetryMessage?.(msg.id, provider, webSearchEnabled)
+                        }
+                        onFeedback={(feedback) => onFeedback?.(msg.id, feedback)}
+                        highlight={highlight || undefined}
+                        onCitationClick={onCitationClick}
+                        onSourcesClick={onSourcesClick}
+                        generationSwitcher={
+                          hasSiblings && !isStreaming && currentChatId ? (
+                            <GenerationSwitcher
+                              message={msg}
+                              siblings={siblings}
+                              chatId={currentChatId}
+                              onSwitch={(newMsg) => onSwitchGeneration?.(newMsg)}
+                            />
+                          ) : null
+                        }
+                      />
+                    </div>
                   );
                 })}
 
