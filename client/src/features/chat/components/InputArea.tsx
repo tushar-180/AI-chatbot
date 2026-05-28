@@ -644,7 +644,7 @@ const InputArea = ({
                       });
                     }
                   }}
-                  className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent pl-1 pr-2 lg:pl-0 lg:pr-3 py-2 text-[0.95rem] lg:text-[1rem] leading-5 lg:leading-[1.5rem] text-zinc-100 placeholder-zinc-600 outline-none overflow-y-auto`}
+                  className={`${isFocused ? "" : "selection:bg-transparent select-none selection:text-white"} not-selectable  max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 flex-1 w-full ${!canUpload ? "ml-5" : ""} resize-none bg-transparent pl-1 pr-2 lg:pl-0 lg:pr-3 py-2 text-[0.95rem] lg:text-[1rem] leading-5 lg:leading-[1.5rem] text-zinc-100 placeholder-zinc-600 outline-none overflow-y-auto`}
                 />
                 <div className="flex items-end gap-1.5 lg:gap-2">
                   {/* Mic button */}
