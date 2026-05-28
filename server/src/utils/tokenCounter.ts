@@ -1,3 +1,6 @@
+import fs from 'fs';
+import path from 'path';
+
 export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;
@@ -111,4 +114,52 @@ export function serializePromptMessages(messages: any[]): string {
       return `${role}: ${content}`;
     })
     .join("\n");
+}
+
+export interface LogTokenDetails {
+  model: string;
+  usage: TokenUsage;
+  context: string;
+  username?: string;
+  groupTitle?: string;
+  chatTitle?: string;
+  messageId?: string;
+  hasWebSearch?: boolean;
+  mcpToolsProvided?: number;
+  attachments?: { name?: string; mimeType?: string }[];
+}
+
+/**
+ * Logs token usage to the console and to a local log file (token_usage.log)
+ */
+export function logTokenUsage(details: LogTokenDetails): void {
+  const timestamp = new Date().toISOString();
+  
+  const extras = [];
+  if (details.username) extras.push(`User: ${details.username}`);
+  if (details.chatTitle) extras.push(`Chat: ${details.chatTitle}`);
+  if (details.groupTitle) extras.push(`Group: ${details.groupTitle}`);
+  if (details.messageId) extras.push(`MsgID: ${details.messageId}`);
+  if (details.hasWebSearch) extras.push(`WebSearch: YES`);
+  if (details.mcpToolsProvided !== undefined) extras.push(`MCP_Tools: ${details.mcpToolsProvided}`);
+  
+  if (details.attachments && details.attachments.length > 0) {
+    const attInfo = details.attachments.map(a => `${a.name || 'file'} (${a.mimeType || 'unknown'})`).join(', ');
+    extras.push(`Attachments: [${attInfo}]`);
+  }
+
+  const extrasStr = extras.length > 0 ? ` | ${extras.join(' | ')}` : '';
+
+  const logEntry = `[${timestamp}] [${details.context}] Model: ${details.model} | Prompt: ${details.usage.promptTokens} | Completion: ${details.usage.completionTokens} | Total: ${details.usage.totalTokens}${extrasStr}\n`;
+  
+  // Console log
+  console.log(`📊 Token Usage -> ${logEntry.trim()}`);
+  
+  // File log
+  try {
+    const logFilePath = path.join(process.cwd(), 'token_usage.log');
+    fs.appendFileSync(logFilePath, logEntry, 'utf8');
+  } catch (error) {
+    console.error("Failed to write token usage to log file:", error);
+  }
 }

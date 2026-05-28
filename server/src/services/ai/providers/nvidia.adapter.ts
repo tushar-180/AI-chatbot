@@ -8,7 +8,15 @@ import {
 } from "../constants";
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 import { mcpClientService } from "../../mcpClient.service";
-import { CORE_VELORA_INSTRUCTIONS } from "../../../constants/prompt.constants";
+import {
+  CORE_VELORA_INSTRUCTIONS,
+  MCP_TOOL_ERROR_FALLBACK_MESSAGE,
+  MCP_TOOL_ERROR_NOTE,
+  MCP_TOOL_ERROR_RETRY_LIMIT,
+  MCP_TOOL_FALLBACK_MESSAGE,
+  MCP_TOOL_LOOP_LIMIT,
+  MCP_TOOL_SUCCESS_NOTE,
+} from "../../../constants/prompt.constants";
 
 export class NvidiaAdapter implements IAIService {
   private openai: OpenAI;
@@ -120,13 +128,36 @@ export class NvidiaAdapter implements IAIService {
     }));
   }
 
+  private formatToolSuccessResult(result: unknown): string {
+    let text: string;
+    if (result && typeof result === "object" && Array.isArray((result as any).content)) {
+      text = (result as any).content
+        .filter((c: any) => c.type === "text" && c.text)
+        .map((c: any) => c.text)
+        .join("\n");
+      if (!text) text = JSON.stringify(result);
+    } else {
+      text = typeof result === "string" ? result : JSON.stringify(result);
+    }
+    return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
+  }
+
+  private formatToolErrorResult(err: unknown, attempt: number): string {
+    const message =
+      err instanceof Error ? err.message : String(err || "Unknown tool error");
+    return JSON.stringify({
+      error: `${message}. ${MCP_TOOL_ERROR_NOTE(attempt)}`,
+    });
+  }
+
   async generateResponse(messages: AIMessage[], tools?: any[]) {
     const finalMessages = this.formatMessages(messages, !!(tools && tools.length > 0));
     const nvidiaTools = this.mapMcpToolsToNvidia(tools);
 
     let hasToolCalls = true;
     let loopCount = 0;
-    const maxLoops = 10;
+    const maxLoops = MCP_TOOL_LOOP_LIMIT;
+    let consecutiveErrorRounds = 0;
     let finalOutput = "";
     let totalUsage: ReturnType<typeof normalizeOpenAIUsage>;
 
@@ -159,6 +190,7 @@ export class NvidiaAdapter implements IAIService {
         if (toolCalls && toolCalls.length > 0) {
           hasToolCalls = true;
           finalMessages.push(choice.message);
+          let hadToolError = false;
 
           const responseMessages = await Promise.all(
             toolCalls.map(async (tc) => {
@@ -176,27 +208,36 @@ export class NvidiaAdapter implements IAIService {
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify(result),
+                  content: this.formatToolSuccessResult(result),
                 };
               } catch (err: any) {
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
+                hadToolError = true;
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify({
-                    error: errMsg,
-                  }),
+                  content: this.formatToolErrorResult(err, consecutiveErrorRounds + 1),
                 };
               }
             }),
           );
 
           finalMessages.push(...responseMessages);
+          consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+          if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+            finalOutput = finalOutput.trim()
+              ? `${finalOutput.trim()}\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}`
+              : MCP_TOOL_ERROR_FALLBACK_MESSAGE;
+            break;
+          }
         }
       }
 
+      if (loopCount >= maxLoops && hasToolCalls && !finalOutput.trim()) {
+        finalOutput = MCP_TOOL_FALLBACK_MESSAGE;
+      }
+
       return {
-        text: finalOutput.trim() || "No response generated.",
+        text: finalOutput.trim() || MCP_TOOL_FALLBACK_MESSAGE,
         usage: totalUsage,
       };
     } catch (error: any) {
@@ -238,7 +279,9 @@ export class NvidiaAdapter implements IAIService {
         try {
           let hasToolCalls = true;
           let loopCount = 0;
-          const maxLoops = 10;
+          const maxLoops = MCP_TOOL_LOOP_LIMIT;
+          let finalStreamText = "";
+          let consecutiveErrorRounds = 0;
 
           while (hasToolCalls && loopCount < maxLoops) {
             loopCount++;
@@ -296,6 +339,7 @@ export class NvidiaAdapter implements IAIService {
               const content = choice?.delta?.content || "";
               if (content) {
                 accumulatedText += content;
+                finalStreamText += content;
                 yield content;
               }
 
@@ -334,6 +378,7 @@ export class NvidiaAdapter implements IAIService {
             });
 
             const responseMessages = [];
+            let hadToolError = false;
             for (const tc of activeToolCalls) {
               const toolCall = tc as any;
               yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
@@ -354,25 +399,32 @@ export class NvidiaAdapter implements IAIService {
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify(result),
+                  content: adapter.formatToolSuccessResult(result),
                 });
               } catch (err: any) {
+                hadToolError = true;
                 yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${
                   err.message || err
                 }*\n\n`;
 
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify({
-                    error: errMsg,
-                  }),
+                  content: adapter.formatToolErrorResult(err, consecutiveErrorRounds + 1),
                 });
               }
             }
 
             finalMessages.push(...responseMessages);
+            consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+            if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+              yield `\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}\n`;
+              return;
+            }
+          }
+
+          if (loopCount >= maxLoops && hasToolCalls && !finalStreamText.trim()) {
+            yield `\n\n${MCP_TOOL_FALLBACK_MESSAGE}\n`;
           }
         } catch (error: any) {
           if (signal?.aborted) {

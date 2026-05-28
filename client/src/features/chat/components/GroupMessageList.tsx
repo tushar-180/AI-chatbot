@@ -12,6 +12,7 @@ import GroupMessageItem from "./GroupMessageItem";
 import { useGroupStore } from "../store/useGroupStore";
 import { Globe, ChevronDown } from "lucide-react";
 import { useParams, useSearchParams } from "react-router-dom";
+import { useUser } from "@clerk/react";
 
 interface GroupMessageListProps {
   onCitationClick?: (id: number) => void;
@@ -34,6 +35,7 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
     groupMessages: storeMessages,
     loading: storeLoading,
     currentGroupId,
+    groups,
     isAiThinking: storeAiThinking,
     isWebSearching: storeWebSearching,
   } = useGroupStore();
@@ -47,6 +49,9 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
   const isAiThinking = isTransitioning ? false : storeAiThinking;
   const isWebSearching = isTransitioning ? false : storeWebSearching;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const { user } = useUser();
+  const currentGroup = groups.find((g) => g._id === currentGroupId);
+  const members = currentGroup?.members || [];
 
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const shouldAutoScrollRef = useRef(true);
@@ -72,11 +77,11 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
     (smooth = false) => {
       const container = getScrollContainer();
       if (!container) return;
-      const offset = 1015;
+      // const offset = 1015;
       
       requestAnimationFrame(() => {
         container.scrollTo({
-          top: container.scrollHeight - offset,
+          top: container.scrollHeight,
           behavior: smooth ? "smooth" : "auto",
         });
       });
@@ -273,25 +278,37 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
             </div>
           ) : (
             <>
-              {groupMessages.map((msg) => (
-                <GroupMessageItem
-                  key={msg._id}
-                  message={msg}
-                  onCitationClick={onCitationClick}
-                  onSourcesClick={onSourcesClick}
-                  onEdit={(content, webSearchEnabled, attachments, attachedFile) => onEditMessage?.(msg._id, content, webSearchEnabled, attachments, attachedFile)}
-                  onEditStart={onEditStart}
-                  onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg._id, provider, webSearchEnabled)}
-                  onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}
-                />
-              ))}
+              {groupMessages.map((msg, index) => {
+                let isRequester = msg.metadata?.requesterId === user?.id;
+                if (msg.metadata?.requesterId === undefined && (msg.role === "assistant" || msg.userId === "velora")) {
+                  const prevMsg = index > 0 ? groupMessages[index - 1] : null;
+                  if (prevMsg && prevMsg.role === "user") {
+                    isRequester = prevMsg.userId === user?.id;
+                  }
+                }
+
+                return (
+                  <GroupMessageItem
+                    key={msg._id}
+                    message={msg}
+                    members={members}
+                    isRequester={!!isRequester}
+                    onCitationClick={onCitationClick}
+                    onSourcesClick={onSourcesClick}
+                    onEdit={(content, webSearchEnabled, attachments, attachedFile) => onEditMessage?.(msg._id, content, webSearchEnabled, attachments, attachedFile)}
+                    onEditStart={onEditStart}
+                    onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg._id, provider, webSearchEnabled)}
+                    onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}
+                  />
+                );
+              })}
               {isAiThinking && (
                 <div
                   key="group-active-thinking-loader"
                   className="flex w-full justify-start duration-300 animate-in fade-in slide-in-from-bottom-2"
                 >
                   <div className="flex max-w-[85%] flex-row gap-3 items-start">
-                    <div className="flex shrink-0 items-center justify-center rounded-lg overflow-hidden h-7 w-7 bg-slate-900 border border-white/[0.05]">
+                    <div className="flex shrink-0 items-center justify-center rounded-lg overflow-hidden h-7 w-7 bg-slate-900 border border-white/5">
                       <img
                         src="/logo.png"
                         alt="Velora Logo"
@@ -303,7 +320,7 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                       <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                         Velora
                       </span>
-                      <div className="flex items-center gap-1.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] px-5 py-3.5 shadow-sm">
+                      <div className="flex items-center gap-1.5 rounded-2xl bg-white/3 border border-white/6 px-5 py-3.5 shadow-sm">
                         {isWebSearching ? (
                           <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-slate-400">
                             <Globe size={14} className="animate-pulse" />
