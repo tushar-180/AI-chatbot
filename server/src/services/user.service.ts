@@ -82,7 +82,7 @@ ${memories.map(m => `- [${m.category}] ${m.content} (Recorded: ${m.createdAt.toI
     const exportPrompt = EXPORT_DATA_PROMPT(context);
 
     const provider = aiService.getProvider("gemini");
-    provider.setModel("gemini-3.1-flash-lite-preview");
+    provider.setModel("gemini-3.1-flash-lite");
     
     const summary = await provider.generateResponse([
       { role: "user", content: exportPrompt, userId: clerkId }
