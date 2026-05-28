@@ -74,6 +74,46 @@ const messageSchema = new mongoose.Schema(
     tokens: {
       type: tokenUsageSchema,
     },
+    // ── Branching / versioning fields ──────────────────────────────────────
+    // parentId: the user-message that triggered this assistant response.
+    // On retry the same parentId is reused; on edit a new user msg is created
+    // and becomes the parentId of the new assistant response.
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+      index: true,
+    },
+    // retryOf: points to the previous assistant message being re-generated.
+    retryOf: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    // editedFrom: points to the original user message that this edit branched from.
+    editedFrom: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+    },
+    // branchId: groups all retry/edit siblings under one identifier (UUID string).
+    // All generations that share the same parent user message get the same branchId.
+    branchId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    // version: 1-based counter within a branchId group (1 = original, 2 = first retry, …).
+    version: {
+      type: Number,
+      default: 1,
+    },
+    // isActive: only the "active" sibling in a branchId group is shown by default.
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
   },
   { timestamps: true },
 );
@@ -147,6 +187,13 @@ export type ChatMessage = {
   tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
+  // Branching fields
+  parentId?: string | null;
+  retryOf?: string | null;
+  editedFrom?: string | null;
+  branchId?: string | null;
+  version?: number;
+  isActive?: boolean;
 };
 
 export const Chat = mongoose.model("Chat", chatSchema);

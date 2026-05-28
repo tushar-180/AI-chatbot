@@ -26,6 +26,7 @@ import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
+import { resolveActiveBranch } from "@/features/chat/utils/branchUtils";
 
 /**
  * Chat Page Component
@@ -401,6 +402,40 @@ const Chat = () => {
                     }
                     onCitationClick={handleCitationClick}
                     onSourcesClick={handleSourcesOpen}
+                    onSwitchGeneration={async (newMsg) => {
+                      const current = useChatStore.getState().messages;
+                      const optimistic = normalStream.optimisticMessages;
+                      const base = optimistic ?? current;
+
+                      const updated = base.map((m) => {
+                        if (!newMsg.branchId) return m;
+                        if (m.branchId === newMsg.branchId) {
+                          return { ...m, isActive: m.id === newMsg.id };
+                        }
+                        return m;
+                      });
+
+                      const activePath = resolveActiveBranch(updated);
+                      setMessages(activePath);
+
+                      if (currentChatId && newMsg.branchId) {
+                        try {
+                          await chatService.setActiveBranch(
+                            currentChatId,
+                            newMsg.branchId,
+                            newMsg.id,
+                          );
+                          const realMessages =
+                            await chatService.fetchMessages(currentChatId, true);
+                          setMessages(realMessages);
+                        } catch (err) {
+                          console.error(
+                            "Failed to switch active branch on server",
+                            err,
+                          );
+                        }
+                      }
+                    }}
                   />
                 );
               })()}

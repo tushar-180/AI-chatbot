@@ -38,6 +38,13 @@ import { parseFile } from "../modules/file-rag/fileParser";
 import { processAttachedFile, cleanupChatFiles } from "../modules/file-rag/fileHandler";
 import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
 import { extractTranscript } from "../modules/tools/youtube";
+import {
+  nextVersionForParent,
+  resolveActiveBranch,
+  getContextBeforeMessage,
+  type RawMessage,
+} from "../utils/branchUtils";
+
 
 const getChatId = (chat: { _id: unknown }) => String(chat._id);
 
@@ -517,6 +524,14 @@ async function* streamAssistantResponse(
   includeChatId = false,
   existingAssistantMessageId?: string,
   webSearchOverride?: boolean,
+  // Branch metadata: when set, a NEW message node is created (immutable retry/edit)
+  branchMeta?: {
+    parentId?: string;
+    retryOf?: string;
+    editedFrom?: string;
+    branchId?: string;
+    version?: number;
+  },
 ): AsyncGenerator<StreamPayload> {
   await aiService.validateModelAccess(provider);
   const aiProvider = aiService.getProvider(provider);
@@ -561,7 +576,8 @@ async function* streamAssistantResponse(
       },
     );
   } else {
-    // Create assistant message in its own collection
+    // Create assistant message in its own collection.
+    // If branchMeta is provided this is an immutable retry/edit node.
     assistantMessageDoc = await chatRepository.saveMessage(chatId, {
       role: "assistant",
       userId: chat.userId,
@@ -570,7 +586,15 @@ async function* streamAssistantResponse(
       requestId,
       status: "streaming",
       metadata: buildGroundingMetadata(webGrounding),
-    });
+      ...(branchMeta ? {
+        parentId: branchMeta.parentId,
+        retryOf: branchMeta.retryOf,
+        editedFrom: branchMeta.editedFrom,
+        branchId: branchMeta.branchId,
+        version: branchMeta.version ?? 1,
+        isActive: true,
+      } : {}),
+    } as any);
   }
 
   const messageId = (assistantMessageDoc as any)._id?.toString() || "";
@@ -1502,7 +1526,7 @@ export const chatService = {
   async *streamEditMessage({
     chatId,
     messageId,
-    content,
+    content: editedContent,
     provider,
     requestId,
     webSearchEnabled,
@@ -1510,24 +1534,31 @@ export const chatService = {
     attachedFile,
     selection,
   }: EditMessageInput) {
-    const trimmedMessage = requireMessage(content);
+    // IMMUTABLE EDIT STREAM:
+    // 1. Assign branchId to original user message if none exists yet.
+    // 2. Deactivate original user message and all active messages after it.
+    // 3. Create a NEW user message as a sibling, inheriting the same parentId.
+    // 4. Stream a new assistant message linked to this new user message.
+    const trimmedMessage = requireMessage(editedContent);
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
+    const allMessages = chat.messages as RawMessage[];
 
     let resolvedMessageId = messageId;
     const isObjectId = /^[0-9a-fA-F]{24}$/.test(messageId);
-    
+
     if (!isObjectId) {
-      // Find the message by its temporary ID or request ID
-      const targetMessage = (chat.messages as any[]).find(
-        (m) => m.requestId === messageId || (m.metadata && m.metadata.tempId === messageId) || m.id === messageId
+      const targetMessage = allMessages.find(
+        (m) =>
+          m.requestId === messageId ||
+          m.metadata?.tempId === messageId ||
+          m.id === messageId,
       );
 
       if (targetMessage) {
         resolvedMessageId = String(targetMessage._id || targetMessage.id);
       } else {
-        // Fallback to the latest user message, as edits usually target the user's latest prompt
-        const lastUserMsg = (chat.messages as any[]).filter((m) => m.role === "user").pop();
+        const lastUserMsg = allMessages.filter((m) => m.role === "user").pop();
         if (lastUserMsg) {
           resolvedMessageId = String(lastUserMsg._id || lastUserMsg.id);
         } else {
@@ -1536,8 +1567,13 @@ export const chatService = {
       }
     }
 
-    // Delete all messages after this one
-    await chatRepository.deleteMessagesAfter(chatId, resolvedMessageId);
+    const originalMsg = allMessages.find(
+      (m) =>
+        String(m._id) === resolvedMessageId ||
+        m.id === resolvedMessageId ||
+        m.requestId === resolvedMessageId,
+    );
+    if (!originalMsg) throw new Error("Message not found for edit");
 
     let fileText: string | null = null;
     let allAttachments = attachments || [];
@@ -1547,31 +1583,141 @@ export const chatService = {
       allAttachments = result.attachments;
     }
 
-    // Update the message itself
-    await chatRepository.updateMessage(resolvedMessageId, {
+    const origId = String(originalMsg._id);
+
+    // ── Determine the branchId and parentId (Preserve the ORIGINAL stable parentId & branchId) ──
+    let sharedBranchId = originalMsg.branchId ? String(originalMsg.branchId) : null;
+    let parentId: string | undefined = undefined;
+
+    if (originalMsg.parentId) {
+      parentId = String(originalMsg.parentId);
+    }
+
+    // If it's already a branched message, find if we can locate branchId and parentId from siblings
+    if (sharedBranchId) {
+      const siblingWithParent = allMessages.find(
+        (m) => m.branchId === sharedBranchId && m.parentId
+      );
+      if (siblingWithParent) {
+        parentId = String(siblingWithParent.parentId);
+      }
+    }
+
+    // If still no parentId, check if there is an existing branch group for edits of this message
+    let isAlreadyBranched = !!sharedBranchId;
+    if (!sharedBranchId) {
+      const sibling = allMessages.find(
+        (m) => m.editedFrom === messageId || String(m._id) === messageId || m.id === messageId
+      );
+      if (sibling && sibling.branchId) {
+        sharedBranchId = String(sibling.branchId);
+        isAlreadyBranched = true;
+        if (sibling.parentId) {
+          parentId = String(sibling.parentId);
+        }
+      }
+    }
+
+    // If it's the very first edit (legacy or fresh linear message), infer parentId once from preceding assistant
+    if (!isAlreadyBranched && !parentId) {
+      const originalMsgIndex = allMessages.findIndex(
+        (m) => String(m._id) === origId || m.id === messageId
+      );
+      const precedingAssistant = allMessages
+        .slice(0, originalMsgIndex >= 0 ? originalMsgIndex : undefined)
+        .filter((m) => m.role === "assistant")
+        .pop();
+      if (precedingAssistant) {
+        parentId = String(precedingAssistant._id || precedingAssistant.id);
+      }
+    }
+
+    // ── Assign branchId to the original user message if none exists ──
+    let isFirstEdit = !isAlreadyBranched;
+    if (isFirstEdit) {
+      if (!sharedBranchId) {
+        const { randomUUID } = await import("crypto");
+        sharedBranchId = randomUUID();
+      }
+      // Persist branchId=shared, version=1, isActive=false, parentId=parentId on original user message
+      await chatRepository.updateMessage(origId, {
+        branchId: sharedBranchId,
+        version: 1,
+        isActive: false,
+        parentId: parentId || undefined,
+      } as any);
+    } else {
+      // Deactivate siblings in this branch
+      await chatRepository.updateMany({ chatId, branchId: sharedBranchId }, { isActive: false });
+    }
+
+    // Calculate version for the new sibling user message
+    const siblings = allMessages.filter((m) => m.branchId === sharedBranchId || String(m._id) === origId);
+    const userEditVersion = Math.max(...siblings.map((m) => m.version ?? 1), 1) + 1;
+
+    // Save the new sibling user message under the SAME parentId
+    const newUserMsg = await chatRepository.saveMessage(chatId, {
+      role: "user",
+      userId: String(chat.userId),
       content: trimmedMessage,
       attachments: allAttachments as any,
+      status: "completed",
       metadata: {
         webSearchEnabled: Boolean(webSearchEnabled),
         fileText,
         ...(selection !== undefined ? { selection } : {}),
       },
-    });
+      parentId: parentId || undefined, // Inherit same parent!
+      editedFrom: messageId,
+      branchId: sharedBranchId,
+      version: userEditVersion,
+      isActive: true,
+    } as any);
 
-    // Refresh chat to include updated user message
-    const updatedChat = await chatRepository.findById(chatId);
+    const newUserMsgId = String((newUserMsg as any)._id);
 
-    // Check if it's the first message to update title
-    if (updatedChat?.messages?.[0]?.id === resolvedMessageId) {
-      await chatRepository.update(chatId, {
-        title: createTitle(trimmedMessage),
-      });
+    // Build branch metadata for the new assistant response
+    const { randomUUID: assistantRandomUUID } = await import("crypto");
+    const assistantBranchMeta = {
+      parentId: newUserMsgId,
+      editedFrom: messageId,
+      branchId: assistantRandomUUID(),
+      version: 1,
+    };
+
+    // Update title if this was the first message
+    if (
+      allMessages[0] &&
+      (String(allMessages[0]._id) === resolvedMessageId ||
+        allMessages[0].id === resolvedMessageId)
+    ) {
+      await chatRepository.update(chatId, { title: createTitle(trimmedMessage) });
     }
 
+    // Build context up to the original user message's parent (not including originalMsg itself)
+    const contextBefore = getContextBeforeMessage(allMessages, origId) as ChatMessage[];
+    const contextWithNewUser: ChatMessage[] = [
+      ...contextBefore,
+      {
+        role: "user",
+        userId: String(chat.userId),
+        content: trimmedMessage,
+        attachments: allAttachments as any,
+        status: "completed",
+        metadata: { webSearchEnabled: Boolean(webSearchEnabled), fileText, selection },
+      } as any,
+    ];
+
+    const syntheticChat = { ...chat, messages: contextWithNewUser };
+
     yield* streamAssistantResponse(
-      updatedChat as any,
+      syntheticChat as any,
       resolvedRequestId,
       provider,
+      false,
+      undefined,
+      webSearchEnabled,
+      assistantBranchMeta,
     );
   },
 
@@ -1584,37 +1730,32 @@ export const chatService = {
     messageId: string;
     provider?: string;
   }) {
+    // IMMUTABLE RETRY: never delete the old message.
+    // Create a NEW assistant message linked to the same parentId/branchId.
     const chat = await requireChat(chatId);
-    let assistantMessage = (chat.messages as any[]).find(
-      (m) =>
-        (m.id === messageId ||
-          String(m._id) === messageId ||
-          m.requestId === messageId) &&
-        m.role === "assistant",
-    );
+    const allMessages = chat.messages as RawMessage[];
 
-    // Fallback for old messages with mismatched UUIDs: use the last assistant message
-    if (!assistantMessage && messageId.includes("-")) {
-      assistantMessage = (chat.messages as any[])
-        .filter((m) => m.role === "assistant")
-        .pop();
+    const assistantMessage =
+      allMessages.find(
+        (m) =>
+          (String(m._id) === messageId || m.id === messageId || m.requestId === messageId) &&
+          m.role === "assistant",
+      ) ?? [...allMessages].filter((m) => m.role === "assistant").pop();
+
+    if (!assistantMessage) throw new Error("Assistant message not found for retry");
+
+    const parentId = assistantMessage.parentId
+      ? String(assistantMessage.parentId)
+      : String([...allMessages].filter((m) => m.role === "user").pop()?._id ?? "");
+
+    const contextMessages = getContextBeforeMessage(allMessages, String(assistantMessage._id)) as ChatMessage[];
+    const lastUserMessage = [...contextMessages].filter((m) => m.role === "user").pop();
+
+    const { version, branchId } = nextVersionForParent(allMessages, parentId);
+
+    if (assistantMessage.branchId) {
+      await chatRepository.setActiveBranchMessage(chatId, String(assistantMessage.branchId), "__none__");
     }
-
-    if (!assistantMessage) {
-      throw new Error("Assistant message not found for retry");
-    }
-
-    // Filter context to messages before this one
-    const contextMessages = (chat.messages as any[]).filter(
-      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
-    );
-
-    // Delete all messages after this one
-    await chatRepository.deleteMessagesAfter(chatId, String((assistantMessage as any)._id || assistantMessage.id));
-
-    const lastUserMessage = contextMessages
-      .filter((m) => m.role === "user")
-      .pop();
 
     await aiService.validateModelAccess(provider);
     const aiProvider = aiService.getProvider(provider);
@@ -1642,21 +1783,25 @@ export const chatService = {
 
     reply = finalizeGroundedResponse(reply, webGrounding).content;
 
-    await chatRepository.updateMessage(messageId, {
+    await chatRepository.saveMessage(chatId, {
+      role: "assistant",
+      userId: String(chat.userId),
       content: reply,
-      status: "completed",
       model: providerName,
+      status: "completed",
       metadata: buildGroundingMetadata(webGrounding),
+      parentId: parentId || undefined,
+      retryOf: String(assistantMessage._id),
+      branchId,
+      version,
+      isActive: true,
       tokens: resolveAssistantTokens(
         usage,
         serializePromptMessages(promptMessages),
         reply,
-        promptMessages.reduce(
-          (sum, m) => sum + (m.attachments?.length || 0),
-          0,
-        ),
+        promptMessages.reduce((sum, m) => sum + (m.attachments?.length || 0), 0),
       ),
-    });
+    } as any);
 
     return await chatRepository.findById(chatId);
   },
@@ -1674,66 +1819,80 @@ export const chatService = {
     requestId: string;
     webSearchEnabled?: boolean;
   }) {
+    // IMMUTABLE RETRY STREAM: preserve old response, create a new node.
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
+    const allMessages = chat.messages as RawMessage[];
 
-    console.log("Retrying messageId:", messageId);
-    console.log("Chat messages count:", chat.messages.length);
-    console.log(
-      "Last 2 messages:",
-      chat.messages.slice(-2).map((m: any) => ({
-        id: m.id,
-        _id: m._id,
-        requestId: m.requestId,
-        role: m.role,
-      })),
-    );
-
-    let assistantMessage = (chat.messages as any[]).find(
+    // Locate the assistant message being retried (by id or requestId)
+    let assistantMessage = allMessages.find(
       (m) =>
-        (m.id === messageId ||
-          String(m._id) === messageId ||
-          m.requestId === messageId) &&
+        (String(m._id) === messageId || m.id === messageId || m.requestId === messageId) &&
         m.role === "assistant",
     );
-    console.log("Assistant message:", assistantMessage);
-
-    // Fallback for old messages with mismatched UUIDs: use the last assistant message
     if (!assistantMessage && messageId.includes("-")) {
-      console.log("Using fallback: Finding last assistant message in chat");
-      assistantMessage = (chat.messages as any[])
-        .filter((m) => m.role === "assistant")
-        .pop();
+      assistantMessage = [...allMessages].filter((m) => m.role === "assistant").pop();
     }
-
     if (!assistantMessage) {
-      console.log(
-        "FAILED TO FIND MESSAGE. IDs in chat:",
-        chat.messages.map((m: any) => m.id || m._id),
-      );
       throw new Error("Assistant message not found for retry");
     }
 
-    // Filter chat messages to only include those before the message being retried
-    const filteredMessages = (chat.messages as any[]).filter(
-      (m) => new Date(m.createdAt) < new Date(assistantMessage.createdAt),
-    );
+    const origId = String(assistantMessage._id);
 
-    // Delete all messages after this one
-    await chatRepository.deleteMessagesAfter(chatId, String((assistantMessage as any)._id || assistantMessage.id));
+    // Determine parentId (user message that triggered this assistant response)
+    const assistantIndex = allMessages.indexOf(assistantMessage);
+    const parentId = assistantMessage.parentId
+      ? String(assistantMessage.parentId)
+      : String(
+          allMessages
+            .slice(0, assistantIndex >= 0 ? assistantIndex : undefined)
+            .filter((m) => m.role === "user")
+            .pop()?._id ?? ""
+        );
 
-    const updatedChat = {
-      ...chat,
-      messages: filteredMessages,
+    // ── Assign a branchId to the original message if it doesn't have one yet ──
+    // This is needed on the very first retry so both original and new share a branchId.
+    let sharedBranchId = assistantMessage.branchId ? String(assistantMessage.branchId) : null;
+    if (!sharedBranchId) {
+      const { randomUUID } = await import("crypto");
+      sharedBranchId = randomUUID();
+      // Persist branchId=shared, version=1, isActive=false, parentId=parentId on the original
+      await chatRepository.updateMessage(origId, {
+        branchId: sharedBranchId,
+        version: 1,
+        isActive: false,
+        parentId: parentId || undefined,
+      } as any);
+    } else {
+      // Deactivate all existing siblings in this branch
+      await chatRepository.updateMany({ chatId, branchId: sharedBranchId }, { isActive: false });
+    }
+
+    // Count existing siblings to compute the next version
+    const siblings = allMessages.filter((m) => m.branchId === sharedBranchId || String(m._id) === origId);
+    const nextVersion = Math.max(...siblings.map((m) => m.version ?? 1), 1) + 1;
+
+    // Build prompt context from active-branch messages before the retried assistant message
+    const contextMessages = getContextBeforeMessage(allMessages, origId);
+
+    const branchMeta = {
+      parentId,
+      retryOf: origId,
+      branchId: sharedBranchId,
+      version: nextVersion,
     };
 
+    // Synthetic chat with only the relevant context
+    const syntheticChat = { ...chat, messages: contextMessages };
+
     yield* streamAssistantResponse(
-      updatedChat as any,
+      syntheticChat as any,
       resolvedRequestId,
       provider,
       false,
-      messageId,
+      undefined,
       webSearchEnabled,
+      branchMeta,
     );
   },
 
@@ -1742,5 +1901,21 @@ export const chatService = {
     feedback: "like" | "dislike" | null,
   ) {
     return await chatRepository.updateMessage(messageId, { feedback });
+  },
+
+  /**
+   * Navigate to a specific generation within a branchId group.
+   * Marks the chosen message as active and all siblings as inactive.
+   */
+  async setActiveBranch(chatId: string, branchId: string, messageId: string) {
+    return chatRepository.setActiveBranchMessage(chatId, branchId, messageId);
+  },
+
+  /**
+   * Return all assistant generations for a given parent user message,
+   * sorted by version ascending.
+   */
+  async getMessageGenerations(parentId: string) {
+    return chatRepository.getMessagesByParentId(parentId);
   },
 };
