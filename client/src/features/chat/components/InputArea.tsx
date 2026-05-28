@@ -181,6 +181,18 @@ const ModelSelector = ({
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
 
+  if (availableProviders.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
+        <div className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-red-900/60 bg-red-500/10 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-red-400 transition-all">
+          <span className="max-w-[200px] lg:max-w-none truncate">
+            No model is available right now
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
       <DropdownMenu>

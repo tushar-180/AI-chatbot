@@ -43,6 +43,25 @@ const GridProviderIcon = ({ provider, size = 16 }: { provider: string, size?: nu
   );
 };
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const modelName = data.modelName || label;
+    return (
+      <div className="bg-zinc-900 border border-white/10 rounded-xl p-3 shadow-xl z-50">
+        <p className="text-zinc-300 font-bold mb-2">{modelName}</p>
+        <div className="space-y-1">
+          <p className="text-sky-400 text-xs">Input: <span className="font-bold text-white ml-1">{(data.promptTokens || 0).toLocaleString()} tokens</span></p>
+          <p className="text-emerald-400 text-xs">Output: <span className="font-bold text-white ml-1">{(data.completionTokens || 0).toLocaleString()} tokens</span></p>
+          <div className="h-[1px] w-full bg-white/10 my-1" />
+          <p className="text-zinc-400 text-xs">Total: <span className="font-bold text-white ml-1">{(data.tokens || 0).toLocaleString()} tokens</span></p>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 const CustomTick = (props: any) => {
   const { x, y, payload, chartData } = props;
   const entry = chartData.find((d: any) => d.model === payload.value);
@@ -302,15 +321,7 @@ export default function UserUsageTab({ users }: UserUsageTabProps) {
                                     />
                                     <Tooltip 
                                       cursor={{ fill: '#ffffff05' }}
-                                      contentStyle={{ backgroundColor: "#18181b", borderColor: "#ffffff10", borderRadius: "12px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.5)" }}
-                                      itemStyle={{ color: "#fff", fontWeight: "bold" }}
-                                      formatter={(val: any, name: any) => [(val || 0).toLocaleString() + " tokens", name === "Input Tokens" ? "Input" : "Output"]}
-                                      labelFormatter={(val: any, payload: any) => {
-                                        if (payload && payload.length > 0) {
-                                          return payload[0].payload.modelName || val;
-                                        }
-                                        return val;
-                                      }}
+                                      content={<CustomTooltip />}
                                     />
                                     <Bar dataKey="promptTokens" name="Input Tokens" stackId="a" maxBarSize={60}>
                                       {chartData.map((entry, index) => (
