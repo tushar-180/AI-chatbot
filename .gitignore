@@ -64,6 +64,7 @@ coverage/
 .cache/
 
 .agents/
+.prompts/
 
 AI_Agents.md
 GROUP_CHAT_WORKFLOW.md
