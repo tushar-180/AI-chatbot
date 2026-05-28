@@ -157,8 +157,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       console.error("Save Profile Error:", error);
       toast.error(
         error.response?.data?.error ||
-          error.message ||
-          "Failed to update profile",
+        error.message ||
+        "Failed to update profile",
       );
     } finally {
       setIsSavingProfile(false);
@@ -648,11 +648,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all ${
-                  activeTab === item.id
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all ${activeTab === item.id
                     ? "bg-white text-black shadow-lg"
                     : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                }`}
+                  }`}
               >
                 <item.icon size={16} />
                 <span>{item.label}</span>
@@ -959,11 +958,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 tone,
                               })
                             }
-                            className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl text-[9px] lg:text-[10px] font-bold uppercase tracking-widest transition-all border ${
-                              personalizationData.tone === tone
+                            className={`px-3 lg:px-4 py-1.5 lg:py-2 rounded-xl text-[9px] lg:text-[10px] font-bold uppercase tracking-widest transition-all border ${personalizationData.tone === tone
                                 ? "bg-white text-black border-white"
                                 : "bg-zinc-900/30 border-zinc-800/40 text-zinc-500 hover:text-white"
-                            }`}
+                              }`}
                           >
                             {tone}
                           </button>
@@ -1040,11 +1038,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           setIsEditMode((prev) => !prev);
                           setSelectedIds([]);
                         }}
-                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                          isEditMode
+                        className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${isEditMode
                             ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30"
                             : "bg-white/5 text-zinc-400 border border-zinc-800/40 hover:text-white hover:bg-white/10"
-                        }`}
+                          }`}
                       >
                         {isEditMode ? "Cancel" : "Edit"}
                       </button>
@@ -1096,11 +1093,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <button
                           disabled={selectedIds.length === 0}
                           onClick={() => promptDeleteMemory(selectedIds)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
-                            selectedIds.length > 0
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${selectedIds.length > 0
                               ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
                               : "bg-white/2 border-zinc-800/40 text-zinc-600 cursor-not-allowed"
-                          }`}
+                            }`}
                         >
                           <Trash2 size={12} />
                           Delete Selected
@@ -1114,13 +1110,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div
                           key={memory._id}
                           onClick={() => isEditMode && toggleSelect(memory._id)}
-                          className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all ${
-                            isEditMode ? "cursor-pointer" : ""
-                          } ${
-                            isSelected
+                          className={`group flex items-start gap-4 p-4 rounded-2xl border transition-all ${isEditMode ? "cursor-pointer" : ""
+                            } ${isSelected
                               ? "bg-emerald-500/5 border-emerald-500/20"
                               : "bg-white/2 border-zinc-800/40 hover:border-zinc-800/60"
-                          }`}
+                            }`}
                         >
                           {isEditMode && (
                             <button
@@ -1128,11 +1122,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 e.stopPropagation();
                                 toggleSelect(memory._id);
                               }}
-                              className={`flex-shrink-0 w-4 h-4 rounded-md border flex items-center justify-center mt-1 transition-all ${
-                                isSelected
+                              className={`flex-shrink-0 w-4 h-4 rounded-md border flex items-center justify-center mt-1 transition-all ${isSelected
                                   ? "bg-emerald-500 border-emerald-400 text-zinc-950"
                                   : "border-zinc-700/60 hover:border-emerald-500/50"
-                              }`}
+                                }`}
                             >
                               {isSelected && (
                                 <Check size={10} strokeWidth={4} />
@@ -1202,11 +1195,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         setIsEditMode((prev) => !prev);
                         setSelectedIds([]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        isEditMode
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${isEditMode
                           ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30"
                           : "bg-white/5 text-zinc-400 border border-zinc-800/40 hover:text-white hover:bg-white/10"
-                      }`}
+                        }`}
                     >
                       {isEditMode ? "Cancel" : "Edit"}
                     </button>
@@ -1259,11 +1251,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <button
                           disabled={selectedIds.length === 0}
                           onClick={() => promptDeleteArchive(selectedIds)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
-                            selectedIds.length > 0
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${selectedIds.length > 0
                               ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
                               : "bg-white/2 border-zinc-800/40 text-zinc-600 cursor-not-allowed"
-                          }`}
+                            }`}
                         >
                           <Trash2 size={12} />
                           Delete Selected
@@ -1283,20 +1274,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               openArchivedChat(chat);
                             }
                           }}
-                          className={`group flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${
-                            isSelected
+                          className={`group flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer ${isSelected
                               ? "bg-white/5 border-amber-500/30"
                               : "bg-white/2 border-zinc-800/40 hover:bg-white/5"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
                             {isEditMode && (
                               <div
-                                className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
-                                  isSelected
+                                className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${isSelected
                                     ? "bg-amber-500 border-amber-500 text-white"
                                     : "border-zinc-800/60 bg-white/5 hover:border-zinc-700/60"
-                                }`}
+                                  }`}
                               >
                                 {isSelected && (
                                   <Check size={12} className="stroke-[3]" />
@@ -1370,11 +1359,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         setIsEditMode((prev) => !prev);
                         setSelectedIds([]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        isEditMode
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${isEditMode
                           ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30"
                           : "bg-white/5 text-zinc-400 border border-zinc-800/40 hover:text-white hover:bg-white/10"
-                      }`}
+                        }`}
                     >
                       {isEditMode ? "Cancel" : "Edit"}
                     </button>
@@ -1434,11 +1422,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               <button
                                 disabled={selectedIds.length === 0}
                                 onClick={() => promptDeleteShare(selectedIds)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
-                                  selectedIds.length > 0
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${selectedIds.length > 0
                                     ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
                                     : "bg-white/2 border-zinc-800/40 text-zinc-600 cursor-not-allowed"
-                                }`}
+                                  }`}
                               >
                                 <Trash2 size={12} />
                                 Delete Selected
@@ -1458,22 +1445,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     toggleSelect(share._id);
                                   }
                                 }}
-                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                  isEditMode ? "cursor-pointer" : ""
-                                } ${
-                                  isSelected
+                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${isEditMode ? "cursor-pointer" : ""
+                                  } ${isSelected
                                     ? "bg-white/5 border-indigo-500/30"
                                     : "bg-white/2 border-zinc-800/40 hover:bg-white/5"
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
                                   {isEditMode && (
                                     <div
-                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
-                                        isSelected
+                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${isSelected
                                           ? "bg-indigo-500 border-indigo-500 text-white"
                                           : "border-zinc-800/60 bg-white/5 hover:border-zinc-700/60"
-                                      }`}
+                                        }`}
                                     >
                                       {isSelected && (
                                         <Check
@@ -1507,11 +1491,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                       onClick={() =>
                                         handleCopy(shareUrl, share._id)
                                       }
-                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${
-                                        isShareCopied
+                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${isShareCopied
                                           ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                                           : "bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10"
-                                      }`}
+                                        }`}
                                       title="Copy Share Link"
                                     >
                                       {isShareCopied ? (
@@ -1565,11 +1548,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         setIsEditMode((prev) => !prev);
                         setSelectedIds([]);
                       }}
-                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                        isEditMode
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${isEditMode
                           ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30"
                           : "bg-white/5 text-zinc-400 border border-zinc-800/40 hover:text-white hover:bg-white/10"
-                      }`}
+                        }`}
                     >
                       {isEditMode ? "Cancel" : "Edit"}
                     </button>
@@ -1631,11 +1613,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               <button
                                 disabled={selectedIds.length === 0}
                                 onClick={() => promptDeleteGroup(selectedIds)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${
-                                  selectedIds.length > 0
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-bold uppercase tracking-widest ${selectedIds.length > 0
                                     ? "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white"
                                     : "bg-white/2 border-zinc-800/40 text-zinc-600 cursor-not-allowed"
-                                }`}
+                                  }`}
                               >
                                 <Trash2 size={12} />
                                 Delete Selected
@@ -1655,22 +1636,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     toggleSelect(group._id);
                                   }
                                 }}
-                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${
-                                  isEditMode ? "cursor-pointer" : ""
-                                } ${
-                                  isSelected
+                                className={`group flex items-center justify-between p-4 rounded-2xl border transition-all ${isEditMode ? "cursor-pointer" : ""
+                                  } ${isSelected
                                     ? "bg-white/5 border-indigo-500/30"
                                     : "bg-white/2 border-zinc-800/40 hover:bg-white/5"
-                                }`}
+                                  }`}
                               >
                                 <div className="flex items-center gap-3 flex-1 min-w-0 mr-4">
                                   {isEditMode && (
                                     <div
-                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
-                                        isSelected
+                                      className={`h-5 w-5 rounded-md border flex items-center justify-center transition-all shrink-0 ${isSelected
                                           ? "bg-indigo-500 border-indigo-500 text-white"
                                           : "border-zinc-800/60 bg-white/5 hover:border-zinc-700/60"
-                                      }`}
+                                        }`}
                                     >
                                       {isSelected && (
                                         <Check
@@ -1704,11 +1682,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                       onClick={() =>
                                         handleCopy(inviteUrl, group._id)
                                       }
-                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${
-                                        isInviteCopied
+                                      className={`p-2.5 rounded-xl transition-all border flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest ${isInviteCopied
                                           ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                                           : "bg-white/5 border-transparent text-zinc-400 hover:text-white hover:bg-white/10"
-                                      }`}
+                                        }`}
                                       title="Copy Invite Link"
                                     >
                                       {isInviteCopied ? (
@@ -2008,11 +1985,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div
-                                className={`h-10 w-10 rounded-2xl flex items-center justify-center transition-colors ${
-                                  isConnected
+                                className={`h-10 w-10 rounded-2xl flex items-center justify-center transition-colors ${isConnected
                                     ? "bg-emerald-500/10 text-emerald-400"
                                     : "bg-white/5 text-zinc-500"
-                                }`}
+                                  }`}
                               >
                                 <IconComponent size={20} />
                               </div>
@@ -2022,22 +1998,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 </h4>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span
-                                    className={`h-1.5 w-1.5 rounded-full ${
-                                      isConnected
+                                    className={`h-1.5 w-1.5 rounded-full ${isConnected
                                         ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]"
                                         : server.enabled
                                           ? "bg-amber-400 animate-pulse"
                                           : "bg-zinc-700"
-                                    }`}
+                                      }`}
                                   />
                                   <span
-                                    className={`text-[9px] font-bold uppercase tracking-widest ${
-                                      isConnected
+                                    className={`text-[9px] font-bold uppercase tracking-widest ${isConnected
                                         ? "text-emerald-400"
                                         : server.enabled
                                           ? "text-amber-400/80"
                                           : "text-zinc-600"
-                                    }`}
+                                      }`}
                                   >
                                     {isConnected
                                       ? "Connected"
@@ -2088,18 +2062,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                   onClick={() =>
                                     toggleMcpServer(server.name, server.enabled)
                                   }
-                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                    server.enabled
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${server.enabled
                                       ? "bg-emerald-500"
                                       : "bg-zinc-800"
-                                  }`}
+                                    }`}
                                 >
                                   <span
-                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                      server.enabled
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${server.enabled
                                         ? "translate-x-4"
                                         : "translate-x-0"
-                                    }`}
+                                      }`}
                                   />
                                 </button>
                               )}

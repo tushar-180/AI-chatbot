@@ -3,12 +3,12 @@ import { useUser } from "@clerk/react";
 import { Link } from "react-router-dom";
 import Loading from "@/features/chat/components/Loading";
 import McpAdminTab from "@/features/admin/components/McpAdminTab";
+import AccessControlTab from "@/features/admin/components/AccessControlTab";
 import { api } from "@/lib/api";
 import {
   ArrowLeft,
   User as UserIcon,
   MessageSquare,
-
   Search,
   ChevronUp,
   ChevronDown,
@@ -21,7 +21,8 @@ import {
   Database,
   Clock,
   RefreshCw,
-  Sliders
+  Sliders,
+  Lock
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -40,6 +41,7 @@ interface GlobalModelUse {
   tokens: number;
   promptTokens: number;
   completionTokens: number;
+  isAvailable?: boolean;
 }
 
 interface UserStat {
@@ -93,7 +95,8 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
         completionTokens: item.completionTokens,
         messages: item.count,
         fullName: item.model,
-        percent: Math.min(percent, 100)
+        percent: Math.min(percent, 100),
+        isAvailable: item.isAvailable
       };
     });
   }, [usage]);
@@ -107,7 +110,7 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
     return "bg-zinc-400 shadow-[0_0_8px_rgba(148,163,184,0.4)]";
   };
 
-  
+
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 w-full">
@@ -120,8 +123,13 @@ const ModelUsageList: React.FC<ModelUsageListProps> = ({ usage }) => {
             <div className="flex items-center gap-3 min-w-0">
               <span className={`h-3 w-3 rounded-full shrink-0 ${getModelBulletColor(item.fullName)}`} />
               <div className="min-w-0">
-                <p className="text-sm font-bold text-white truncate leading-tight">
-                  {item.name}
+                <p className="text-sm font-bold text-white leading-tight flex items-center gap-2 min-w-0">
+                  <span className="truncate">{item.name}</span>
+                  {item.isAvailable === false && (
+                    <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[9px] border border-rose-500/20 uppercase tracking-widest shrink-0">
+                      Deprecated
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-zinc-400 font-mono mt-0.5">
                   {item.messages.toLocaleString()} queries loaded
@@ -184,7 +192,8 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
       tokens: item.tokens,
       promptTokens: item.promptTokens,
       completionTokens: item.completionTokens,
-      fullName: item.model
+      fullName: item.model,
+      isAvailable: item.isAvailable
     }));
   }, [usage]);
 
@@ -194,23 +203,30 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
       const data = payload[0].payload;
       return (
         <div className="bg-zinc-950/95 border border-white/10 backdrop-blur-md px-5 py-4 rounded-3xl shadow-2xl flex flex-col gap-1.5 animate-in fade-in leading-relaxed select-none">
-          <p className="text-sm font-black text-white uppercase tracking-wider">{data.name}</p>
+          <p className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            {data.name}
+            {data.isAvailable === false && (
+              <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[9px] border border-rose-500/20 uppercase shrink-0">
+                Deprecated
+              </span>
+            )}
+          </p>
           <div className="h-[1px] w-full bg-white/5 my-0.5" />
           <p className="text-xs text-zinc-300 font-semibold font-sans flex items-center justify-between gap-4">
             <span>Messages:</span>
             <span className="font-mono text-white font-bold">{data.messages.toLocaleString()}</span>
           </p>
           <p className="text-xs text-sky-400 font-semibold font-sans flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input:</span>
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400" />Input:</span>
             <span className="font-mono text-white font-bold">{(data.promptTokens || 0).toLocaleString()}</span>
           </p>
           <p className="text-xs text-emerald-400 font-semibold font-sans flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output:</span>
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Output:</span>
             <span className="font-mono text-white font-bold">{(data.completionTokens || 0).toLocaleString()}</span>
           </p>
           <div className="h-[1px] w-full bg-white/5 my-0.5" />
           <p className="text-xs text-purple-400 font-semibold font-sans flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total:</span>
+            <span className="flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400" />Total:</span>
             <span className="font-mono text-white font-bold">{data.tokens.toLocaleString()}</span>
           </p>
         </div>
@@ -254,7 +270,7 @@ const ModelVolumeBarChart: React.FC<ModelVolumeBarChartProps> = ({ usage, stats 
               </defs>
 
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-              
+
               <XAxis
                 dataKey="name"
                 stroke="#64748b"
@@ -340,7 +356,12 @@ const ModelEfficiencyList: React.FC<{ usage: GlobalModelUse[] }> = ({ usage }) =
         ...item,
         density: item.count > 0 ? Math.round(item.tokens / item.count) : 0
       }))
-      .sort((a, b) => b.density - a.density);
+      .sort((a, b) => {
+        if (a.isAvailable !== b.isAvailable) {
+          return a.isAvailable ? -1 : 1;
+        }
+        return b.density - a.density;
+      });
   }, [usage]);
 
   return (
@@ -369,8 +390,13 @@ const ModelEfficiencyList: React.FC<{ usage: GlobalModelUse[] }> = ({ usage }) =
                 className="p-3.5 bg-zinc-900/20 border border-white/5 hover:border-white/10 hover:bg-zinc-900/30 rounded-2xl flex items-center justify-between transition-all duration-300 group"
               >
                 <div className="min-w-0">
-                  <span className="text-xs font-bold text-white block truncate max-w-[220px]">
-                    {getModelShortName(item.model)}
+                  <span className="text-xs font-bold text-white flex items-center gap-2 min-w-0 max-w-[220px]">
+                    <span className="truncate">{getModelShortName(item.model)}</span>
+                    {item.isAvailable === false && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 text-[9px] border border-rose-500/20 uppercase shrink-0">
+                        Deprecated
+                      </span>
+                    )}
                   </span>
                   <span className="text-[10px] font-mono text-zinc-500 block mt-0.5 font-bold uppercase tracking-wider">
                     {item.count} messages loaded
@@ -401,7 +427,7 @@ const Admin: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortField, setSortField] = useState<"name" | "chats" | "joined" | "tokens">("chats");
   const [sortAsc, setSortAsc] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance" | "mcp">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance" | "mcp" | "access">("overview");
   const [syncing, setSyncing] = useState<boolean>(false);
 
   const fetchStats = async (isSync = false) => {
@@ -593,7 +619,6 @@ const Admin: React.FC = () => {
           </div>
         </div>
 
-        {/* Analytics Summary Cards (6 columns) */}
         {/* Analytics Summary Cards (4 columns) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Card 1: Users */}
@@ -643,8 +668,8 @@ const Admin: React.FC = () => {
                 {(stats.totalTokens || 0).toLocaleString()}
               </h3>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-[9px] font-mono text-sky-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>In: {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k</span>
-                <span className="text-[9px] font-mono text-emerald-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Out: {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k</span>
+                <span className="text-[9px] font-mono text-sky-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-sky-400" />In: {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k</span>
+                <span className="text-[9px] font-mono text-emerald-400/70 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Out: {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k</span>
               </div>
             </div>
             <div className="h-12 w-12 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0 group-hover:scale-110 transition-transform ml-2 shadow-inner border border-purple-500/10">
@@ -657,11 +682,10 @@ const Admin: React.FC = () => {
         <div className="flex border-b border-white/5 gap-4 sm:gap-6 mb-2 pt-2 w-full overflow-x-auto scrollbar-hide whitespace-nowrap justify-start sm:justify-start">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-              activeTab === "overview"
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "overview"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
-            }`}
+              }`}
           >
             <BarChart3 size={14} className="hidden sm:block shrink-0" />
             <span className="hidden sm:inline">Overview Hub</span>
@@ -669,11 +693,10 @@ const Admin: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("users")}
-            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-              activeTab === "users"
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "users"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
-            }`}
+              }`}
           >
             <UserCheck size={14} className="hidden sm:block shrink-0" />
             <span className="hidden sm:inline">User Directory</span>
@@ -681,11 +704,10 @@ const Admin: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("performance")}
-            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-              activeTab === "performance"
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "performance"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
-            }`}
+              }`}
           >
             <Zap size={14} className="hidden sm:block shrink-0" />
             <span className="hidden sm:inline">Model Performance</span>
@@ -693,15 +715,25 @@ const Admin: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab("mcp")}
-            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${
-              activeTab === "mcp"
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "mcp"
                 ? "text-indigo-400 border-indigo-400 font-bold"
                 : "text-zinc-500 border-transparent hover:text-zinc-300"
-            }`}
+              }`}
           >
             <Sliders size={14} className="hidden sm:block shrink-0" />
             <span className="hidden sm:inline">MCP Servers</span>
             <span className="sm:hidden">MCP</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("access")}
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "access"
+                ? "text-indigo-400 border-indigo-400 font-bold"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+          >
+            <Lock size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">Model Access Control</span>
+            <span className="sm:hidden">Access</span>
           </button>
         </div>
 
@@ -814,9 +846,10 @@ const Admin: React.FC = () => {
             <div className="hidden md:block overflow-x-auto min-h-0 flex-1">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="border-b border-white/5 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500 pb-4">
+                  <tr className="border-b border-white/5 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500 pb-4" style={{ outline: 'none' }}>
                     <th
-                      className="pb-4 cursor-pointer select-none hover:text-white transition-colors"
+                      className="pb-4 cursor-pointer select-none hover:text-white transition-colors focus:outline-none"
+                      style={{ outline: 'none' }}
                       onClick={() => handleSort("name")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -826,7 +859,8 @@ const Admin: React.FC = () => {
                       </div>
                     </th>
                     <th
-                      className="pb-4 hidden sm:table-cell cursor-pointer select-none hover:text-white transition-colors"
+                      className="pb-4 hidden sm:table-cell cursor-pointer select-none hover:text-white transition-colors focus:outline-none"
+                      style={{ outline: 'none' }}
                       onClick={() => handleSort("joined")}
                     >
                       <div className="flex items-center gap-1.5">
@@ -836,7 +870,8 @@ const Admin: React.FC = () => {
                       </div>
                     </th>
                     <th
-                      className="pb-4 text-right cursor-pointer select-none hover:text-white transition-colors pr-4"
+                      className="pb-4 text-right cursor-pointer select-none hover:text-white transition-colors pr-4 focus:outline-none"
+                      style={{ outline: 'none' }}
                       onClick={() => handleSort("chats")}
                     >
                       <div className="flex items-center gap-1.5 justify-end">
@@ -846,7 +881,8 @@ const Admin: React.FC = () => {
                       </div>
                     </th>
                     <th
-                      className="pb-4 text-right cursor-pointer select-none hover:text-white transition-colors pr-4"
+                      className="pb-4 text-right cursor-pointer select-none hover:text-white transition-colors pr-4 focus:outline-none"
+                      style={{ outline: 'none' }}
                       onClick={() => handleSort("tokens")}
                     >
                       <div className="flex items-center gap-1.5 justify-end">
@@ -858,7 +894,7 @@ const Admin: React.FC = () => {
                     <th className="pb-4 text-right">Favorite Model</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody>
                   {filteredAndSortedUsers.length === 0 ? (
                     <tr>
                       <td
@@ -884,7 +920,7 @@ const Admin: React.FC = () => {
                       const relativeProgress = Math.round((u.totalChats / maxChats) * 100);
 
                       return (
-                        <tr key={u.clerkId} className="group hover:bg-white/1 transition-all">
+                        <tr key={u.clerkId} className="group hover:bg-white/1 transition-colors border-t border-white/5 first:border-t-0">
                           <td className="py-4 pr-3">
                             <div className="flex items-center gap-3.5">
                               <div className="h-10 w-10 rounded-2xl overflow-hidden border border-white/5 shadow-inner shrink-0 relative">
@@ -909,9 +945,8 @@ const Admin: React.FC = () => {
                                     onChange={(e) =>
                                       handleRoleChange(u.clerkId, e.target.value as "user" | "admin")
                                     }
-                                    className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all ${
-                                      u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
-                                    }`}
+                                    className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all ${u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
+                                      }`}
                                   >
                                     <option value="user" className="bg-zinc-950 text-zinc-400 text-[9px] font-bold">
                                       User
@@ -947,11 +982,11 @@ const Admin: React.FC = () => {
                             </span>
                             <div className="flex items-center justify-end gap-3 mt-1">
                               <span className="text-[9px] text-sky-400/80 font-mono font-semibold flex items-center gap-1" title="Input tokens">
-                                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0"/>
+                                <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" />
                                 {((u.promptTokens || 0) / 1000).toFixed(1)}k
                               </span>
                               <span className="text-[9px] text-emerald-400/80 font-mono font-semibold flex items-center gap-1" title="Output tokens">
-                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                                 {((u.completionTokens || 0) / 1000).toFixed(1)}k
                               </span>
                             </div>
@@ -1029,9 +1064,8 @@ const Admin: React.FC = () => {
                           onChange={(e) =>
                             handleRoleChange(u.clerkId, e.target.value as "user" | "admin")
                           }
-                          className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${
-                            u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
-                          }`}
+                          className={`bg-zinc-900 border border-white/10 hover:border-indigo-500/30 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest focus:outline-none focus:border-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 ${u.role === "admin" ? "text-emerald-400" : "text-zinc-400"
+                            }`}
                         >
                           <option value="user" className="bg-zinc-950 text-zinc-400 text-[9px] font-bold">
                             User
@@ -1091,11 +1125,11 @@ const Admin: React.FC = () => {
                           <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-500">Token Mix</p>
                           <div className="flex items-center gap-3 mt-1.5">
                             <span className="text-[9px] text-sky-400/80 font-mono font-semibold flex items-center gap-1" title="Input tokens">
-                              <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0"/>
+                              <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" />
                               {((u.promptTokens || 0) / 1000).toFixed(1)}k
                             </span>
                             <span className="text-[9px] text-emerald-400/80 font-mono font-semibold flex items-center gap-1" title="Output tokens">
-                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0"/>
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
                               {((u.completionTokens || 0) / 1000).toFixed(1)}k
                             </span>
                           </div>
@@ -1161,19 +1195,19 @@ const Admin: React.FC = () => {
                     <span className="font-mono text-indigo-400 font-bold">{activeModelsCount} loaded</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400"/>Input Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-sky-400" />Input Tokens</span>
                     <span className="font-mono text-sky-400 font-bold">
                       {((stats.totalPromptTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Output Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />Output Tokens</span>
                     <span className="font-mono text-emerald-400 font-bold">
                       {((stats.totalCompletionTokens || 0) / 1000).toFixed(1)}k
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-xs border-t border-white/5 pt-2">
-                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400"/>Total Tokens</span>
+                    <span className="text-zinc-400 font-semibold flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-purple-400" />Total Tokens</span>
                     <span className="font-mono text-purple-400 font-bold">
                       {((stats.totalTokens || 0) / 1000).toFixed(1)}k
                     </span>
@@ -1190,6 +1224,7 @@ const Admin: React.FC = () => {
         )}
 
         {activeTab === "mcp" && <McpAdminTab />}
+        {activeTab === "access" && <AccessControlTab />}
 
       </div>
     </div>

@@ -426,6 +426,7 @@ async function* streamAssistantResponse(
   existingAssistantMessageId?: string,
   webSearchOverride?: boolean,
 ): AsyncGenerator<StreamPayload> {
+  await aiService.validateModelAccess(provider);
   const aiProvider = aiService.getProvider(provider);
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
@@ -586,6 +587,12 @@ async function* streamAssistantResponse(
 
     chatStreamRegistry.updateUsage(requestId, await stream.usage);
 
+    if (!fullResponse.trim() && !activeStream.abortController.signal.aborted) {
+      fullResponse = "The AI was unable to generate a response. Please try rephrasing your request or check if it was blocked by safety filters.";
+      chatStreamRegistry.updateResponse(requestId, fullResponse, fullResponse);
+      yield { chunk: fullResponse, requestId, status: "streaming" };
+    }
+
     const groundedResponse = finalizeGroundedResponse(
       fullResponse,
       webGrounding,
@@ -694,7 +701,7 @@ async function* streamAssistantResponse(
       "",
       promptAttachmentCount,
     );
-    const detailedErrorMessage = `⚠️ **Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
+    const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       content: detailedErrorMessage,
       status: "failed",
@@ -759,6 +766,7 @@ export const chatService = {
       };
       await chatRepository.saveMessage(chatId, userMessage);
 
+      await aiService.validateModelAccess(provider);
       const aiProvider = aiService.getProvider(provider);
       const providerName = aiProvider.getProviderName();
 
@@ -936,6 +944,7 @@ export const chatService = {
       chat.title = newTitle;
     }
 
+    await aiService.validateModelAccess(provider);
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
 
@@ -1304,6 +1313,7 @@ export const chatService = {
       },
     });
 
+    await aiService.validateModelAccess(provider);
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
 
@@ -1460,6 +1470,7 @@ export const chatService = {
       .filter((m) => m.role === "user")
       .pop();
 
+    await aiService.validateModelAccess(provider);
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
 
