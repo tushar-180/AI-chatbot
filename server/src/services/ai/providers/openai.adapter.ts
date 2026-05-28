@@ -187,6 +187,9 @@ export class OpenAIAdapter implements IAIService {
     } else {
       text = typeof result === "string" ? result : JSON.stringify(result);
     }
+    if (text.length > 4000) {
+      text = text.substring(0, 4000) + "\n...[Note: results truncated for brevity]";
+    }
     return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
   }
 
@@ -436,7 +439,7 @@ export class OpenAIAdapter implements IAIService {
             let hadToolError = false;
             for (const tc of activeToolCalls) {
               const toolCall = tc as any;
-              yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
+              yield `\n\n[TOOL_RUNNING:${toolCall.function.name}]\n\n`;
 
               try {
                 const toolName = toolCall.function.name;
@@ -449,7 +452,7 @@ export class OpenAIAdapter implements IAIService {
                   toolName,
                   args,
                 );
-                yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
+                yield `\n\n[TOOL_COMPLETED:${toolCall.function.name}]\n\n`;
 
                 let resultString = adapter.formatToolSuccessResult(result);
                 if (resultString.length > 4000) {
@@ -463,8 +466,7 @@ export class OpenAIAdapter implements IAIService {
                 });
               } catch (err: any) {
                 hadToolError = true;
-                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${err.message || err
-                  }*\n\n`;
+                yield `\n\n[TOOL_ERROR:${toolCall.function.name}:${err.message || err}]\n\n`;
 
                 responseMessages.push({
                   role: "tool" as const,

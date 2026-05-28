@@ -309,6 +309,9 @@ export class GeminiAdapter implements IAIService {
     } else {
       text = typeof result === "string" ? result : JSON.stringify(result);
     }
+    if (text.length > 4000) {
+      text = text.substring(0, 4000) + "\n...[Note: results truncated for brevity]";
+    }
     return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
   }
 
@@ -400,9 +403,6 @@ export class GeminiAdapter implements IAIService {
                 );
 
                 let resultString = this.formatToolSuccessResult(result);
-                if (resultString.length > 4000) {
-                  resultString = resultString.substring(0, 4000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
-                }
 
                 return {
                   functionResponse: {
@@ -567,7 +567,7 @@ export class GeminiAdapter implements IAIService {
             for (const f of activeFunctionCalls) {
               if (!f.name) continue;
 
-              yield `\n\n⚙️ *Running tool \`${f.name}\`...*\n`;
+              yield `\n\n[TOOL_RUNNING:${f.name}]\n\n`;
 
               try {
                 const isAllowed = tools && tools.some((t) => t.name === f.name);
@@ -578,12 +578,9 @@ export class GeminiAdapter implements IAIService {
                   f.name,
                   f.args,
                 );
-                yield `\n\n✅ *Tool \`${f.name}\` completed.* \n\n`;
+                yield `\n\n[TOOL_COMPLETED:${f.name}]\n\n`;
 
                 let resultString = adapter.formatToolSuccessResult(result);
-                if (resultString.length > 4000) {
-                  resultString = resultString.substring(0, 4000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
-                }
 
                 responseParts.push({
                   functionResponse: {
@@ -593,8 +590,7 @@ export class GeminiAdapter implements IAIService {
                 });
               } catch (err: any) {
                 hadToolError = true;
-                yield `\n\n❌ *Tool \`${f.name}\` failed: ${err.message || err
-                  }*\n\n`;
+                yield `\n\n[TOOL_ERROR:${f.name}:${err.message || err}]\n\n`;
 
                 responseParts.push({
                   functionResponse: {

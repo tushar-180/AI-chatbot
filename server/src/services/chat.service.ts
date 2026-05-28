@@ -643,7 +643,7 @@ async function* streamAssistantResponse(
       ? [] 
       : await getEnabledMcpTools(String(chat.userId), hasFiles, latestUserMsgText);
     console.log("toools", tools)
-
+  
     const promptSizes = promptMessages.map(m => ({
       role: m.role,
       length: m.content?.length || 0,

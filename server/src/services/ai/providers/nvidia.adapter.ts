@@ -107,8 +107,14 @@ export class NvidiaAdapter implements IAIService {
         }
       }
 
+      let role = m.role as any;
+      if (!["system", "user", "assistant", "tool", "function"].includes(role)) {
+        console.warn(`[NvidiaAdapter] Overriding invalid role '${role}' to 'user'`);
+        role = "user";
+      }
+
       return {
-        role: m.role as any,
+        role,
         content,
       };
     });
@@ -138,6 +144,9 @@ export class NvidiaAdapter implements IAIService {
       if (!text) text = JSON.stringify(result);
     } else {
       text = typeof result === "string" ? result : JSON.stringify(result);
+    }
+    if (text.length > 4000) {
+      text = text.substring(0, 4000) + "\n...[Note: results truncated for brevity]";
     }
     return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
   }
@@ -288,6 +297,7 @@ export class NvidiaAdapter implements IAIService {
             hasToolCalls = false;
 
             let streamOptions: { include_usage: boolean } | undefined = { include_usage: true };
+            console.log("NVIDIA request messages:", JSON.stringify(finalMessages, null, 2));
 
             const stream = await adapter.openai.chat.completions.create(
               {
@@ -381,7 +391,7 @@ export class NvidiaAdapter implements IAIService {
             let hadToolError = false;
             for (const tc of activeToolCalls) {
               const toolCall = tc as any;
-              yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
+              yield `\n\n[TOOL_RUNNING:${toolCall.function.name}]\n\n`;
 
               try {
                 const toolName = toolCall.function.name;
@@ -394,7 +404,7 @@ export class NvidiaAdapter implements IAIService {
                   toolName,
                   args,
                 );
-                yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
+                yield `\n\n[TOOL_COMPLETED:${toolCall.function.name}]\n\n`;
 
                 responseMessages.push({
                   role: "tool" as const,
@@ -403,9 +413,7 @@ export class NvidiaAdapter implements IAIService {
                 });
               } catch (err: any) {
                 hadToolError = true;
-                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${
-                  err.message || err
-                }*\n\n`;
+                yield `\n\n[TOOL_ERROR:${toolCall.function.name}:${err.message || err}]\n\n`;
 
                 responseMessages.push({
                   role: "tool" as const,

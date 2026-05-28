@@ -136,7 +136,7 @@ export const MCP_TOOL_ERROR_FALLBACK_MESSAGE =
   "I couldn't complete that lookup through the connected tools after three error attempts. If you want, give me a narrower request or one more detail and I'll try again.";
 
 export const MCP_TOOL_SUCCESS_NOTE =
-  "[SYSTEM NOTE: If this tool output already answers the user's request, stop tool use now and respond directly. Do not infer facts. Do not repeat tool calls.]";
+  "[SYSTEM NOTE: Analyze the tool output. If it fully answers the request, stop tool use and respond. If it is incomplete, you MAY execute another tool call to gather missing details. Do NOT repeat the exact same tool call with the exact same arguments.]";
 
 export const MCP_TOOL_ERROR_NOTE = (attempt: number) =>
   `[SYSTEM NOTE: This is tool error attempt ${attempt}/3. If the next tool round also fails, stop and acknowledge the limitation.]`;
