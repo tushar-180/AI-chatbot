@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { api } from "@/lib/api";
+import { api, API_ORIGIN } from "@/lib/api";
+import { io, Socket } from "socket.io-client";
 
 export interface Provider {
   id: string;
@@ -9,6 +10,32 @@ export interface Provider {
 // Global cache variables to deduplicate parallel requests and cache resolved providers
 let cachedProviders: Provider[] | null = null;
 let providersPromise: Promise<Provider[]> | null = null;
+let listeners: Array<(providers: Provider[]) => void> = [];
+let globalConfigSocket: Socket | null = null;
+
+if (typeof window !== "undefined" && !globalConfigSocket) {
+  globalConfigSocket = io(API_ORIGIN, {
+    transports: ["websocket", "polling"],
+  });
+
+  globalConfigSocket.on("config_updated", async () => {
+    cachedProviders = null;
+    providersPromise = null;
+    try {
+      providersPromise = api
+        .get("/ai/providers")
+        .then((res) => {
+          const providers = res.data.providers || [];
+          cachedProviders = providers;
+          return providers;
+        });
+      const providers = await providersPromise;
+      listeners.forEach((fn) => fn(providers));
+    } catch (err) {
+      console.error("Error refreshing providers on config update", err);
+    }
+  });
+}
 
 export const useAvailableProviders = (
   selectedProvider: string,
@@ -17,6 +44,13 @@ export const useAvailableProviders = (
   const [availableProviders, setAvailableProviders] = useState<Provider[]>(
     cachedProviders || [],
   );
+
+  useEffect(() => {
+    listeners.push(setAvailableProviders);
+    return () => {
+      listeners = listeners.filter((fn) => fn !== setAvailableProviders);
+    };
+  }, []);
 
   useEffect(() => {
     if (cachedProviders) {

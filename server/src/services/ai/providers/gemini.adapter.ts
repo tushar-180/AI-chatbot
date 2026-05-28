@@ -150,7 +150,7 @@ export class GeminiAdapter implements IAIService {
                       Buffer.from(arrayBuffer).toString("base64");
 
                     const data = { mimeType, data: base64Data };
-                    
+
                     if (GeminiAdapter.imageCache.size > 500) {
                       const firstKey = GeminiAdapter.imageCache.keys().next().value;
                       if (firstKey) GeminiAdapter.imageCache.delete(firstKey);
@@ -186,7 +186,7 @@ export class GeminiAdapter implements IAIService {
 
     // Do NOT strip instructions if hasTools is false. The core Velora instructions 
     // are needed for web search and image generation to work properly!
-    
+
     const mcpInstruction = hasTools
       ? "\n\n[CRITICAL INSTRUCTION FOR MCP TOOLS: You have access to various tools via MCP. RULE 1: DO NOT attempt to use any file analysis or parsing tools (such as Excel, CSV, or PDF tools) unless the user has explicitly uploaded a corresponding file in this conversation. If no file is attached, you MUST NOT guess or hallucinate that a file exists. RULE 2: Use Web Search tools only if the user explicitly asks to search or if you require real-time/updated data to answer the query. RULE 3: If you lack the required context or files to use a tool, fulfill the request using your own knowledge or admit you cannot answer.]"
       : "";

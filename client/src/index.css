@@ -372,15 +372,20 @@
 
 /* Floating particle animation */
 @keyframes float-particle {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: translateY(0px) translateX(0px);
   }
+
   25% {
     transform: translateY(-30px) translateX(10px);
   }
+
   50% {
     transform: translateY(-15px) translateX(-8px);
   }
+
   75% {
     transform: translateY(-40px) translateX(5px);
   }
@@ -395,6 +400,7 @@
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
@@ -409,6 +415,7 @@
   from {
     transform: rotate(360deg);
   }
+
   to {
     transform: rotate(0deg);
   }
