@@ -489,6 +489,15 @@ erDiagram
         Date createdAt
         Date updatedAt
     }
+    
+    APP_CONFIG {
+        ObjectId _id PK
+        string singletonId
+        array disabledProviders
+        array disabledModels
+        Date createdAt
+        Date updatedAt
+    }
 ```
 
 ## 6. Features Breakdown
@@ -523,7 +532,8 @@ Users can organize conversations by project context. Projects contain custom ins
 ### 6.9 Admin Analytics Dashboard
 A secure dashboard is provided for administrators to monitor platform telemetry and manage users. Key functionalities include:
 *   **Model Telemetry and Performance**: Visualizes global token consumption, model share percentages, and conversational density (average tokens per message) across all active AI adapters using Recharts.
-*   **User Directory and Access Control**: Allows administrators to view user-specific token usage, favorite models, and chat counts, as well as the ability to modify user roles.
+*   **User Directory**: Allows administrators to view user-specific token usage, favorite models, and chat counts, as well as the ability to modify user roles.
+*   **Dynamic Model Access Control**: A dedicated UI to globally disable or enable entire AI providers or specific models.
 *   **Model Context Protocol Management**: Provides an interface to register, configure, and monitor external MCP tool servers globally.
 *   **System Diagnostics**: Displays system status signals, active adapter counts, and aggregated payload comparisons.
 
@@ -556,5 +566,5 @@ Velora AI is built to provide a unified AI workspace where individuals and teams
 | Total Source Files | 173 TypeScript and TSX files |
 | Codebase Size | Approximately 36,500 lines |
 | AI Providers Supported | Gemini, OpenAI, NVIDIA |
-| Database Models | 10 Database schemas |
+| Database Models | 11 Database schemas |
 | Real-time Protocol | Server-Sent Events and WebSockets |
