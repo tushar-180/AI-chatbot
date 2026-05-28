@@ -108,47 +108,77 @@ export const adminController = {
       const chatStats = await Chat.aggregate([{ $group: { _id: "$userId", count: { $sum: 1 } } }]);
       const chatStatsMap = new Map(chatStats.map((stat) => [stat._id, stat.count]));
 
-      // 4. Aggregate favorite model per user based on messages, with normalization
+      // 4. Aggregate model usage per user based on messages, with normalization
       const userStats = await TokenUsageRecord.aggregate([
         { $match: { role: "assistant", model: { $exists: true, $ne: null } } },
-        { $group: { _id: { userId: "$userId", model: "$model" }, count: { $sum: 1 } } },
+        { 
+          $group: { 
+            _id: { userId: "$userId", model: "$model" }, 
+            count: { $sum: 1 },
+            totalTokens: { $sum: "$tokens.totalTokens" },
+            promptTokens: { $sum: "$tokens.promptTokens" },
+            completionTokens: { $sum: "$tokens.completionTokens" }
+          } 
+        },
       ]);
 
-      // Normalize and find user-specific favorite model
+      // Normalize and find user-specific favorite model and breakdown
+      interface ModelUsageItem {
+        model: string;
+        count: number;
+        tokens: number;
+        promptTokens: number;
+        completionTokens: number;
+      }
+
       interface UserAggregatedStats {
         favoriteModel: string;
         favoriteModelCount: number;
+        modelUsage: ModelUsageItem[];
       }
 
-      const userModelCounts = new Map<string, Map<string, number>>();
+      const userModelCounts = new Map<string, Map<string, ModelUsageItem>>();
       for (const item of userStats) {
         const userId = item._id.userId;
         const normalized = normalizeModelName(item._id.model);
 
         if (!userModelCounts.has(userId)) {
-          userModelCounts.set(userId, new Map<string, number>());
+          userModelCounts.set(userId, new Map<string, ModelUsageItem>());
         }
 
         const modelMap = userModelCounts.get(userId)!;
-        const current = modelMap.get(normalized) || 0;
-        modelMap.set(normalized, current + item.count);
+        const current = modelMap.get(normalized) || { model: normalized, count: 0, tokens: 0, promptTokens: 0, completionTokens: 0 };
+        
+        modelMap.set(normalized, {
+          model: normalized,
+          count: current.count + item.count,
+          tokens: current.tokens + (item.totalTokens || 0),
+          promptTokens: current.promptTokens + (item.promptTokens || 0),
+          completionTokens: current.completionTokens + (item.completionTokens || 0)
+        });
       }
 
       const modelStatsMap = new Map<string, UserAggregatedStats>();
       for (const [userId, modelMap] of userModelCounts.entries()) {
         let favModel = "None";
         let maxCount = 0;
+        const modelUsage: ModelUsageItem[] = [];
 
-        for (const [model, count] of modelMap.entries()) {
-          if (count > maxCount) {
-            maxCount = count;
+        for (const [model, stats] of modelMap.entries()) {
+          modelUsage.push(stats);
+          if (stats.count > maxCount) {
+            maxCount = stats.count;
             favModel = model;
           }
         }
 
+        // Sort model breakdown by highest token usage
+        modelUsage.sort((a, b) => b.tokens - a.tokens);
+
         modelStatsMap.set(userId, {
           favoriteModel: favModel,
           favoriteModelCount: maxCount,
+          modelUsage
         });
       }
 
@@ -193,6 +223,7 @@ export const adminController = {
           lastSignInAt: user.lastSignInAt,
           role: user.get("role") || "user",
           favoriteModel: favoriteModelInfo ? favoriteModelInfo.favoriteModel : "None",
+          modelUsage: favoriteModelInfo ? favoriteModelInfo.modelUsage : [],
           totalChats: totalChats,
           totalTokens: tokenStats.totalTokens,
           promptTokens: tokenStats.promptTokens,

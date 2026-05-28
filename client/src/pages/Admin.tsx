@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import Loading from "@/features/chat/components/Loading";
 import McpAdminTab from "@/features/admin/components/McpAdminTab";
 import AccessControlTab from "@/features/admin/components/AccessControlTab";
+import UserUsageTab from "@/features/admin/components/UserUsageTab";
 import { api } from "@/lib/api";
 import {
   ArrowLeft,
@@ -58,6 +59,13 @@ interface UserStat {
   totalTokens: number;
   promptTokens: number;
   completionTokens: number;
+  modelUsage?: {
+    model: string;
+    count: number;
+    tokens: number;
+    promptTokens: number;
+    completionTokens: number;
+  }[];
 }
 
 interface AdminStats {
@@ -427,7 +435,7 @@ const Admin: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortField, setSortField] = useState<"name" | "chats" | "joined" | "tokens">("chats");
   const [sortAsc, setSortAsc] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance" | "mcp" | "access">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "performance" | "mcp" | "access" | "usage">("overview");
   const [syncing, setSyncing] = useState<boolean>(false);
 
   const fetchStats = async (isSync = false) => {
@@ -734,6 +742,17 @@ const Admin: React.FC = () => {
             <Lock size={14} className="hidden sm:block shrink-0" />
             <span className="hidden sm:inline">Model Access Control</span>
             <span className="sm:hidden">Access</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("usage")}
+            className={`pb-4 text-[10px] sm:text-xs font-semibold uppercase tracking-widest border-b-2 transition-all cursor-pointer flex items-center gap-1.5 sm:gap-2 shrink-0 ${activeTab === "usage"
+                ? "text-indigo-400 border-indigo-400 font-bold"
+                : "text-zinc-500 border-transparent hover:text-zinc-300"
+              }`}
+          >
+            <Database size={14} className="hidden sm:block shrink-0" />
+            <span className="hidden sm:inline">Token Usage</span>
+            <span className="sm:hidden">Usage</span>
           </button>
         </div>
 
@@ -1225,6 +1244,7 @@ const Admin: React.FC = () => {
 
         {activeTab === "mcp" && <McpAdminTab />}
         {activeTab === "access" && <AccessControlTab />}
+        {activeTab === "usage" && <UserUsageTab users={stats.usersList} />}
 
       </div>
     </div>
