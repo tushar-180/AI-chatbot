@@ -158,7 +158,7 @@ export class GeminiAdapter implements IAIService {
                       Buffer.from(arrayBuffer).toString("base64");
 
                     const data = { mimeType, data: base64Data };
-                    
+
                     if (GeminiAdapter.imageCache.size > 500) {
                       const firstKey = GeminiAdapter.imageCache.keys().next().value;
                       if (firstKey) GeminiAdapter.imageCache.delete(firstKey);
@@ -194,7 +194,7 @@ export class GeminiAdapter implements IAIService {
 
     // Do NOT strip instructions if hasTools is false. The core Velora instructions 
     // are needed for web search and image generation to work properly!
-    
+
     const mcpInstruction = hasTools
       ? "\n\n[CRITICAL INSTRUCTION FOR MCP TOOLS: You have access to various tools via MCP. RULE 1: DO NOT attempt to use any file analysis or parsing tools (such as Excel, CSV, or PDF tools) unless the user has explicitly uploaded a corresponding file in this conversation. If no file is attached, you MUST NOT guess or hallucinate that a file exists. RULE 2: Use Web Search tools only if the user explicitly asks to search or if you require real-time/updated data to answer the query. RULE 3: After a tool response, treat it as authoritative and do not repeat the same or an equivalent tool call unless the user provides new information or the output clearly shows a different missing detail. RULE 4: If you lack the required context or files to use a tool, fulfill the request using your own knowledge or admit you cannot answer.]"
       : "";
@@ -437,32 +437,6 @@ export class GeminiAdapter implements IAIService {
         }
       }
 
-      if (loopCount >= maxLoops && hasToolCalls) {
-        contents.push({
-          role: "user",
-          parts: [
-            {
-              text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
-            },
-          ],
-        } as any);
-
-        const finalConfig: any = {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt, false),
-        };
-
-        const finalRes = await this.ai.models.generateContent({
-          model: this.model,
-          contents,
-          config: finalConfig,
-        });
-
-        const choiceText = finalRes.text || "";
-        if (choiceText) {
-          finalOutput += choiceText;
-        }
-      }
-
       if (loopCount >= maxLoops && hasToolCalls && !finalOutput.trim()) {
         finalOutput = MCP_TOOL_FALLBACK_MESSAGE;
       }
@@ -647,36 +621,8 @@ export class GeminiAdapter implements IAIService {
             }
           }
 
-          if (loopCount >= maxLoops && hasToolCalls) {
-            contents.push({
-              role: "user",
-              parts: [
-                {
-                  text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
-                },
-              ],
-            } as any);
-
-            const finalConfig: any = {
-              systemInstruction:
-                adapter.getSystemInstruction(combinedSystemPrompt, false),
-            };
-
-            const finalRes = await adapter.ai.models.generateContentStream({
-              model: adapter.model,
-              contents,
-              config: finalConfig,
-            } as any);
-
-            for await (const chunk of finalRes) {
-              if (signal?.aborted) return;
-              const text = chunk.text;
-              if (text) yield text;
-            }
-
-            if (!finalStreamText.trim()) {
-              yield `\n\n${MCP_TOOL_FALLBACK_MESSAGE}\n`;
-            }
+          if (loopCount >= maxLoops && hasToolCalls && !finalStreamText.trim()) {
+            yield `\n\n${MCP_TOOL_FALLBACK_MESSAGE}\n`;
           }
         } catch (error: any) {
           if (signal?.aborted) {

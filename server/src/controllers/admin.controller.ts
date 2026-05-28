@@ -63,7 +63,7 @@ export const adminController = {
 
       // 2. Fetch global model usage analytics and tokens (keeps top model stat active)
       const globalModelUsage = await TokenUsageRecord.aggregate([
-        { $match: { model: { $exists: true, $ne: null } } },
+        { $match: { role: "assistant", model: { $exists: true, $ne: null } } },
         {
           $group: {
             _id: "$model",
@@ -79,7 +79,6 @@ export const adminController = {
       const modelCountsMap = new Map<string, { count: number; tokens: number; promptTokens: number; completionTokens: number }>();
       for (const item of globalModelUsage) {
         const normalized = normalizeModelName(item._id);
-        if (!validModels.has(normalized)) continue; // Skip obsolete or non-existent test models
         const current = modelCountsMap.get(normalized) || { count: 0, tokens: 0, promptTokens: 0, completionTokens: 0 };
         modelCountsMap.set(normalized, {
           count: current.count + item.count,
@@ -95,9 +94,15 @@ export const adminController = {
           count: info.count,
           tokens: info.tokens,
           promptTokens: info.promptTokens,
-          completionTokens: info.completionTokens
+          completionTokens: info.completionTokens,
+          isAvailable: validModels.has(model)
         }))
-        .sort((a, b) => b.tokens - a.tokens); // Sort by total tokens used
+        .sort((a, b) => {
+          if (a.isAvailable !== b.isAvailable) {
+            return a.isAvailable ? -1 : 1;
+          }
+          return b.tokens - a.tokens;
+        }); // Sort by availability then total tokens
 
       // 3. Count total chats per user
       const chatStats = await Chat.aggregate([{ $group: { _id: "$userId", count: { $sum: 1 } } }]);
@@ -105,7 +110,7 @@ export const adminController = {
 
       // 4. Aggregate favorite model per user based on messages, with normalization
       const userStats = await TokenUsageRecord.aggregate([
-        { $match: { model: { $exists: true, $ne: null } } },
+        { $match: { role: "assistant", model: { $exists: true, $ne: null } } },
         { $group: { _id: { userId: "$userId", model: "$model" }, count: { $sum: 1 } } },
       ]);
 
@@ -119,7 +124,6 @@ export const adminController = {
       for (const item of userStats) {
         const userId = item._id.userId;
         const normalized = normalizeModelName(item._id.model);
-        if (!validModels.has(normalized)) continue; // Skip obsolete or non-existent test models
 
         if (!userModelCounts.has(userId)) {
           userModelCounts.set(userId, new Map<string, number>());

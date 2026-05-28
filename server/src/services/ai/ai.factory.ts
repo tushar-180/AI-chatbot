@@ -4,6 +4,7 @@ import { OpenAIAdapter } from "./providers/openai.adapter";
 // import { ClaudeAdapter } from "./providers/claude.adapter";
 import { NvidiaAdapter } from "./providers/nvidia.adapter";
 import { AI_PROVIDERS, getDisplayProviderName } from "./constants";
+import { AppConfig } from "../../models/AppConfig.model";
 
 export class AIServiceFactory {
   private static providers: Record<string, IAIService> = {
@@ -18,13 +19,22 @@ export class AIServiceFactory {
    * Returns available provider details (id and display name).
    * Now returns all combinations of provider and model.
    */
-  public static getAvailableProviders(): { id: string; name: string }[] {
+  public static async getAvailableProviders(): Promise<{ id: string; name: string }[]> {
+    const config = await AppConfig.findOne({ singletonId: "global" }).lean();
+    const disabledProviders = new Set(config?.disabledProviders || []);
+    const disabledModels = new Set(config?.disabledModels || []);
+
     const available: { id: string; name: string }[] = [];
 
     Object.values(AI_PROVIDERS).forEach((p) => {
+      if (disabledProviders.has(p.id)) return;
+
       p.models.forEach((m) => {
+        const fullId = `${p.id}:${m}`;
+        if (disabledModels.has(fullId)) return;
+
         available.push({
-          id: `${p.id}:${m}`,
+          id: fullId,
           name: getDisplayProviderName(p.id, m),
         });
       });

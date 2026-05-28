@@ -240,10 +240,11 @@ export class GroupChatService {
       metadata: msg.metadata,
       attachments: msg.attachments || [],
       createdAt: msg.createdAt,
+      updatedAt: msg.updatedAt || msg.createdAt,
     }));
 
     if (groupMessages.length > 0) {
-      await GroupMessage.insertMany(groupMessages);
+      await GroupMessage.insertMany(groupMessages, { timestamps: false });
     }
 
     await cleanupChatFiles(chatId);
@@ -496,7 +497,7 @@ export class GroupChatService {
         if (mentionMatch) {
           const mention = mentionMatch[1].toLowerCase();
           if (mention !== "velora" && mention !== "system") {
-            const allProviders = aiService.getAvailableProviders();
+            const allProviders = await aiService.getAvailableProviders();
             const matchedProv = allProviders.find((p) => {
               const cleanName = p.id
                 .split(":")
@@ -547,7 +548,7 @@ export class GroupChatService {
     // Handle Agent Mention
     const mentions = [...content.matchAll(/@([a-zA-Z0-9-:_/.]+)/g)].map(m => m[1].toLowerCase());
     if (mentions.length > 0) {
-      const allProviders = aiService.getAvailableProviders();
+      const allProviders = await aiService.getAvailableProviders();
       const isAiMention = mentions.some((mention) => 
         mention === "velora" ||
         allProviders.some((p) => {
@@ -669,7 +670,7 @@ export class GroupChatService {
     let targetProvider: string | undefined = overrideProvider;
     if (!targetProvider) {
       const mentions = [...userContent.matchAll(/@([a-zA-Z0-9-:_/.]+)/g)].map(m => m[1].toLowerCase());
-      const allProviders = aiService.getAvailableProviders();
+      const allProviders = await aiService.getAvailableProviders();
       
       for (const mention of mentions) {
         if (mention === "velora" || mention === "system") continue;
@@ -722,6 +723,7 @@ export class GroupChatService {
       );
       const lastUserMessage = promptMessages.filter(m => m.role === 'user').pop()?.content || "";
       const tools = webSearchEnabled ? [] : await getEnabledMcpTools(activeUserId, hasFiles, lastUserMessage);
+      await aiService.validateModelAccess(targetProvider);
       const aiProvider = aiService.getProvider(targetProvider);
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
@@ -747,6 +749,19 @@ export class GroupChatService {
 
       if (activeStream.abortController.signal.aborted) {
         return;
+      }
+
+      if (!fullResponse.trim()) {
+        fullResponse = "The AI was unable to generate a response. Please try rephrasing your request or check if it was blocked by safety filters.";
+        groupStreamRegistry.updateResponse(groupId, fullResponse);
+        groupSocketManager.broadcast(groupId, {
+          type: "ai_stream",
+          chunk: fullResponse,
+          tempId,
+          done: false,
+          username: assistantUsername,
+          webSearchEnabled,
+        });
       }
 
       fullResponse = this.sanitizeAssistantResponse(fullResponse);
@@ -880,7 +895,7 @@ export class GroupChatService {
 
       console.error("AI Group Generation Error:", err);
 
-      const errorContent = `⚠️ **Failed to generate response.** The model \`${displayName}\` encountered an error or is temporarily unavailable. Please try again.`;
+      const errorContent = `**Failed to generate response.** The model \`${displayName}\` encountered an error or is temporarily unavailable. Please try again.`;
 
       // Save the error message so it persists in the chat history
       const errorMsg = await GroupMessage.create({
@@ -1052,7 +1067,7 @@ export class GroupChatService {
     let isAiMention = false;
     if (match) {
       const mention = match[1].toLowerCase();
-      const allProviders = aiService.getAvailableProviders();
+      const allProviders = await aiService.getAvailableProviders();
       isAiMention =
         mention === "velora" ||
         allProviders.some((p) => {
