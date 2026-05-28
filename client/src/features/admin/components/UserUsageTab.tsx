@@ -304,8 +304,8 @@ export default function UserUsageTab({ users }: UserUsageTabProps) {
                                       cursor={{ fill: '#ffffff05' }}
                                       contentStyle={{ backgroundColor: "#18181b", borderColor: "#ffffff10", borderRadius: "12px", fontSize: "12px", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.5)" }}
                                       itemStyle={{ color: "#fff", fontWeight: "bold" }}
-                                      formatter={(val: number, name: string) => [val.toLocaleString() + " tokens", name === "Input Tokens" ? "Input" : "Output"]}
-                                      labelFormatter={(val: string, payload: any[]) => {
+                                      formatter={(val: any, name: any) => [(val || 0).toLocaleString() + " tokens", name === "Input Tokens" ? "Input" : "Output"]}
+                                      labelFormatter={(val: any, payload: any) => {
                                         if (payload && payload.length > 0) {
                                           return payload[0].payload.modelName || val;
                                         }
