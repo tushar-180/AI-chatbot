@@ -206,17 +206,18 @@ const tokenUsageRecordSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Optional — not set for compare-mode records (no Chat document is created)
     chatId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Chat",
-      required: true,
+      required: false,
       index: true,
     },
+    // Optional — not set for compare-mode records (no Message document is created)
     messageId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
-      required: true,
-      unique: true,
+      required: false,
       index: true,
     },
     role: {
@@ -226,6 +227,13 @@ const tokenUsageRecordSchema = new mongoose.Schema(
     },
     model: {
       type: String,
+      index: true,
+    },
+    // 'chat' = regular conversation message, 'compare' = arena comparison (no chat/message stored)
+    source: {
+      type: String,
+      enum: ["chat", "compare"],
+      default: "chat",
       index: true,
     },
     tokens: {

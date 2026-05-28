@@ -5,6 +5,9 @@ import { useUser } from "@clerk/react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useGroupStore } from "../store/useGroupStore";
+import { useChatStore } from "../store/useChatStore";
+import { useProjectStore } from "../store/useProjectStore";
+import { useNavigate } from "react-router-dom";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -14,14 +17,41 @@ interface CreateGroupModalProps {
 
 const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, chatId }) => {
   const { user } = useUser();
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
+  const [hasFinalizedConversion, setHasFinalizedConversion] = useState(false);
   const addGroup = useGroupStore((state) => state.addGroup);
+  const setCurrentGroup = useGroupStore((state) => state.setCurrentGroup);
+  const removeChat = useChatStore((state) => state.removeChat);
+  const setCurrentChat = useChatStore((state) => state.setCurrentChat);
+  const removeChatFromProjectStore = useProjectStore(
+    (state) => state.removeChatFromProjectStore,
+  );
+
+  const finalizeGroupCreation = () => {
+    if (!createdGroupId || hasFinalizedConversion) {
+      return;
+    }
+
+    setHasFinalizedConversion(true);
+    removeChat(chatId);
+    removeChatFromProjectStore(chatId);
+    setCurrentChat(null);
+    setCurrentGroup(createdGroupId);
+    navigate(`/group/${createdGroupId}`);
+  };
+
+  const handleClose = () => {
+    finalizeGroupCreation();
+    onClose();
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
 
     if (isOpen) {
@@ -29,12 +59,14 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
     } else {
       setCopied(false);
       setInviteUrl(null);
+      setCreatedGroupId(null);
+      setHasFinalizedConversion(false);
     }
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [handleClose, isOpen]);
 
   const handleGenerateLink = async () => {
     if (!user) return;
@@ -47,6 +79,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
       const group = response.data;
       
       addGroup(group);
+      setCreatedGroupId(group._id);
       
       const baseUrl = window.location.origin;
       const url = `${baseUrl}/join/${group.inviteCode}`;
@@ -67,7 +100,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
       setCopied(true);
       toast.success("Invite link copied!");
       setTimeout(() => {
-        onClose();
+        handleClose();
       }, 1000);
     }
   };
@@ -77,7 +110,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
   const modalContent = (
     <div 
       className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -93,7 +126,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-zinc-900 rounded-full transition-colors text-zinc-500 hover:text-white"
           >
             <X className="w-5 h-5" />
@@ -139,7 +172,7 @@ const CreateGroupModal: React.FC<CreateGroupModalProps> = ({ isOpen, onClose, ch
             )}
             
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="w-full px-4 py-3 bg-zinc-900 text-white font-medium rounded-xl hover:bg-zinc-800 transition-all border border-zinc-800"
             >
               {inviteUrl ? "Done" : "Cancel"}

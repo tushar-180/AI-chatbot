@@ -149,6 +149,7 @@ export const temporaryChatService = {
     webSearchEnabled?: boolean;
     attachedFile?: Express.Multer.File | null;
   }): AsyncGenerator<StreamPayload> {
+    await aiService.validateModelAccess(provider);
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
 
@@ -212,7 +213,7 @@ export const temporaryChatService = {
       const hasFiles = promptMessages.some((m) =>
         m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
       );
-      const tools = await getEnabledMcpTools(String(userId), hasFiles);
+      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(String(userId), hasFiles);
 
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,
@@ -246,6 +247,12 @@ export const temporaryChatService = {
         }
       } finally {
         clearTimeout(timeout);
+      }
+
+      if (!fullResponse.trim() && !activeStream.abortController.signal.aborted) {
+        fullResponse = "The AI was unable to generate a response. Please try rephrasing your request or check if it was blocked by safety filters.";
+        chatStreamRegistry.updateResponse(requestId, fullResponse, fullResponse);
+        yield { chunk: fullResponse, requestId, status: "streaming" };
       }
 
       const groundedResponse = finalizeGroundedResponse(
@@ -291,7 +298,7 @@ export const temporaryChatService = {
       }
 
       console.error("AI Error in temporary chat stream:", aiError);
-      const detailedErrorMessage = `⚠️ **Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
+      const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
       chatStreamRegistry.fail(requestId, detailedErrorMessage);
       yield { error: detailedErrorMessage, status: "failed" };
     }

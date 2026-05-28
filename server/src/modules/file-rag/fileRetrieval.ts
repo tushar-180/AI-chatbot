@@ -34,7 +34,7 @@ export async function retrieveFileContext(
             {
                 query_embedding: queryEmbedding,
                 match_threshold: 0.35,   // adjusted for 256 dimensions
-                match_count: 5,
+                match_count: 3,
                 filter_path: storagePath,
             }
         );

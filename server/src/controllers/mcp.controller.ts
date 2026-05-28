@@ -107,6 +107,8 @@ export const mcpController = {
         await server.save();
 
         if (enabled) {
+          // Ensure it's removed from their personal disabled list so it actually shows up as enabled
+          await currentUser?.updateOne({ $pull: { disabledMcpServers: name } });
           await mcpClientService.connect(server);
         } else {
           await mcpClientService.disconnect(server.name);

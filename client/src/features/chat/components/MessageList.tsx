@@ -409,7 +409,7 @@ const MessageList = forwardRef<
                       <img
                         src="/logo.png"
                         alt="Velora Logo"
-                        className="h-16 w-16 lg:h-20 lg:w-20 object-contain object-center drop-shadow-lg"
+                        className="h-16 w-16 lg:h-20 lg:w-20 object-contain object-center drop-shadow-lg not-selectable"
                       />
                     )}
                   </div>

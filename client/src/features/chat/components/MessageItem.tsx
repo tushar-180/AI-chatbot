@@ -81,10 +81,23 @@ const getModelOnlyName = (fullName: string) => {
   return fullName.includes(" : ") ? fullName.split(" : ")[1] : fullName;
 };
 
+type SelectionContext = NonNullable<Message["metadata"]>["selection"];
+type MessageMetadataWithWebSearch = Message["metadata"] & {
+  webSearchEnabled?: boolean;
+};
+
+type EditOptions = {
+  provider?: string;
+  webSearchEnabled?: boolean;
+  attachments?: Attachment[];
+  attachedFile?: File | null;
+  selection?: SelectionContext | null;
+};
+
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }) => void;
+  onEdit?: (content: string, options?: EditOptions) => void;
   onEditStart?: () => void;
   onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
@@ -288,20 +301,31 @@ const MessageItem = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [attachments, setAttachments] = useState<any[]>(msg.attachments || []);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [editSelectionContext, setEditSelectionContext] = useState<any>(
-    msg.metadata?.selection || null
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    msg.attachments || [],
   );
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [editSelectionContext, setEditSelectionContext] =
+    useState<SelectionContext | null>(msg.metadata?.selection || null);
 
   // Edit-local provider & web search state
   const [editProvider, setEditProvider] = useState(getStoredProvider);
   const [editWebSearchEnabled, setEditWebSearchEnabled] = useState(false);
-  const { availableProviders } = useAvailableProviders(editProvider, setEditProvider);
+  const handleEditProviderChange = (providerId: string) => {
+    setEditProvider(providerId);
+    if (!supportsVision(providerId)) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  };
+  const { availableProviders } = useAvailableProviders(
+    editProvider,
+    handleEditProviderChange,
+  );
 
   // State for the retry web search toggle
   const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
-    Boolean((msg.metadata as any)?.webSearchEnabled)
+    Boolean((msg.metadata as MessageMetadataWithWebSearch)?.webSearchEnabled)
   );
   const canUpload = supportsVision(editProvider);
 
@@ -432,7 +456,7 @@ const MessageItem = ({
     setIsEditing(true);
     setEditContent(msg.content);
     setEditSelectionContext(msg.metadata?.selection || null);
-    setEditProvider(getStoredProvider());
+    handleEditProviderChange(getStoredProvider());
     setEditWebSearchEnabled(false);
     onEditStart?.();
   };
@@ -444,14 +468,6 @@ const MessageItem = ({
     setAttachments(msg.attachments || []);
     setAttachedFile(null);
   };
-
-  // Clear attachments when switching to a non-vision model
-  useEffect(() => {
-    if (isEditing && !canUpload) {
-      setAttachments([]);
-      setAttachedFile(null);
-    }
-  }, [isEditing, canUpload]);
 
   const handleEditSave = () => {
     const contentChanged = editContent.trim() !== msg.content;
@@ -595,12 +611,32 @@ const MessageItem = ({
 
   if (processedContent) {
     processedContent = escapeUnrecognizedHtmlTags(processedContent);
+    
+    // Replace completed tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_COMPLETED:\1\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>'
+    );
+    // Replace failed tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_ERROR:\1:(.*?)\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>'
+    );
+    // Replace still running tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>'
+    );
   }
 
   const citationComponents = !isUser
     ? {
       ...assistantMarkdownComponents,
-      cite: ({ node }: any) => {
+      cite: ({
+        node,
+      }: {
+        node?: { properties?: { dataId?: string | number } };
+      }) => {
         const id = Number(node?.properties?.dataId);
 
         if (isNaN(id)) return null;
@@ -726,7 +762,7 @@ const MessageItem = ({
                       {availableProviders.map((p) => (
                         <DropdownMenuItem
                           key={p.id}
-                          onClick={() => setEditProvider(p.id)}
+                          onClick={() => handleEditProviderChange(p.id)}
                           className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
                             editProvider === p.id
                               ? "bg-white text-black"

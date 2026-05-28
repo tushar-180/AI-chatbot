@@ -9,7 +9,15 @@ import {
 import { normalizeGeminiUsageMetadata } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 import { mcpClientService } from "../../mcpClient.service";
-import { CORE_VELORA_INSTRUCTIONS } from "../../../constants/prompt.constants";
+import {
+  CORE_VELORA_INSTRUCTIONS,
+  MCP_TOOL_ERROR_FALLBACK_MESSAGE,
+  MCP_TOOL_ERROR_NOTE,
+  MCP_TOOL_ERROR_RETRY_LIMIT,
+  MCP_TOOL_FALLBACK_MESSAGE,
+  MCP_TOOL_LOOP_LIMIT,
+  MCP_TOOL_SUCCESS_NOTE,
+} from "../../../constants/prompt.constants";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { existsSync } from "node:fs";
@@ -150,7 +158,7 @@ export class GeminiAdapter implements IAIService {
                       Buffer.from(arrayBuffer).toString("base64");
 
                     const data = { mimeType, data: base64Data };
-                    
+
                     if (GeminiAdapter.imageCache.size > 500) {
                       const firstKey = GeminiAdapter.imageCache.keys().next().value;
                       if (firstKey) GeminiAdapter.imageCache.delete(firstKey);
@@ -186,9 +194,9 @@ export class GeminiAdapter implements IAIService {
 
     // Do NOT strip instructions if hasTools is false. The core Velora instructions 
     // are needed for web search and image generation to work properly!
-    
+
     const mcpInstruction = hasTools
-      ? "\n\n[CRITICAL INSTRUCTION FOR MCP TOOLS: You have access to various tools via MCP. RULE 1: DO NOT attempt to use any file analysis or parsing tools (such as Excel, CSV, or PDF tools) unless the user has explicitly uploaded a corresponding file in this conversation. If no file is attached, you MUST NOT guess or hallucinate that a file exists. RULE 2: Use Web Search tools only if the user explicitly asks to search or if you require real-time/updated data to answer the query. RULE 3: If you lack the required context or files to use a tool, fulfill the request using your own knowledge or admit you cannot answer.]"
+      ? "\n\n[CRITICAL INSTRUCTION FOR MCP TOOLS: You have access to various tools via MCP. RULE 1: DO NOT attempt to use any file analysis or parsing tools (such as Excel, CSV, or PDF tools) unless the user has explicitly uploaded a corresponding file in this conversation. If no file is attached, you MUST NOT guess or hallucinate that a file exists. RULE 2: Use Web Search tools only if the user explicitly asks to search or if you require real-time/updated data to answer the query. RULE 3: After a tool response, treat it as authoritative and do not repeat the same or an equivalent tool call unless the user provides new information or the output clearly shows a different missing detail. RULE 4: If you lack the required context or files to use a tool, fulfill the request using your own knowledge or admit you cannot answer.]"
       : "";
 
     const finalPrompt = combinedSystemPrompt
@@ -290,6 +298,31 @@ export class GeminiAdapter implements IAIService {
     ];
   }
 
+  private formatToolSuccessResult(result: unknown): string {
+    let text: string;
+    if (result && typeof result === "object" && Array.isArray((result as any).content)) {
+      text = (result as any).content
+        .filter((c: any) => c.type === "text" && c.text)
+        .map((c: any) => c.text)
+        .join("\n");
+      if (!text) text = JSON.stringify(result);
+    } else {
+      text = typeof result === "string" ? result : JSON.stringify(result);
+    }
+    if (text.length > 4000) {
+      text = text.substring(0, 4000) + "\n...[Note: results truncated for brevity]";
+    }
+    return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
+  }
+
+  private formatToolErrorResult(err: unknown, attempt: number): string {
+    const message =
+      err instanceof Error ? err.message : String(err || "Unknown tool error");
+    return JSON.stringify({
+      error: `${message}. ${MCP_TOOL_ERROR_NOTE(attempt)}`,
+    });
+  }
+
   async generateResponse(messages: AIMessage[], tools?: any[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const collapsedMessages = this.collapseConsecutiveRoles(messages);
@@ -302,7 +335,8 @@ export class GeminiAdapter implements IAIService {
     const geminiTools = this.mapMcpToolsToGemini(tools);
     let hasToolCalls = true;
     let loopCount = 0;
-    const maxLoops = 5;
+    const maxLoops = MCP_TOOL_LOOP_LIMIT;
+    let consecutiveErrorRounds = 0;
     let finalOutput = "";
     let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
@@ -340,6 +374,7 @@ export class GeminiAdapter implements IAIService {
         const functionCalls = res.functionCalls;
         if (functionCalls && functionCalls.length > 0) {
           hasToolCalls = true;
+          let hadToolError = false;
 
           const modelContent = res.candidates?.[0]?.content;
           contents.push({
@@ -367,10 +402,7 @@ export class GeminiAdapter implements IAIService {
                   f.args,
                 );
 
-                let resultString = typeof result === "string" ? result : JSON.stringify(result);
-                if (resultString.length > 10000) {
-                  resultString = resultString.substring(0, 10000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
-                }
+                let resultString = this.formatToolSuccessResult(result);
 
                 return {
                   functionResponse: {
@@ -379,11 +411,11 @@ export class GeminiAdapter implements IAIService {
                   },
                 };
               } catch (err: any) {
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
+                hadToolError = true;
                 return {
                   functionResponse: {
                     name: f.name!,
-                    response: { error: errMsg },
+                    response: { error: this.formatToolErrorResult(err, consecutiveErrorRounds + 1) },
                   },
                 };
               }
@@ -394,37 +426,23 @@ export class GeminiAdapter implements IAIService {
             role: "user",
             parts: responseParts,
           } as any);
+
+          consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+          if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+            finalOutput = finalOutput.trim()
+              ? `${finalOutput.trim()}\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}`
+              : MCP_TOOL_ERROR_FALLBACK_MESSAGE;
+            break;
+          }
         }
       }
 
-      if (loopCount >= maxLoops && hasToolCalls) {
-        contents.push({
-          role: "user",
-          parts: [
-            {
-              text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
-            },
-          ],
-        } as any);
-
-        const finalConfig: any = {
-          systemInstruction: this.getSystemInstruction(combinedSystemPrompt, false),
-        };
-
-        const finalRes = await this.ai.models.generateContent({
-          model: this.model,
-          contents,
-          config: finalConfig,
-        });
-
-        const choiceText = finalRes.text || "";
-        if (choiceText) {
-          finalOutput += choiceText;
-        }
+      if (loopCount >= maxLoops && hasToolCalls && !finalOutput.trim()) {
+        finalOutput = MCP_TOOL_FALLBACK_MESSAGE;
       }
 
       return {
-        text: finalOutput.trim() || "No response generated.",
+        text: finalOutput.trim() || MCP_TOOL_FALLBACK_MESSAGE,
         usage: totalUsage,
       };
     } catch (error: any) {
@@ -447,6 +465,7 @@ export class GeminiAdapter implements IAIService {
       .join("\n\n---\n\n");
 
     const geminiTools = this.mapMcpToolsToGemini(tools);
+    console.log("Gemini Tools--->", geminiTools);
     let totalUsage: ReturnType<typeof normalizeGeminiUsageMetadata> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     let settleUsage: (
       usage: ReturnType<typeof normalizeGeminiUsageMetadata>,
@@ -470,7 +489,9 @@ export class GeminiAdapter implements IAIService {
         try {
           let hasToolCalls = true;
           let loopCount = 0;
-          const maxLoops = 5;
+          const maxLoops = MCP_TOOL_LOOP_LIMIT;
+          let finalStreamText = "";
+          let consecutiveErrorRounds = 0;
 
           while (hasToolCalls && loopCount < maxLoops) {
             loopCount++;
@@ -489,7 +510,7 @@ export class GeminiAdapter implements IAIService {
               contents,
               config,
             } as any);
-
+            console.log("res---->", res);   
             const activeFunctionCalls: any[] = [];
             const accumulatedParts: any[] = [];
 
@@ -508,6 +529,7 @@ export class GeminiAdapter implements IAIService {
 
               const text = chunk.text;
               if (text) {
+                finalStreamText += text;
                 yield text;
               }
 
@@ -541,10 +563,11 @@ export class GeminiAdapter implements IAIService {
             } as any);
 
             const responseParts = [];
+            let hadToolError = false;
             for (const f of activeFunctionCalls) {
               if (!f.name) continue;
 
-              yield `\n\n⚙️ *Running tool \`${f.name}\`...*\n`;
+              yield `\n\n[TOOL_RUNNING:${f.name}]\n\n`;
 
               try {
                 const isAllowed = tools && tools.some((t) => t.name === f.name);
@@ -555,12 +578,9 @@ export class GeminiAdapter implements IAIService {
                   f.name,
                   f.args,
                 );
-                yield `\n\n✅ *Tool \`${f.name}\` completed.* \n\n`;
+                yield `\n\n[TOOL_COMPLETED:${f.name}]\n\n`;
 
-                let resultString = typeof result === "string" ? result : JSON.stringify(result);
-                if (resultString.length > 10000) {
-                  resultString = resultString.substring(0, 10000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
-                }
+                let resultString = adapter.formatToolSuccessResult(result);
 
                 responseParts.push({
                   functionResponse: {
@@ -569,14 +589,13 @@ export class GeminiAdapter implements IAIService {
                   },
                 });
               } catch (err: any) {
-                yield `\n\n❌ *Tool \`${f.name}\` failed: ${err.message || err
-                  }*\n\n`;
+                hadToolError = true;
+                yield `\n\n[TOOL_ERROR:${f.name}:${err.message || err}]\n\n`;
 
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseParts.push({
                   functionResponse: {
                     name: f.name,
-                    response: { error: errMsg },
+                    response: { error: adapter.formatToolErrorResult(err, consecutiveErrorRounds + 1) },
                   },
                 });
               }
@@ -586,34 +605,20 @@ export class GeminiAdapter implements IAIService {
               role: "user",
               parts: responseParts,
             } as any);
+
+            consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+            if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+              if (!finalStreamText.trim()) {
+                yield `\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}\n`;
+              } else {
+                yield `\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}\n`;
+              }
+              return;
+            }
           }
 
-          if (loopCount >= maxLoops && hasToolCalls) {
-            contents.push({
-              role: "user",
-              parts: [
-                {
-                  text: "[SYSTEM NOTE: You have reached the maximum number of tool executions. You MUST now provide a final answer based ONLY on the information you have gathered so far. Do NOT attempt to call any more tools.]",
-                },
-              ],
-            } as any);
-
-            const finalConfig: any = {
-              systemInstruction:
-                adapter.getSystemInstruction(combinedSystemPrompt, false),
-            };
-
-            const finalRes = await adapter.ai.models.generateContentStream({
-              model: adapter.model,
-              contents,
-              config: finalConfig,
-            } as any);
-
-            for await (const chunk of finalRes) {
-              if (signal?.aborted) return;
-              const text = chunk.text;
-              if (text) yield text;
-            }
+          if (loopCount >= maxLoops && hasToolCalls && !finalStreamText.trim()) {
+            yield `\n\n${MCP_TOOL_FALLBACK_MESSAGE}\n`;
           }
         } catch (error: any) {
           if (signal?.aborted) {

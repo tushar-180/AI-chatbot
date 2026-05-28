@@ -25,8 +25,8 @@ import type {
 } from "./webSearch.types";
 
 const MAX_SEARCH_RESULTS = 10;
-const MAX_SOURCE_COUNT = 5;
-const MAX_RAW_CONTENT_CHARS = 10000;
+const MAX_SOURCE_COUNT = 3;
+const MAX_RAW_CONTENT_CHARS = 3000;
 const LIVE_QUERY_TTL_MS = 10 * 60 * 1000;
 const STABLE_QUERY_TTL_MS = 2 * 60 * 60 * 1000;
 

@@ -209,12 +209,17 @@ export const useChatStore = create<ChatState>()(
         }),
 
       removeChat: (id) =>
-        set((state) => ({
-          chats: state.chats.filter((chat) => chat._id !== id),
-          currentChatId:
-            state.currentChatId === id ? null : state.currentChatId,
-          messages: state.currentChatId === id ? [] : state.messages,
-        })),
+        set((state) => {
+          const isCurrentChat = state.currentChatId === id;
+
+          return {
+            chats: state.chats.filter((chat) => chat._id !== id),
+            currentChatId: isCurrentChat ? null : state.currentChatId,
+            currentChat:
+              state.currentChat?._id === id ? null : state.currentChat,
+            messages: isCurrentChat ? [] : state.messages,
+          };
+        }),
 
       updateChatTitle: (id, title) =>
         set((state) => ({
