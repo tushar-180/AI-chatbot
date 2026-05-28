@@ -1192,10 +1192,10 @@ const Sidebar = () => {
               <span>New Chat</span>
             </button>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setGalleryOpen(true)}
-                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
+                className="group relative flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
               >
                 <ImageIcon
                   size={14}
@@ -1209,7 +1209,7 @@ const Sidebar = () => {
                   setSidebarOpen(false);
                   navigate("/projects");
                 }}
-                className="group relative flex items-center justify-center gap-2 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-3.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
+                className="group relative flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-zinc-800/40 bg-zinc-900/30 py-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white transition-all hover:bg-white/8 shadow-xl shadow-black/10 cursor-pointer"
               >
                 <Folder
                   size={14}

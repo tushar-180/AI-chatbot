@@ -9,6 +9,7 @@ import {
   type SearchRejection,
   webSearchService,
 } from "../modules/web-search";
+import { chatRepository } from "../repositories/chat.repository";
 
 
 export const buildProjectContext = async (
@@ -18,6 +19,7 @@ export const buildProjectContext = async (
   latestUserMessage?: string,
   webSearchEnabled = false,
   provider?: string,
+  currentChatId?: string,
 ) => {
   const project = await projectRepository.findByIdAndUser(projectId, userId);
   if (!project) {
@@ -52,14 +54,7 @@ export const buildProjectContext = async (
     });
   }
 
-  if (project.memory && project.memory.trim()) {
-    systemMessages.push({
-      role: "system",
-      content: `[PROJECT MEMORY]\nHere are persistent facts and notes for this project:\n${project.memory.trim()}`,
-      userId,
-      status: "completed",
-    });
-  }
+
 
   const personalizationContext =
     await userService.getPersonalizationContext(userId);
@@ -86,7 +81,54 @@ export const buildProjectContext = async (
     });
   }
 
-  // ── 5. Web search grounding (if enabled) ──────────────────────────────
+  // ── 5. Cross-chat project memory ──────────────────────────────────────
+  // Resolve the current chatId: prefer the explicit argument, then fall back
+  // to scanning the first message document for a chatId field (Mongoose docs).
+  const resolvedChatId =
+    currentChatId ||
+    (chatMessages[0] as any)?.chatId?.toString?.() ||
+    "";
+
+  if (resolvedChatId) {
+    try {
+      const siblingChats = await chatRepository.findRecentMessagesByProjectId(
+        projectId,
+        resolvedChatId,
+        6,  // last 6 messages per sibling chat
+        5,  // up to 5 most-recently-updated sibling chats
+      );
+
+      if (siblingChats.length > 0) {
+        const lines: string[] = [
+          "[PROJECT SHARED MEMORY]",
+          "The following are recent conversations from other chats in this same project.",
+          "Use this context to maintain continuity, avoid repeating work, and stay aware of prior decisions.",
+          "",
+        ];
+
+        for (const { chatTitle, messages } of siblingChats) {
+          lines.push(`--- Chat: "${chatTitle}" ---`);
+          for (const msg of messages) {
+            const prefix = msg.role === "user" ? "User" : "Assistant";
+            lines.push(`${prefix}: ${msg.content}`);
+          }
+          lines.push("");
+        }
+
+        systemMessages.push({
+          role: "system",
+          content: lines.join("\n"),
+          userId,
+          status: "completed",
+        });
+      }
+    } catch (err) {
+      // Non-fatal: if cross-chat memory fails, proceed without it
+      console.error("[project-chat] Failed to load cross-chat memory:", err);
+    }
+  }
+
+  // ── 6. Web search grounding (if enabled) ──────────────────────────────
   let webGrounding: WebGroundingContext | null = null;
   const supportsImages = provider?.startsWith("gemini");
   if (webSearchEnabled && latestUserMessage) {
@@ -114,7 +156,7 @@ export const buildProjectContext = async (
     });
   }
 
-  // ── 6. Chat history (conversation messages only, no project metadata)
+  // ── 7. Chat history (conversation messages only, no project metadata)
   const rawPromptMessages = getLimitedMessages(chatMessages);
   const promptMessages = rawPromptMessages.map((m) => {
     const raw = typeof (m as any).toObject === "function" ? (m as any).toObject() : { ...m };

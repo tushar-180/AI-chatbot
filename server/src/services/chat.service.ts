@@ -266,6 +266,7 @@ const buildPromptMessages = async (
   webSearchEnabled = false,
   provider?: string,
   projectId?: string,
+  currentChatId?: string,
 ) => {
   if (projectId) {
     return await buildProjectContext(
@@ -275,6 +276,7 @@ const buildPromptMessages = async (
       latestUserMessage,
       webSearchEnabled,
       provider,
+      currentChatId,
     );
   }
   const isGemini = provider?.startsWith("gemini") ?? false;
@@ -451,6 +453,7 @@ async function* streamAssistantResponse(
       : Boolean(lastUserMessage?.metadata?.webSearchEnabled),
     provider,
     chat.projectId ? String(chat.projectId) : undefined,
+    chatId,
   );
 
   let assistantMessageDoc;
@@ -544,7 +547,7 @@ async function* streamAssistantResponse(
       m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
     );
     const tools = await getEnabledMcpTools(String(chat.userId), hasFiles);
-
+  
     const promptSizes = promptMessages.map(m => ({
       role: m.role,
       length: m.content?.length || 0,
@@ -779,6 +782,7 @@ export const chatService = {
         webSearchEnabled,
         provider,
         chat.projectId ? String(chat.projectId) : undefined,
+        chatId,
       );
 
       let reply = "";

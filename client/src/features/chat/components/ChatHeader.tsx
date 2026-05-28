@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Menu, Ghost, ChevronLeft, Share2 } from "lucide-react";
+import { Menu, Ghost, ChevronLeft, Share2, GitCompare } from "lucide-react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import { useTemporaryChatStore } from "@/features/chat/store/useTemporaryChatStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
@@ -11,9 +11,17 @@ interface ChatHeaderProps {
   currentChatId: string | null;
   onMenuClick: () => void;
   chatTitle?: string;
+  isCompareMode?: boolean;
+  onCompareToggle?: () => void;
 }
 
-const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) => {
+const ChatHeader = ({
+  currentChatId,
+  onMenuClick,
+  chatTitle,
+  isCompareMode = false,
+  onCompareToggle,
+}: ChatHeaderProps) => {
   const isTemporaryChatActive = useTemporaryChatStore((state) => state.isTemporaryChatActive);
   const chats = useChatStore((state) => state.chats);
   const streamingChatIds = useChatStore((state) => state.streamingChatIds);
@@ -105,7 +113,28 @@ const ChatHeader = ({ currentChatId, onMenuClick, chatTitle }: ChatHeaderProps) 
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center justify-end gap-4">
+        <div className="flex items-center justify-end gap-3.5">
+          {/* Compare Mode Toggle */}
+          <button
+            onClick={onCompareToggle}
+            className={
+              isCompareMode
+                ? "group relative flex h-8 px-3 items-center justify-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-950/20 text-purple-400 backdrop-blur-md transition hover:bg-purple-500/25 hover:text-purple-200 hover:border-purple-500/40 active:scale-[0.95] shadow-[0_0_12px_rgba(168,85,247,0.15)] cursor-pointer text-xs font-semibold"
+                : "group relative flex h-8 px-3 items-center justify-center gap-1.5 rounded-lg border border-zinc-800/40 bg-white/5 text-zinc-400 backdrop-blur-md transition hover:bg-white/10 hover:text-zinc-200 hover:border-zinc-800/60 active:scale-[0.95] cursor-pointer text-xs font-semibold"
+            }
+            title={isCompareMode ? "Exit Compare Mode" : "Compare Models Side-by-Side"}
+          >
+            <GitCompare
+              size={13}
+              className={
+                isCompareMode
+                  ? "text-purple-400 animate-pulse"
+                  : "text-zinc-400 group-hover:text-zinc-200 transition-colors"
+              }
+            />
+            <span>Compare</span>
+          </button>
+
           {/* Temporary Chat Toggle Button */}
           {(isNewChat || !currentChatId || isTemporaryChatActive) && (
             <button
