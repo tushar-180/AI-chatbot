@@ -3,9 +3,9 @@ import { aiService } from "../services/ai.service";
 import { TokenUsageRecord } from "../models/Chat.model";
 import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
 
-export const getAvailableProviders = (_req: Request, res: Response) => {
+export const getAvailableProviders = async (_req: Request, res: Response) => {
   try {
-    const providers = aiService.getAvailableProviders();
+    const providers = await aiService.getAvailableProviders();
     return res.json({ providers });
   } catch (error) {
     console.error("Error fetching AI providers:", error);

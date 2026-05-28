@@ -51,6 +51,15 @@ class GroupSocketManager {
       console.warn("[Socket] not initialized, cannot broadcast");
     }
   }
+
+  broadcastGlobal(event: string, data?: any) {
+    if (this.io) {
+      this.io.emit(event, data);
+      console.log(`[Socket] Broadcasted global event: ${event}`);
+    } else {
+      console.warn("[Socket] not initialized, cannot broadcast global");
+    }
+  }
 }
 
 export const groupSocketManager = new GroupSocketManager();
