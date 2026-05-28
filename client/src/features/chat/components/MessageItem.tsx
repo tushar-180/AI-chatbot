@@ -592,6 +592,22 @@ const MessageItem = ({
 
   if (processedContent) {
     processedContent = escapeUnrecognizedHtmlTags(processedContent);
+    
+    // Replace completed tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_COMPLETED:\1\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>'
+    );
+    // Replace failed tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_ERROR:\1:(.*?)\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>'
+    );
+    // Replace still running tools
+    processedContent = processedContent.replace(
+      /\[TOOL_RUNNING:([^\]]+)\]/g,
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>'
+    );
   }
 
   const citationComponents = !isUser

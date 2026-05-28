@@ -862,7 +862,7 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({
                     ? `Cooling down... Please wait ${cooldown}s`
                     : "Message group..."
                 }
-                className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-zinc-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 block`}
+                className={`${isFocused ? "" : "selection:bg-transparent select-none selection:text-white"} not-selectable relative w-full resize-none bg-transparent px-2 py-1.5 lg:px-4 lg:py-2 text-[0.95rem] lg:text-[1rem] text-transparent caret-white placeholder-zinc-600 outline-none overflow-y-auto max-h-50 lg:max-h-75 min-h-9 lg:min-h-10 block`}
                 style={sharedTextStyles}
               />
             </div>

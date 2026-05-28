@@ -9,7 +9,15 @@ import {
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
 import { mcpClientService } from "../../mcpClient.service";
-import { CORE_VELORA_INSTRUCTIONS } from "../../../constants/prompt.constants";
+import {
+  CORE_VELORA_INSTRUCTIONS,
+  MCP_TOOL_ERROR_FALLBACK_MESSAGE,
+  MCP_TOOL_ERROR_NOTE,
+  MCP_TOOL_ERROR_RETRY_LIMIT,
+  MCP_TOOL_FALLBACK_MESSAGE,
+  MCP_TOOL_LOOP_LIMIT,
+  MCP_TOOL_SUCCESS_NOTE,
+} from "../../../constants/prompt.constants";
 
 dotenv.config();
 
@@ -168,6 +176,31 @@ export class OpenAIAdapter implements IAIService {
     }));
   }
 
+  private formatToolSuccessResult(result: unknown): string {
+    let text: string;
+    if (result && typeof result === "object" && Array.isArray((result as any).content)) {
+      text = (result as any).content
+        .filter((c: any) => c.type === "text" && c.text)
+        .map((c: any) => c.text)
+        .join("\n");
+      if (!text) text = JSON.stringify(result);
+    } else {
+      text = typeof result === "string" ? result : JSON.stringify(result);
+    }
+    if (text.length > 4000) {
+      text = text.substring(0, 4000) + "\n...[Note: results truncated for brevity]";
+    }
+    return `${text}\n\n${MCP_TOOL_SUCCESS_NOTE}`;
+  }
+
+  private formatToolErrorResult(err: unknown, attempt: number): string {
+    const message =
+      err instanceof Error ? err.message : String(err || "Unknown tool error");
+    return JSON.stringify({
+      error: `${message}. ${MCP_TOOL_ERROR_NOTE(attempt)}`,
+    });
+  }
+
   async generateResponse(messages: AIMessage[], tools?: any[]) {
     const systemMessages = messages.filter((msg) => msg.role === "system");
     const combinedSystemPrompt = systemMessages
@@ -189,7 +222,8 @@ export class OpenAIAdapter implements IAIService {
     const openAITools = this.mapMcpToolsToOpenAI(tools);
     let hasToolCalls = true;
     let loopCount = 0;
-    const maxLoops = 10;
+    const maxLoops = MCP_TOOL_LOOP_LIMIT;
+    let consecutiveErrorRounds = 0;
     let finalOutput = "";
     let totalUsage: ReturnType<typeof normalizeOpenAIUsage> = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
@@ -219,6 +253,7 @@ export class OpenAIAdapter implements IAIService {
         if (toolCalls && toolCalls.length > 0) {
           hasToolCalls = true;
           finalMessages.push(choice.message);
+          let hadToolError = false;
 
           const responseMessages = await Promise.all(
             toolCalls.map(async (tc) => {
@@ -233,30 +268,45 @@ export class OpenAIAdapter implements IAIService {
                   toolName,
                   args,
                 );
+                let resultString = this.formatToolSuccessResult(result);
+                if (resultString.length > 4000) {
+                  resultString = resultString.substring(0, 4000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
+                }
+
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify(result),
+                  content: resultString,
                 };
               } catch (err: any) {
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
+                hadToolError = true;
                 return {
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify({
-                    error: errMsg,
-                  }),
+                  content: this.formatToolErrorResult(err, consecutiveErrorRounds + 1),
                 };
               }
             }),
           );
 
           finalMessages.push(...responseMessages);
+
+          consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+          if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+            finalOutput = finalOutput.trim()
+              ? `${finalOutput.trim()}\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}`
+              : MCP_TOOL_ERROR_FALLBACK_MESSAGE;
+            break;
+          }
         }
       }
 
+      if (loopCount >= maxLoops && hasToolCalls && !finalOutput.trim()) {
+        finalOutput = MCP_TOOL_FALLBACK_MESSAGE;
+      }
+
       return {
-        text: finalOutput.trim() || "No response generated.",
+        text: finalOutput.trim() || MCP_TOOL_FALLBACK_MESSAGE,
         usage: totalUsage,
       };
     } catch (error: any) {
@@ -310,7 +360,9 @@ export class OpenAIAdapter implements IAIService {
         try {
           let hasToolCalls = true;
           let loopCount = 0;
-          const maxLoops = 10;
+          const maxLoops = MCP_TOOL_LOOP_LIMIT;
+          let finalStreamText = "";
+          let consecutiveErrorRounds = 0;
 
           while (hasToolCalls && loopCount < maxLoops) {
             loopCount++;
@@ -345,6 +397,7 @@ export class OpenAIAdapter implements IAIService {
               const text = choice?.delta?.content || "";
               if (text) {
                 accumulatedText += text;
+                finalStreamText += text;
                 yield text;
               }
 
@@ -383,9 +436,10 @@ export class OpenAIAdapter implements IAIService {
             });
 
             const responseMessages = [];
+            let hadToolError = false;
             for (const tc of activeToolCalls) {
               const toolCall = tc as any;
-              yield `\n\n⚙️ *Running tool \`${toolCall.function.name}\`...*\n`;
+              yield `\n\n[TOOL_RUNNING:${toolCall.function.name}]\n\n`;
 
               try {
                 const toolName = toolCall.function.name;
@@ -398,29 +452,40 @@ export class OpenAIAdapter implements IAIService {
                   toolName,
                   args,
                 );
-                yield `\n\n✅ *Tool \`${toolCall.function.name}\` completed.* \n\n`;
+                yield `\n\n[TOOL_COMPLETED:${toolCall.function.name}]\n\n`;
+
+                let resultString = adapter.formatToolSuccessResult(result);
+                if (resultString.length > 4000) {
+                  resultString = resultString.substring(0, 4000) + "\n...[TRUNCATED due to token limits. If you need more data, refine your query to be more specific.]";
+                }
 
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify(result),
+                  content: resultString,
                 });
               } catch (err: any) {
-                yield `\n\n❌ *Tool \`${toolCall.function.name}\` failed: ${err.message || err
-                  }*\n\n`;
+                hadToolError = true;
+                yield `\n\n[TOOL_ERROR:${toolCall.function.name}:${err.message || err}]\n\n`;
 
-                const errMsg = `${err.message || String(err)}. [SYSTEM NOTE: The tool failed or returned no results. Explicitly tell the user that you couldn't get the requested information (e.g. "I don't get info about that weather" or similar). Do NOT guess, speculate, or fabricate any details under any circumstances.]`;
                 responseMessages.push({
                   role: "tool" as const,
                   tool_call_id: tc.id,
-                  content: JSON.stringify({
-                    error: errMsg,
-                  }),
+                  content: adapter.formatToolErrorResult(err, consecutiveErrorRounds + 1),
                 });
               }
             }
 
             finalMessages.push(...responseMessages);
+            consecutiveErrorRounds = hadToolError ? consecutiveErrorRounds + 1 : 0;
+            if (consecutiveErrorRounds >= MCP_TOOL_ERROR_RETRY_LIMIT) {
+              yield `\n\n${MCP_TOOL_ERROR_FALLBACK_MESSAGE}\n`;
+              return;
+            }
+          }
+
+          if (loopCount >= maxLoops && hasToolCalls && !finalStreamText.trim()) {
+            yield `\n\n${MCP_TOOL_FALLBACK_MESSAGE}\n`;
           }
         } catch (error: any) {
           if (signal?.aborted) {

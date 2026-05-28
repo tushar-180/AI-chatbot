@@ -1,7 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
-import { useGroupStore } from "@/features/chat/store/useGroupStore";
 import { optimizeImageUrl } from "@/lib/utils";
 
 import {
@@ -50,10 +49,12 @@ import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { supportsVision } from "@/features/chat/constants/chat.constants";
 
 import type { Attachment } from "../types/chat.types";
-import type { GroupMessage } from "../store/useGroupStore";
+import type { GroupMessage, GroupMember } from "../store/useGroupStore";
 
 interface GroupMessageItemProps {
   message: GroupMessage;
+  members: GroupMember[];
+  isRequester: boolean;
 
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: any[], activeId?: number) => void;
@@ -195,7 +196,7 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
             <img
               src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-[32rem] bg-slate-950/40"
+              className="h-auto w-full object-contain max-h-128 bg-slate-950/40"
               fetchPriority="high"
             />
           ) : (
@@ -242,6 +243,8 @@ function escapeUnrecognizedHtmlTags(text: string): string {
 
 const GroupMessageItem = ({
   message: msg,
+  members,
+  isRequester,
   onCitationClick,
   onSourcesClick,
   onEdit,
@@ -251,22 +254,9 @@ const GroupMessageItem = ({
 }: GroupMessageItemProps) => {
   const { user } = useUser();
   const dbUser = useChatStore((state) => state.dbUser);
-  const { currentGroupId, groups } = useGroupStore();
-  const currentGroup = groups.find((g) => g._id === currentGroupId);
-  const members = currentGroup?.members || [];
 
-  const messages = useGroupStore((state) => state.groupMessages);
   const isAssistant = msg.role === "assistant" || msg.userId === "velora";
   const isMe = msg.userId === user?.id && !isAssistant;
-  
-  let isRequester = msg.metadata?.requesterId === user?.id;
-  if (msg.metadata?.requesterId === undefined && isAssistant) {
-    const myIndex = messages.findIndex((m: GroupMessage) => m._id === msg._id);
-    const prevMsg = myIndex > 0 ? messages[myIndex - 1] : null;
-    if (prevMsg && prevMsg.role === "user") {
-      isRequester = prevMsg.userId === user?.id;
-    }
-  }
 
   const isSystem = msg.role === "system";
   const isUser = msg.role === "user";
@@ -708,7 +698,7 @@ const GroupMessageItem = ({
   if (isSystem) {
     return (
       <div className="flex justify-center my-6">
-        <span className="px-4 py-1.5 rounded-full bg-white/[0.03] text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 border border-white/[0.05] backdrop-blur-sm">
+        <span className="px-4 py-1.5 rounded-full bg-white/3 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500 border border-white/5 backdrop-blur-sm">
           {msg.content}
         </span>
       </div>
@@ -759,12 +749,12 @@ const GroupMessageItem = ({
             Velora
           </span>
 
-          <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+          <span className="flex items-center rounded-md border border-white/6 bg-white/4 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
             {formatBadgeText(model)}
           </span>
 
           {msg.metadata?.webSearchEnabled && (
-            <span className="flex items-center rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
+            <span className="flex items-center rounded-md border border-white/6 bg-white/4 px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-slate-500">
               web search
             </span>
           )}
@@ -904,12 +894,12 @@ const GroupMessageItem = ({
             ref={messageRef}
             className={`transition-opacity duration-150 ease-out ${
               isMe
-                ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
+                ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/8 bg-white/3 px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
                 : isFailed
                   ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm`
                   : isAssistant
                     ? `w-full max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} py-1 text-base leading-[1.8] text-slate-200`
-                    : `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/[0.08] bg-white/[0.03] px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
+                    : `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/8 bg-white/3 px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
             }`}
           >
             {isEditing ? (
@@ -1394,7 +1384,9 @@ const areEqual = (
     prev.message.userImage === next.message.userImage &&
     prev.message.attachments === next.message.attachments &&
     prev.message.sources === next.message.sources &&
-    prev.message.metadata?.webSearchEnabled === next.message.metadata?.webSearchEnabled
+    prev.message.metadata?.webSearchEnabled === next.message.metadata?.webSearchEnabled &&
+    prev.isRequester === next.isRequester &&
+    prev.members === next.members
   );
 };
 
