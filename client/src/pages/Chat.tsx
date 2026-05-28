@@ -2,6 +2,7 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useChatStore } from "@/features/chat/store/useChatStore";
 import ChatHeader from "@/features/chat/components/ChatHeader";
+import CompareModeView from "@/features/chat/components/CompareModeView";
 import MessageList from "@/features/chat/components/MessageList";
 import InputArea from "@/features/chat/components/InputArea";
 import SourcesSidebar from "@/features/chat/components/SourceSidebar";
@@ -96,11 +97,13 @@ const Chat = () => {
   // Sources sidebar state
   const [selectedSources, setSelectedSources] = useState<WebSource[]>([]);
   const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
+  const [isCompareMode, setIsCompareMode] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedSources([]);
     setActiveSourceId(null);
+    setIsCompareMode(false);
   }, [currentChatId]);
 
   // Sync URL parameter with store when chatId changes from URL.
@@ -308,116 +311,129 @@ const Chat = () => {
             : "bg-[#09090b]"
         }`}
       >
-        <div
-          className={`flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
-        >
-          <ChatHeader
+        {isCompareMode ? (
+          <CompareModeView
             currentChatId={currentChatId}
+            selectedProvider={selectedProvider}
             onMenuClick={() => setSidebarOpen(true)}
+            onExitCompareMode={() => setIsCompareMode(false)}
           />
-
-          <div className="relative flex-1">
-            {(() => {
-              const isTransitioning =
-                (chatId || null) !== currentChatId &&
-                !(
-                  !chatId &&
-                  currentChatId !== null &&
-                  (isStreaming || isCurrentChatLoading)
-                );
-              return (
-                <MessageList
-                  ref={messageListRef}
-                  messages={isTransitioning ? [] : displayMessages}
-                  loading={isTransitioning ? false : isCurrentChatLoading}
-                  messagesLoading={
-                    isTransitioning ? Boolean(chatId) : messagesLoading
-                  }
-                  messagesError={isTransitioning ? null : messagesError}
-                  hasLoadedCurrentChat={
-                    isTransitioning
-                      ? !chatId
-                      : !currentChatId ||
-                        loadedChatId === currentChatId ||
-                        canAutoStartFromSeededMessages
-                  }
-                  isStreaming={isTransitioning ? false : isStreaming}
-                  currentChatId={
-                    isTransitioning ? chatId || null : currentChatId
-                  }
-                  isNewChat={isTransitioning ? !chatId : isNewChat}
-                  onSuggestionClick={setInput}
-                  onEditMessage={(messageId, content, options) =>
-                    editMessage(
-                      messageId,
-                      content,
-                      options?.provider || selectedProvider,
-                      {
-                        webSearchEnabled: options?.webSearchEnabled,
-                        attachments: options?.attachments,
-                        attachedFile: options?.attachedFile,
-                        selection: options?.selection,
-                      },
-                    )
-                  }
-                  onEditStart={stopGeneration}
-                  onFeedback={(messageId, feedback) => {
-                    if (isTemporaryChatActive) {
-                      useTemporaryChatStore
-                        .getState()
-                        .setMessageFeedback(messageId, feedback);
-                    } else {
-                      useChatStore
-                        .getState()
-                        .setMessageFeedback(messageId, feedback);
-                      if (currentChatId) {
-                        chatService.updateMessageFeedback(
-                          currentChatId,
-                          messageId,
-                          feedback,
-                        );
-                      }
-                    }
-                  }}
-                  onRetryMessage={(messageId, provider, webSearchEnabled) =>
-                    retryMessage(
-                      messageId,
-                      provider || selectedProvider,
-                      webSearchEnabled,
-                    )
-                  }
-                  onCitationClick={handleCitationClick}
-                  onSourcesClick={handleSourcesOpen}
-                />
-              );
-            })()}
-          </div>
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
-          <div className="pointer-events-auto">
-            <InputArea
-              input={input}
-              onInputChange={setInput}
-              onSubmit={handleSubmit}
-              onSubmitDocument={handleDocumentSubmit}
-              loading={isCurrentChatLoading}
-              isStreaming={isStreaming}
-              onStop={stopGeneration}
+        ) : (
+          <div
+            className={`flex-1 overflow-y-auto flex flex-col relative pb-[15vh] mask-[linear-gradient(to_bottom,black_85%,transparent_98%)] ${isStreaming ? "will-change-scroll" : ""}`}
+          >
+            <ChatHeader
               currentChatId={currentChatId}
-              selectedProvider={selectedProvider}
-              onProviderChange={setSelectedProvider}
-              attachments={attachments}
-              onAttachmentsChange={setAttachments}
-              webSearchEnabled={webSearchEnabled}
-              onWebSearchToggle={setWebSearchEnabled}
-              isArchived={isArchived}
-              onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
-              quotaStatus={quotaStatus}
-              isQuotaLoading={isQuotaLoading}
+              onMenuClick={() => setSidebarOpen(true)}
+              isCompareMode={isCompareMode}
+              onCompareToggle={() => setIsCompareMode(!isCompareMode)}
             />
+
+            <div className="relative flex-1">
+              {(() => {
+                const isTransitioning =
+                  (chatId || null) !== currentChatId &&
+                  !(
+                    !chatId &&
+                    currentChatId !== null &&
+                    (isStreaming || isCurrentChatLoading)
+                  );
+                return (
+                  <MessageList
+                    ref={messageListRef}
+                    messages={isTransitioning ? [] : displayMessages}
+                    loading={isTransitioning ? false : isCurrentChatLoading}
+                    messagesLoading={
+                      isTransitioning ? Boolean(chatId) : messagesLoading
+                    }
+                    messagesError={isTransitioning ? null : messagesError}
+                    hasLoadedCurrentChat={
+                      isTransitioning
+                        ? !chatId
+                        : !currentChatId ||
+                          loadedChatId === currentChatId ||
+                          canAutoStartFromSeededMessages
+                    }
+                    isStreaming={isTransitioning ? false : isStreaming}
+                    currentChatId={
+                      isTransitioning ? chatId || null : currentChatId
+                    }
+                    isNewChat={isTransitioning ? !chatId : isNewChat}
+                    onSuggestionClick={setInput}
+                    onEditMessage={(messageId, content, options) =>
+                      editMessage(
+                        messageId,
+                        content,
+                        options?.provider || selectedProvider,
+                        {
+                          webSearchEnabled: options?.webSearchEnabled,
+                          attachments: options?.attachments,
+                          attachedFile: options?.attachedFile,
+                          selection: options?.selection,
+                        },
+                      )
+                    }
+                    onEditStart={stopGeneration}
+                    onFeedback={(messageId, feedback) => {
+                      if (isTemporaryChatActive) {
+                        useTemporaryChatStore
+                          .getState()
+                          .setMessageFeedback(messageId, feedback);
+                      } else {
+                        useChatStore
+                          .getState()
+                          .setMessageFeedback(messageId, feedback);
+                        if (currentChatId) {
+                          chatService.updateMessageFeedback(
+                            currentChatId,
+                            messageId,
+                            feedback,
+                          );
+                        }
+                      }
+                    }}
+                    onRetryMessage={(messageId, provider, webSearchEnabled) =>
+                      retryMessage(
+                        messageId,
+                        provider || selectedProvider,
+                        webSearchEnabled,
+                      )
+                    }
+                    onCitationClick={handleCitationClick}
+                    onSourcesClick={handleSourcesOpen}
+                  />
+                );
+              })()}
+            </div>
           </div>
-        </div>
+        )}
+
+        {!isCompareMode && (
+          <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
+            <div className="pointer-events-auto">
+              <InputArea
+                input={input}
+                onInputChange={setInput}
+                onSubmit={handleSubmit}
+                onSubmitDocument={handleDocumentSubmit}
+                loading={isCurrentChatLoading}
+                isStreaming={isStreaming}
+                onStop={stopGeneration}
+                currentChatId={currentChatId}
+                selectedProvider={selectedProvider}
+                onProviderChange={setSelectedProvider}
+                attachments={attachments}
+                onAttachmentsChange={setAttachments}
+                webSearchEnabled={webSearchEnabled}
+                onWebSearchToggle={setWebSearchEnabled}
+                isArchived={isArchived}
+                onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
+                quotaStatus={quotaStatus}
+                isQuotaLoading={isQuotaLoading}
+              />
+            </div>
+          </div>
+        )}
       </main>
 
       {selectedSources.length > 0 && (

@@ -546,7 +546,7 @@ async function* streamAssistantResponse(
       m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
     );
     const tools = await getEnabledMcpTools(String(chat.userId), hasFiles);
-
+  
     const promptSizes = promptMessages.map(m => ({
       role: m.role,
       length: m.content?.length || 0,

@@ -142,6 +142,7 @@ function App() {
                   }
                 />
 
+
                 {/* Public Shared Chat Route */}
                 <Route
                   path="/shared/:sharedChatId"

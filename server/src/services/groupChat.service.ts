@@ -391,7 +391,7 @@ export class GroupChatService {
 
     if (role === "user") {
       try {
-        let targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite-preview";
+        let targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite";
         const mentionMatch = content.match(/@([a-zA-Z0-9-:_/.]+)/);
         if (mentionMatch) {
           const mention = mentionMatch[1].toLowerCase();
@@ -590,7 +590,7 @@ export class GroupChatService {
     }
 
     if (!targetProvider) {
-      targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite-preview";
+      targetProvider = process.env.AI_PROVIDER || "gemini:gemini-3.1-flash-lite";
     }
 
     const cleanModelName = targetProvider.includes(":")
