@@ -156,6 +156,7 @@ client/src
 │       │   ├── ChatHeader.tsx
 │       │   ├── ChatLayout.tsx
 │       │   ├── CodeBlock.tsx
+│       │   ├── CompareModeView.tsx
 │       │   ├── ComposerQuotePreview.tsx
 │       │   ├── CreateGroupModal.tsx
 │       │   ├── DeleteConfirmModal.tsx
@@ -537,6 +538,22 @@ A secure dashboard is provided for administrators to monitor platform telemetry 
 *   **Model Context Protocol Management**: Provides an interface to register, configure, and monitor external MCP tool servers globally.
 *   **System Diagnostics**: Displays system status signals, active adapter counts, and aggregated payload comparisons.
 
+### 6.10 Compare Model Playground
+Velora AI features a Compare Model Playground that allows users to test and contrast multiple language models side-by-side in real-time. This interactive suite is designed for benchmarking provider latency, text generation speed, token consumption, and response quality across different large language models. Key capabilities include:
+*   **Concurrent Multi-Model Streaming**: Users can select up to three active AI models to run side-by-side. The frontend leverages concurrent Server-Sent Events to stream responses token-by-token simultaneously.
+*   **Real-time Performance Telemetry**: As the models stream, the playground calculates and displays live metrics for each model card:
+    *   *Latency (Time to First Token - TTFT)*: The duration in milliseconds from prompt submission until the first response chunk is received.
+    *   *Token Consumption*: The exact count of prompt and completion tokens (or estimated metrics when streaming is active).
+    *   *Generation Speed*: The streaming speed measured in tokens per second (`t/s`).
+    *   *Total Duration*: The total elapsed time in seconds taken to complete the generation.
+*   **Performance Ranking**: Once all streams complete, the interface automatically evaluates the models' performance. It ranks them overall and awards specialized visual badges for the best-performing models in different categories:
+    *   `#1`, `#2`, `#3` overall ranking indicators.
+    *   `Fastest`: Awarded to the model with the highest average token generation speed.
+    *   `Lowest Latency`: Awarded to the model that returns its first token the quickest.
+    *   `Efficient Tokens`: Awarded to the model that accomplishes the task with the minimal total token footprint.
+*   **Intelligent Vision Warnings**: Automatically detects if a selected model lacks vision capability during multimodal testing, displaying a block overlay with a quick dropdown to swap it for a vision-capable alternative.
+*   **Stateless Execution**: Runs comparisons in a completely stateless manner without creating Chat or Message records in MongoDB, persisting only a lightweight `TokenUsageRecord` in MongoDB Atlas for platform-wide analytics.
+
 ## 7. Runtime Flow
 
 ### Sending a Standard Message
@@ -549,6 +566,17 @@ A secure dashboard is provided for administrators to monitor platform telemetry 
 7. The server sends these chunks to the client via Server-Sent Events.
 8. The client accumulates the chunks in the state store and updates the UI.
 9. Upon completion, the server saves the final response and processes any new user memories in the background.
+
+### Comparing Models in the Playground
+1. The user selects up to three models, drafts a prompt (with optional image attachment), and submits the form in the comparison interface.
+2. The frontend triggers concurrent asynchronous HTTP POST requests to the comparison streaming endpoint for each selected model.
+3. The server validates the request and fetches the matching model adapter from the AI Service Factory.
+4. The backend initializes Server-Sent Events (SSE) by writing custom headers and sends down the initial metadata (such as model brand, status, and sessionId).
+5. The model adapter streams token chunks from the provider API, which are immediately parsed and serialized to the client using SSE.
+6. The client records the Time to First Token (TTFT) at the exact moment the first token chunk arrives, updating the latency metric.
+7. Throughout the stream, the client increments the token count and updates the generation speed (`t/s`) dynamically.
+8. When the provider stream ends, the server resolves the exact token counts from the provider's completion payload and saves a lightweight `TokenUsageRecord` in MongoDB Atlas, omitting Chat and Message records to remain completely stateless.
+9. Upon completion of all parallel streams, the frontend evaluates the final latency, speed, and token footprint across all active model cards, applying rankings (`#1`, `#2`, `#3`) and visually highlighting winners (e.g., "Fastest", "Lowest latency", "Efficient tokens").
 
 ## 8. Purpose and Goals
 
