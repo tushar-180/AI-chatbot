@@ -751,7 +751,7 @@ const Admin: React.FC = () => {
               }`}
           >
             <Database size={14} className="hidden sm:block shrink-0" />
-            <span className="hidden sm:inline">Token Usage</span>
+            <span className="hidden sm:inline">User Token Usage</span>
             <span className="sm:hidden">Usage</span>
           </button>
         </div>

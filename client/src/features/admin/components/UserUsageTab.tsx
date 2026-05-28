@@ -154,26 +154,29 @@ export default function UserUsageTab({ users }: UserUsageTabProps) {
   };
 
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
-    
-    const query = searchQuery.toLowerCase();
-    
-    return users.filter(user => {
-      const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase();
-      const email = user.email.toLowerCase();
-      
-      // Match by user name or email
-      if (fullName.includes(query) || email.includes(query)) {
-        return true;
-      }
-      
-      // Match by any model name they have used
-      if (user.modelUsage) {
-        return user.modelUsage.some(m => m.model.toLowerCase().includes(query));
-      }
-      
-      return false;
-    }).sort((a, b) => b.totalTokens - a.totalTokens);
+    let result = users;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = users.filter(user => {
+        const fullName = `${user.firstName || ""} ${user.lastName || ""}`.toLowerCase();
+        const email = user.email.toLowerCase();
+        
+        // Match by user name or email
+        if (fullName.includes(query) || email.includes(query)) {
+          return true;
+        }
+        
+        // Match by any model name they have used
+        if (user.modelUsage) {
+          return user.modelUsage.some(m => m.model.toLowerCase().includes(query));
+        }
+        
+        return false;
+      });
+    }
+
+    return [...result].sort((a, b) => b.totalTokens - a.totalTokens);
   }, [users, searchQuery]);
 
   return (
