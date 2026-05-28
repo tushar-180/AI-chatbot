@@ -515,3 +515,23 @@ export const updateMessageFeedback = asyncHandler(
   },
 );
 
+
+export const setActiveBranch = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const { chatId, branchId, messageId } = req.body;
+    const updated = await chatService.setActiveBranch(chatId, branchId, messageId);
+    return res.json(updated);
+  } catch (error) {
+    return sendControllerError(res, error, "Failed to set active branch");
+  }
+});
+
+export const getMessageGenerations = asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const { parentId } = req.params;
+    const generations = await chatService.getMessageGenerations(String(parentId));
+    return res.json(generations);
+  } catch (error) { 
+    return sendControllerError(res, error, "Failed to get message generations");
+  }
+});

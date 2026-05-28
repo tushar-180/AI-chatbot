@@ -1146,7 +1146,8 @@ export const useChatStream = (hookOptions?: {
     activeRequestIdsRef.current[activeKey] = requestId;
     activeResolvedChatIdsRef.current[activeKey] = currentChatId;
 
-    // Set optimistic UI: find the edited message and remove everything after it
+    // Set optimistic UI — immutable: mark old user message + everything after it as inactive,
+    // then append the new user message and a streaming assistant placeholder.
     const currentMessages =
       optimisticMessagesByChatId[activeKey] ??
       storeState.messages;
@@ -1154,35 +1155,50 @@ export const useChatStream = (hookOptions?: {
 
     if (messageIndex === -1) return;
 
+    const origMsg = currentMessages[messageIndex];
+    // Temporary branchId to group original user msg and the new edit
+    const userBranchId = origMsg.branchId ?? `edit-${messageId}`;
+
+    // New user message node (edit branch)
     const editedUserMessage: Message = {
-      ...currentMessages[messageIndex],
+      ...origMsg,
+      id: `opt-user-${requestId}`,   // temporary optimistic id
       content: newContent,
       attachments: options?.attachments,
       status: "completed",
       metadata: {
-        ...currentMessages[messageIndex].metadata,
+        ...origMsg.metadata,
         ...(options && "selection" in options ? { selection: options.selection } : {}),
       },
-      updatedAt: new Date(
-        Math.max(
-          Date.now(),
-          new Date(currentMessages[messageIndex].createdAt || 0).getTime() + 3000
-        )
-      ).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Branch fields
+      parentId: origMsg.parentId ?? null,
+      editedFrom: messageId,
+      branchId: userBranchId,
+      version: (origMsg.version ?? 1) + 1,
+      isActive: true,
     };
 
     const assistantPlaceholder: Message = {
-      id: requestId, // Use same ID as requestId
+      id: requestId,
       role: "assistant",
       content: "",
       model: provider,
       requestId,
       status: "streaming",
       isWebSearching: webSearchEnabled,
+      parentId: `opt-user-${requestId}`, // Connect to the optimistic user message!
+      isActive: true,
     };
 
-    const nextMessages = [
-      ...currentMessages.slice(0, messageIndex),
+    // Mark only the edited user message itself as inactive (and assign branchId if not set)
+    const nextMessages: Message[] = [
+      ...currentMessages.map((m) =>
+        m.id === messageId
+          ? { ...m, isActive: false, branchId: m.branchId ?? userBranchId }
+          : m
+      ),
       editedUserMessage,
       assistantPlaceholder,
     ];
@@ -1312,7 +1328,7 @@ export const useChatStream = (hookOptions?: {
     activeRequestIdsRef.current[activeKey] = requestId;
     activeResolvedChatIdsRef.current[activeKey] = currentChatId;
 
-    // Set optimistic UI: find the message being retried
+    // Set optimistic UI — immutable: mark old assistant inactive, append new streaming node
     const currentMessages =
       optimisticMessagesByChatId[activeKey] ??
       storeState.messages;
@@ -1320,20 +1336,34 @@ export const useChatStream = (hookOptions?: {
 
     if (messageIndex === -1) return;
 
+    const oldMsg = currentMessages[messageIndex];
+
+    // Assign a temporary branchId shared by old + new so resolveActiveBranch groups them
+    const tempBranchId = oldMsg.branchId ?? `branch-${messageId}`;
+
     // Add a temporary streaming/loading assistant message
     const assistantPlaceholder: Message = {
-      id: requestId, // Use the same ID as requestId
+      id: requestId,
       role: "assistant",
       content: "",
       model: provider,
       requestId,
       status: "streaming",
       isWebSearching: webSearchEnabled,
+      // Branch metadata so resolveActiveBranch picks this one as active
+      parentId: oldMsg.parentId ?? null,
+      branchId: tempBranchId,
+      version: (oldMsg.version ?? 1) + 1,
+      isActive: true,
     };
 
-    // Trim the messages array up to the assistant message index and append placeholder
-    const nextMessages = [
-      ...currentMessages.slice(0, messageIndex),
+    // Mark old assistant as inactive, keep it in array (immutable)
+    const nextMessages: Message[] = [
+      ...currentMessages.map((m) =>
+        m.id === messageId
+          ? { ...m, branchId: tempBranchId, version: m.version ?? 1, isActive: false }
+          : m,
+      ),
       assistantPlaceholder,
     ];
 

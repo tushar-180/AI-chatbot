@@ -36,10 +36,15 @@ export const chatRepository = {
     const messages = await Message.find({ chatId }).sort({ createdAt: 1 });
 
     // Combine legacy messages (if any) with new messages
-    const legacyMessages =
+    const legacyMessagesRaw =
       (chat.toObject() as any).messages ||
       (chat.toObject() as any).legacyMessages ||
       [];
+
+    const legacyMessages = legacyMessagesRaw.map((m: any) => ({
+      ...m,
+      id: String(m._id || m.id || m.requestId || ""),
+    }));
 
     // Convert Mongoose documents to objects and add 'id' field for frontend consistency
     const formattedMessages = messages.map((msg) => ({
@@ -236,6 +241,44 @@ export const chatRepository = {
 
     // No message found
     if (!message) {
+      const searchKey = query._id ? "messages._id" : (query.requestId ? "messages.requestId" : null);
+      const searchValue = query._id || query.requestId;
+      if (searchKey && searchValue) {
+        const chatDoc = await Chat.findOne({ [searchKey]: searchValue });
+        if (chatDoc) {
+          let legacyMsg: any = null;
+          const legacyMsgs = (chatDoc as any).messages || [];
+          for (const m of legacyMsgs) {
+            const matches = query._id
+              ? String(m._id) === String(searchValue)
+              : String(m.requestId) === String(searchValue);
+            if (matches) {
+              if (updateData.metadata) {
+                const existingMetadata = m.metadata || {};
+                updateData.metadata = {
+                  ...existingMetadata,
+                  ...updateData.metadata,
+                };
+              }
+              for (const [key, val] of Object.entries(updateData)) {
+                m[key] = val;
+              }
+              legacyMsg = {
+                ...(m.toObject ? m.toObject() : m),
+                id: String(m._id),
+                _id: m._id,
+                chatId: String(chatDoc._id),
+              };
+              break;
+            }
+          }
+          if (legacyMsg) {
+            chatDoc.markModified("messages");
+            await chatDoc.save();
+            return legacyMsg;
+          }
+        }
+      }
       return null;
     }
 
@@ -391,6 +434,107 @@ export const chatRepository = {
       createdAt: { $gt: message.createdAt },
     });
     await this.touchChat(chatId);
+  },
+
+  /**
+   * Mark a single message by id as active and deactivate all other messages
+   * in the same branchId group within the given chat.
+   * Used when the user navigates between retry/edit generations.
+   */
+  async setActiveBranchMessage(
+    chatId: string,
+    branchId: string,
+    messageId: string,
+  ) {
+    // 1. Deactivate siblings in separate Message collection
+    await Message.updateMany(
+      { chatId, branchId, _id: { $ne: messageId } },
+      { $set: { isActive: false } },
+    );
+    // Activate chosen one in separate Message collection
+    const updatedMsg = await Message.findByIdAndUpdate(
+      messageId,
+      { $set: { isActive: true } },
+      { new: true },
+    );
+
+    // 2. Also update legacy messages stored in the Chat document subdocument array (if any)
+    const chatDoc = await Chat.findById(chatId);
+    let legacyUpdatedMsg = null;
+    if (chatDoc) {
+      let updated = false;
+      const legacyMsgs = (chatDoc as any).messages || [];
+      for (const m of legacyMsgs) {
+        const idStr = String(m._id || m.id);
+        if (m.branchId === branchId) {
+          m.isActive = (idStr === messageId);
+          updated = true;
+          if (idStr === messageId) {
+            legacyUpdatedMsg = {
+              ...(m.toObject ? m.toObject() : m),
+              id: idStr,
+              _id: m._id,
+              chatId: String(chatDoc._id),
+            };
+          }
+        }
+      }
+      if (updated) {
+        chatDoc.markModified("messages");
+        await chatDoc.save();
+      }
+    }
+
+    return updatedMsg || legacyUpdatedMsg;
+  },
+
+  /**
+   * Return a single message document by its _id.
+   */
+  async findMessageById(messageId: string) {
+    const msg = await Message.findById(messageId);
+    if (!msg) return null;
+    return { ...msg.toObject(), id: msg._id.toString() };
+  },
+
+  /**
+   * Return all assistant messages whose parentId equals the given user-message id.
+   * Sorted by version ascending (version 1 = original).
+   */
+  async getMessagesByParentId(parentId: string) {
+    const msgs = await Message.find({ parentId }).sort({ version: 1 }).lean();
+    return msgs.map((m: any) => ({ ...m, id: m._id.toString() }));
+  },
+
+  /** Bulk-update messages matching filter. Used to deactivate branch siblings. */
+  async updateMany(filter: Record<string, any>, update: Record<string, any>) {
+    const res = await Message.updateMany(filter, { $set: update });
+
+    // Also update legacy messages stored in Chat document subdocument array (if any)
+    const chatId = filter.chatId;
+    const branchId = filter.branchId;
+    if (chatId) {
+      const chatDoc = await Chat.findById(chatId);
+      if (chatDoc) {
+        let updated = false;
+        const legacyMsgs = (chatDoc as any).messages || [];
+        for (const m of legacyMsgs) {
+          const matchesBranch = !branchId || m.branchId === branchId;
+          if (matchesBranch) {
+            for (const [key, val] of Object.entries(update)) {
+              m[key] = val;
+            }
+            updated = true;
+          }
+        }
+        if (updated) {
+          chatDoc.markModified("messages");
+          await chatDoc.save();
+        }
+      }
+    }
+
+    return res;
   },
 
   async update(chatId: string, data: any) {
