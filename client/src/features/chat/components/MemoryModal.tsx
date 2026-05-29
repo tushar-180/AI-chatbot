@@ -239,7 +239,7 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
                         <Icon className="w-3.5 h-3.5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-zinc-300 text-[13px] leading-relaxed font-light">
+                        <p className="text-zinc-300 text-[13px] leading-relaxed font-light line-clamp-3">
                           {memory.content}
                         </p>
                         <div className="flex items-center gap-3 mt-2">

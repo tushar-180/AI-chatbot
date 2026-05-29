@@ -1150,7 +1150,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <Zap size={14} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[13px] text-zinc-300 leading-relaxed">
+                            <p className="text-[13px] text-zinc-300 leading-relaxed line-clamp-3">
                               {memory.content}
                             </p>
                             <div className="flex items-center gap-2 mt-2">
