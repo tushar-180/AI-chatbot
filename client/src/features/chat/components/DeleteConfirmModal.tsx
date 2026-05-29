@@ -40,25 +40,25 @@ export default function DeleteConfirmModal({
       onClick={onClose}
     >
       <div 
-        className="w-[400px] max-w-[90vw] rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden"
+        className="w-[400px] max-w-[90vw] rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/60 shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
-          <h2 className="text-lg font-bold text-white mb-2">{title}</h2>
-          <p className="text-sm text-slate-400">{message}</p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">{title}</h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{message}</p>
         </div>
 
         <div className="flex justify-end gap-3 px-6 pb-6 pt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium rounded-lg text-white hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-lg text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
           >
             Cancel
           </button>
 
           <button
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
           >
             {purpose}
           </button>

@@ -136,7 +136,7 @@ const ChatHeader = ({
           </button>
 
           {/* Temporary Chat Toggle Button */}
-          {(isNewChat || !currentChatId || isTemporaryChatActive) && (
+          {!isCompareMode && (isNewChat || !currentChatId || isTemporaryChatActive) && (
             <button
               onClick={handleToggleTempChat}
               className={
@@ -157,7 +157,7 @@ const ChatHeader = ({
             </button>
           )}
 
-          {currentChatId && (
+          {!isCompareMode && currentChatId && (
             <button
               onClick={() => setIsShareModalOpen(true)}
               className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
