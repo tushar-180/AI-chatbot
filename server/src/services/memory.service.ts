@@ -125,6 +125,10 @@ export const memoryService = {
         content: string,
         category: string = "general",
     ) {
+        // Enforce max capacity limit
+        const count = await UserMemory.countDocuments({ userId });
+        if (count >= 100) return null;
+
         // Deduplication
         const existing = await UserMemory.findOne({ userId, content });
         if (existing) return existing;
