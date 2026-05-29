@@ -127,7 +127,14 @@ export const useGroupChat = () => {
       .then((res) => {
         if (isUnmountedRef.current || lastGroupIdRef.current !== connectionGroupId) return;
         setGroupMessages(res.data.messages);
-        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching initial messages:", err);
+      })
+      .finally(() => {
+        if (!isUnmountedRef.current && lastGroupIdRef.current === connectionGroupId) {
+          setLoading(false);
+        }
       });
 
     // Setup Socket.io
