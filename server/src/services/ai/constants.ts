@@ -22,7 +22,12 @@ export const AI_PROVIDERS = {
     id: "nvidia",
     models: [
       "nvidia/nemotron-3-super-120b-a12b",
-      "openai/gpt-oss-120b"
+      "openai/gpt-oss-120b",
+      "meta/llama-4-maverick-17b-128e-instruct",
+      "minimaxai/minimax-m2.7",
+      "mistralai/mistral-large-3-675b-instruct-2512",
+      "qwen/qwen3-coder-480b-a35b-instruct",
+      "deepseek-ai/deepseek-v4-flash"
     ]
   },
 } as const;
