@@ -89,6 +89,20 @@ export const chatRepository = {
       .limit(limit);
   },
 
+  findAllByProjectAndUser(projectId: string, userId: string) {
+    return Chat.find({ projectId, userId })
+      .select("-messages -legacyMessages")
+      .sort({ updatedAt: -1 });
+  },
+
+  moveToProject(chatId: string, userId: string, projectId: string) {
+    return Chat.findOneAndUpdate(
+      { _id: chatId, userId },
+      { projectId },
+      { new: true },
+    );
+  },
+
   async searchChats(userId: string, query: string) {
     try {
       // First, try searching for chats by title
@@ -168,6 +182,18 @@ export const chatRepository = {
       await Message.deleteMany({ chatId });
     }
     return chat;
+  },
+
+  async deleteManyByProjectId(projectId: string) {
+    const chats = await Chat.find({ projectId }).select("_id");
+    const chatIds = chats.map((chat) => chat._id);
+
+    if (chatIds.length > 0) {
+      await Message.deleteMany({ chatId: { $in: chatIds } });
+      await Chat.deleteMany({ _id: { $in: chatIds } });
+    }
+
+    return chatIds.length;
   },
 
   async saveMessage(chatId: string, messageData: Partial<ChatMessage>) {

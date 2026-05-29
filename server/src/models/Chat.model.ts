@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { attachmentSchema } from "./schemas/attachment.schema";
-import { TokenUsage } from "../utils/tokenCounter";
+import type { TokenUsage } from "../types/token.types";
 
 const tokenUsageSchema = new mongoose.Schema(
   {
@@ -206,5 +206,4 @@ const tokenUsageRecordSchema = new mongoose.Schema(
 );
 
 export const TokenUsageRecord = mongoose.model("TokenUsageRecord", tokenUsageRecordSchema);
-
 

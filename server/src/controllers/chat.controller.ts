@@ -3,40 +3,11 @@ import { chatService } from "../services/chat/chat.service";
 import { chatStreamRegistry } from "../services/streams/streamRegistry.service";
 import { asyncHandler } from "../utils/asyncHandler";
 import { setSseHeaders, splitAndWriteChunk, writeSse, pipeStreamResponse } from "../utils/sse";
-import type { StreamPayload } from "../types/chat.types";
 import { parseRequestBody } from "../utils/requestParser";
-
-interface AuthenticatedRequest extends Request {
-  clerkId?: string;
-}
-
-const getHttpStatus = (error: unknown) => {
-  if (!(error instanceof Error)) return 500;
-  if (error.name === "ValidationError") return 400;
-  if (error.name === "NotFoundError") return 404;
-  if (error.name === "ForbiddenError") return 403;
-  return 500;
-};
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  return error instanceof Error ? error.message : fallback;
-};
-
-
-const sendControllerError = (
-  res: Response,
-  error: unknown,
-  fallback: string,
-) => {
-  const status = getHttpStatus(error);
-  const message = getErrorMessage(error, fallback);
-  return res.status(status).json({ error: message });
-};
-
-
+import { sendControllerError, sendStreamControllerError } from "../utils/controller";
 
 export const createChat = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
 
       const parsed = parseRequestBody(req);
@@ -54,7 +25,7 @@ export const createChat = asyncHandler(
 );
 
 export const createChatStream = async (
-  req: AuthenticatedRequest,
+  req: Request,
   res: Response,
 ) => {
   try {
@@ -70,12 +41,7 @@ export const createChatStream = async (
       }),
     );
   } catch (error) {
-    console.log("Error in createChatStream:", error);
-    if (!res.headersSent) {
-      sendControllerError(res, error, "Failed to create chat stream");
-    } else {
-      res.end();
-    }
+    return sendStreamControllerError(res, error, "Failed to create chat stream");
   }
 };
 
@@ -95,7 +61,7 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getAllChats = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
@@ -114,7 +80,7 @@ export const getAllChats = asyncHandler(
 );
 
 export const searchChats = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const query = req.query.q as string;
       if (!query) {
@@ -129,7 +95,7 @@ export const searchChats = asyncHandler(
 );
 
 export const getChatById = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const chatId = String(req.params.id);
       const currentUserId = req.clerkId!;
@@ -164,12 +130,7 @@ export const streamMessage = async (req: Request, res: Response) => {
       }),
     );
   } catch (error) {
-    console.log("Error in streamMessage:", error);
-    if (!res.headersSent) {
-      sendControllerError(res, error, "Failed to initiate stream");
-    } else {
-      res.end();
-    }
+    return sendStreamControllerError(res, error, "Failed to initiate stream");
   }
 };
 
@@ -259,7 +220,7 @@ export const unpinChat = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getGallery = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const gallery = await chatService.getGallery(req.clerkId!);
       return res.json(gallery);
@@ -359,12 +320,7 @@ export const streamEditMessage = async (req: Request, res: Response) => {
       }),
     );
   } catch (error) {
-    console.log("Error in streamEditMessage:", error);
-    if (!res.headersSent) {
-      sendControllerError(res, error, "Failed to initiate stream edit");
-    } else {
-      res.end();
-    }
+    return sendStreamControllerError(res, error, "Failed to initiate stream edit");
   }
 };
 
@@ -398,12 +354,7 @@ export const streamRetryMessage = async (req: Request, res: Response) => {
       }),
     );
   } catch (error) {
-    console.log("Error in streamRetryMessage:", error);
-    if (!res.headersSent) {
-      sendControllerError(res, error, "Failed to initiate retry stream");
-    } else {
-      res.end();
-    }
+    return sendStreamControllerError(res, error, "Failed to initiate retry stream");
   }
 };
 

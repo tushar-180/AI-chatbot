@@ -1,10 +1,14 @@
 import { Request, Response } from "express";
 import { GroupChatService } from "../services/chat/groupChat.service";
 import { resolveClerkId, parseRequestBody } from "../utils/requestParser";
+import { sendControllerError } from "../utils/controller";
 
 export class GroupChatController {
+  private static handleError(res: Response, error: unknown, fallback: string) {
+    return sendControllerError(res, error, fallback);
+  }
+
   static async createGroup(req: Request, res: Response) {
-    console.log("Create Group called with:", req.body);
     try {
       const { chatId } = req.body;
       const clerkId = resolveClerkId(req);
@@ -16,9 +20,8 @@ export class GroupChatController {
         clerkId,
       );
       res.json(group);
-    } catch (error: any) {
-      console.error("Error in createGroup:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to create group");
     }
   }
 
@@ -28,8 +31,8 @@ export class GroupChatController {
       const group = await GroupChatService.getGroupByInviteCode(inviteCode);
       if (!group) return res.status(404).json({ error: "Group not found" });
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch group");
     }
   }
 
@@ -40,8 +43,8 @@ export class GroupChatController {
 
       const group = await GroupChatService.joinGroup(inviteCode, clerkId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to join group");
     }
   }
 
@@ -52,8 +55,8 @@ export class GroupChatController {
 
       const result = await GroupChatService.leaveGroup(groupId, clerkId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to leave group");
     }
   }
 
@@ -71,8 +74,8 @@ export class GroupChatController {
         memberId,
       );
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to remove member");
     }
   }
 
@@ -83,8 +86,8 @@ export class GroupChatController {
 
       const messages = await GroupChatService.getGroupMessages(groupId);
       res.json({ messages });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch group details");
     }
   }
 
@@ -105,8 +108,8 @@ export class GroupChatController {
         parsed.attachedFile,
       );
       res.json(message);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to send group message");
     }
   }
 
@@ -116,8 +119,8 @@ export class GroupChatController {
 
       const groups = await GroupChatService.getUserGroups(clerkId);
       res.json(groups);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch user groups");
     }
   }
 
@@ -127,8 +130,8 @@ export class GroupChatController {
 
       const groups = await GroupChatService.getUserCreatedGroups(clerkId);
       res.json(groups);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch created groups");
     }
   }
 
@@ -139,8 +142,8 @@ export class GroupChatController {
 
       const result = await GroupChatService.deleteGroup(groupId, clerkId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to delete group");
     }
   }
 
@@ -149,8 +152,8 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const result = await GroupChatService.stopGroupStream(groupId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to stop group stream");
     }
   }
 
@@ -166,8 +169,8 @@ export class GroupChatController {
         clerkId,
       );
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to update group title");
     }
   }
 
@@ -176,8 +179,8 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const group = await GroupChatService.pinGroup(groupId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to pin group");
     }
   }
 
@@ -186,8 +189,8 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const group = await GroupChatService.unpinGroup(groupId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to unpin group");
     }
   }
 
@@ -208,9 +211,8 @@ export class GroupChatController {
         parsed.attachedFile
       );
       res.json(message);
-    } catch (error: any) {
-      console.error("Error in editGroupMessage:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to edit group message");
     }
   }
 
@@ -228,9 +230,8 @@ export class GroupChatController {
         webSearchEnabled,
       );
       res.json(result);
-    } catch (error: any) {
-      console.error("Error in retryGroupMessage:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to retry group message");
     }
   }
 
@@ -247,9 +248,8 @@ export class GroupChatController {
         feedback,
       );
       res.json(message);
-    } catch (error: any) {
-      console.error("Error in updateGroupMessageFeedback:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to update group message feedback");
     }
   }
 }

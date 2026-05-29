@@ -1,16 +1,11 @@
 import { Request, Response } from "express";
 import { temporaryChatService } from "../services/chat/temporaryChat.service";
-import { setSseHeaders, splitAndWriteChunk, writeSse, pipeStreamResponse } from "../utils/sse";
-import { StreamPayload } from "../types/chat.types";
+import { pipeStreamResponse } from "../utils/sse";
 import { chatStreamRegistry } from "../services/streams/streamRegistry.service";
 import { parseRequestBody } from "../utils/requestParser";
+import { sendStreamControllerError } from "../utils/controller";
 
-interface AuthenticatedRequest extends Request {
-  clerkId?: string;
-}
-
-
-export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: Response) => {
+export const createTemporaryChatStream = async (req: Request, res: Response) => {
   try {
     const rawMessages = req.body.messages;
     const messages = typeof rawMessages === "string" ? JSON.parse(rawMessages) : rawMessages;
@@ -36,11 +31,6 @@ export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: 
       }
     );
   } catch (error) {
-    console.error("Error in createTemporaryChatStream:", error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Failed to create temporary chat stream" });
-    } else {
-      res.end();
-    }
+    return sendStreamControllerError(res, error, "Failed to create temporary chat stream");
   }
 };

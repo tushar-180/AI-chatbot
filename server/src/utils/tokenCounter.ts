@@ -1,11 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-
-export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-}
+import type { LogTokenDetails, TokenUsage } from "../types/token.types";
 
 export function createTokenUsage(
   promptTokens = 0,
@@ -114,19 +109,6 @@ export function serializePromptMessages(messages: any[]): string {
       return `${role}: ${content}`;
     })
     .join("\n");
-}
-
-export interface LogTokenDetails {
-  model: string;
-  usage: TokenUsage;
-  context: string;
-  username?: string;
-  groupTitle?: string;
-  chatTitle?: string;
-  messageId?: string;
-  hasWebSearch?: boolean;
-  mcpToolsProvided?: number;
-  attachments?: { name?: string; mimeType?: string }[];
 }
 
 /**

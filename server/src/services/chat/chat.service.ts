@@ -28,12 +28,12 @@ import { mcpClientService } from "../mcp/mcpClient.service";
 import { getEnabledMcpTools } from "../mcp/mcpToolFilter.service";
 import { buildGroundingMetadata, finalizeGroundedResponse } from "../../utils/webGrounding";
 import {
-  TokenUsage,
   calculateUsage,
   estimateTokenCount,
   serializePromptMessages,
   logTokenUsage,
 } from "../../utils/tokenCounter";
+import type { TokenUsage } from "../../types/token.types";
 import { requireUserId, requireMessage, requireRequestId } from "../../utils/validation";
 import { buildProjectContext } from "../project/buildProjectContext";
 
@@ -44,8 +44,8 @@ import {
   nextVersionForParent,
   resolveActiveBranch,
   getContextBeforeMessage,
-  type RawMessage,
 } from "../../utils/branchUtils";
+import type { RawMessage } from "../../types/branch.types";
 import { buildPromptMessages } from "./promptBuilder.service";
 import { streamAssistantResponse } from "./chatResponseHandler.service";
 import { chatBranchingService } from "./chatBranching.service";

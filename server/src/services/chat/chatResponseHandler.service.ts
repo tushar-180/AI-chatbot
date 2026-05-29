@@ -5,11 +5,13 @@ import { getEnabledMcpTools } from "../mcp/mcpToolFilter.service";
 import { userService } from "../user/user.service";
 import { memoryService } from "../memory/memory.service";
 import { buildPromptMessages } from "./promptBuilder.service";
-import { resolveActiveBranch, type RawMessage } from "../../utils/branchUtils";
+import { resolveActiveBranch } from "../../utils/branchUtils";
+import type { RawMessage } from "../../types/branch.types";
 import { buildGroundingMetadata, finalizeGroundedResponse } from "../../utils/webGrounding";
-import { serializePromptMessages, calculateUsage, TokenUsage } from "../../utils/tokenCounter";
+import { serializePromptMessages, calculateUsage } from "../../utils/tokenCounter";
 import { logTokenUsage } from "../../utils/tokenCounter";
 import { ChatMessage, StreamPayload } from "../../types/chat.types";
+import type { TokenUsage } from "../../types/token.types";
 
 const resolveAssistantTokens = (
   usage: TokenUsage | undefined,
