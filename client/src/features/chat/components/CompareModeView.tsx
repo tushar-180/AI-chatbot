@@ -3,6 +3,8 @@ import { useEffect, useRef, useState, type ChangeEvent, type SubmitEvent } from 
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 import { toast } from "sonner";
 import {
   AlertCircle,
@@ -752,22 +754,29 @@ const CompareModeView = ({
                         </div>
                       </div>
                     )}
-                    {hasResponse && (
+                    {hasResponse && (() => {
+                      // Convert LaTeX block math \[ \] to $$ $$
+                      let processedText = state.text.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+                      // Convert LaTeX inline math \( \) to $ $
+                      processedText = processedText.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+                      
+                      return (
                       <div className="prose prose-invert max-w-none will-change-scroll prose-p:text-zinc-300 prose-p:leading-7 prose-li:text-zinc-300 prose-strong:text-zinc-100 prose-headings:text-zinc-50">
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeRaw, rehypeKatex]}
                           components={{
                             p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
                             pre: ({ children }) => <pre className="p-4 bg-zinc-950/70 border border-white/[0.08] rounded-lg overflow-x-auto text-[13px] font-mono mb-3">{children}</pre>,
                             code: ({ children }) => <code className="px-1.5 py-0.5 rounded bg-white/[0.06] text-[13px] font-mono text-zinc-200">{children}</code>,
                           }}
                         >
-                          {state.text}
+                          {processedText}
                         </ReactMarkdown>
                         {state.status === "streaming" && <span className="inline-block w-1.5 h-4 ml-1 bg-zinc-300 animate-pulse align-middle" />}
                       </div>
-                    )}
+                      );
+                    })()}
                   </div>
 
                   <div className="px-5 py-3 border-t border-white/[0.06] bg-zinc-950/35 shrink-0 text-xs text-zinc-500 flex items-center justify-between select-none">

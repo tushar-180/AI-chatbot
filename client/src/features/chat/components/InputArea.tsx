@@ -168,6 +168,7 @@ const ModelSelector = ({
   onWebSearchToggle,
   quotaStatus,
   isQuotaLoading,
+  isLoadingProviders,
 }: {
   availableProviders: Provider[];
   selectedProvider: string;
@@ -176,10 +177,24 @@ const ModelSelector = ({
   onWebSearchToggle: (enabled: boolean) => void;
   quotaStatus?: InputAreaProps["quotaStatus"];
   isQuotaLoading?: boolean;
+  isLoadingProviders?: boolean;
 }) => {
   const currentProviderName =
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
+
+  if (isLoadingProviders) {
+    return (
+      <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
+        <div className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-zinc-800/60 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-zinc-400 lg:text-zinc-500 transition-all">
+          <Loader2 size={12} className="animate-spin text-zinc-500" />
+          <span className="max-w-[100px] lg:max-w-none truncate">
+            Loading...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (availableProviders.length === 0) {
     return (
@@ -303,7 +318,7 @@ const InputArea = ({
     },
   });
 
-  const { availableProviders } = useAvailableProviders(
+  const { availableProviders, isLoadingProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
   );
@@ -536,6 +551,7 @@ const InputArea = ({
                 onWebSearchToggle={onWebSearchToggle}
                 quotaStatus={quotaStatus}
                 isQuotaLoading={isQuotaLoading}
+                isLoadingProviders={isLoadingProviders}
               />
 
               {/* Attachment Previews */}
