@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import os from "node:os";
 import fs from "node:fs/promises";
-import { cloudinaryService } from "../services/cloudinary.service";
+import { cloudinaryService } from "../services/storage/cloudinary.service";
 
 const router = Router();
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 5 * 1024 * 1024 } });

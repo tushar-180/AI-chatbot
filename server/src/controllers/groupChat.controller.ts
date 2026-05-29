@@ -1,16 +1,13 @@
 import { Request, Response } from "express";
-import { GroupChatService } from "../services/groupChat.service";
+import { GroupChatService } from "../services/chat/groupChat.service";
+import { resolveClerkId, parseRequestBody } from "../utils/requestParser";
 
 export class GroupChatController {
   static async createGroup(req: Request, res: Response) {
     console.log("Create Group called with:", req.body);
     try {
-      const { chatId, userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { chatId } = req.body;
+      const clerkId = resolveClerkId(req);
 
       if (!chatId) return res.status(400).json({ error: "chatId is required" });
 
@@ -39,12 +36,7 @@ export class GroupChatController {
   static async joinGroup(req: Request, res: Response) {
     try {
       const inviteCode = req.params.inviteCode as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const group = await GroupChatService.joinGroup(inviteCode, clerkId);
       res.json(group);
@@ -56,12 +48,7 @@ export class GroupChatController {
   static async leaveGroup(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const result = await GroupChatService.leaveGroup(groupId, clerkId);
       res.json(result);
@@ -73,12 +60,8 @@ export class GroupChatController {
   static async removeMember(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { memberId, userId } = req.body;
-      const adminClerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!adminClerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { memberId } = req.body;
+      const adminClerkId = resolveClerkId(req);
       if (!memberId)
         return res.status(400).json({ error: "Member ID is required" });
 
@@ -96,12 +79,7 @@ export class GroupChatController {
   static async getGroupDetails(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const messages = await GroupChatService.getGroupMessages(groupId);
       res.json({ messages });
@@ -113,25 +91,18 @@ export class GroupChatController {
   static async sendMessage(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { content, userId, webSearchEnabled } = req.body;
-      const attachments = typeof req.body.attachments === 'string'
-        ? JSON.parse(req.body.attachments)
-        : (req.body.attachments || []);
-      const attachedFile = req.file || null;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { content } = req.body;
+      const clerkId = resolveClerkId(req);
+      const parsed = parseRequestBody(req);
 
       const message = await GroupChatService.addMessage(
         groupId,
         clerkId,
         content,
         "user",
-        Boolean(webSearchEnabled),
-        attachments || [],
-        attachedFile,
+        Boolean(parsed.webSearchEnabled),
+        parsed.attachments || [],
+        parsed.attachedFile,
       );
       res.json(message);
     } catch (error: any) {
@@ -141,12 +112,7 @@ export class GroupChatController {
 
   static async getUserGroups(req: Request, res: Response) {
     try {
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const groups = await GroupChatService.getUserGroups(clerkId);
       res.json(groups);
@@ -157,12 +123,7 @@ export class GroupChatController {
 
   static async getUserCreatedGroups(req: Request, res: Response) {
     try {
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const groups = await GroupChatService.getUserCreatedGroups(clerkId);
       res.json(groups);
@@ -174,12 +135,7 @@ export class GroupChatController {
   static async deleteGroup(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const result = await GroupChatService.deleteGroup(groupId, clerkId);
       res.json(result);
@@ -201,12 +157,8 @@ export class GroupChatController {
   static async updateGroupTitle(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { title, userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { title } = req.body;
+      const clerkId = resolveClerkId(req);
 
       const group = await GroupChatService.updateGroupTitle(
         groupId,
@@ -243,21 +195,17 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const messageId = req.params.messageId as string;
-      const { content, provider, webSearchEnabled } = req.body;
-
-      const attachments = typeof req.body.attachments === 'string'
-        ? JSON.parse(req.body.attachments)
-        : (req.body.attachments || []);
-      const attachedFile = req.file || null;
+      const { content, provider } = req.body;
+      const parsed = parseRequestBody(req);
 
       const message = await GroupChatService.editGroupMessage(
         groupId,
         messageId,
         content,
         provider,
-        Boolean(webSearchEnabled),
-        attachments,
-        attachedFile
+        Boolean(parsed.webSearchEnabled),
+        parsed.attachments,
+        parsed.attachedFile
       );
       res.json(message);
     } catch (error: any) {
@@ -289,7 +237,8 @@ export class GroupChatController {
   static async updateGroupMessageFeedback(req: Request, res: Response) {
     try {
       const messageId = req.params.messageId as string;
-      const { feedback, userId, username } = req.body;
+      const { feedback, username } = req.body;
+      const userId = resolveClerkId(req);
 
       const message = await GroupChatService.updateGroupMessageReaction(
         messageId,

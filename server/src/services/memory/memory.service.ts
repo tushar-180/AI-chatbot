@@ -1,9 +1,9 @@
-import { UserMemory } from "../models/UserMemory.model";
-import { aiService } from "./ai.service";
+import { UserMemory } from "../../models/UserMemory.model";
+import { aiService } from "../ai/ai.service";
 import {
     MEMORY_CONTEXT_PROMPT,
     MEMORY_EXTRACTION_PROMPT,
-} from "../constants/prompt.constants";
+} from "../../constants/prompt.constants";
 
 export const memoryService = {
     /**

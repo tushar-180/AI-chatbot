@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
-import { chatService } from "../services/chat.service";
-import { chatStreamRegistry } from "../services/chatStreamRegistry.service";
+import { chatService } from "../services/chat/chat.service";
+import { chatStreamRegistry } from "../services/streams/streamRegistry.service";
 import { asyncHandler } from "../utils/asyncHandler";
-import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
+import { setSseHeaders, splitAndWriteChunk, writeSse, pipeStreamResponse } from "../utils/sse";
 import type { StreamPayload } from "../types/chat.types";
+import { parseRequestBody } from "../utils/requestParser";
 
 interface AuthenticatedRequest extends Request {
   clerkId?: string;
@@ -20,13 +21,7 @@ const getHttpStatus = (error: unknown) => {
 const getErrorMessage = (error: unknown, fallback: string) => {
   return error instanceof Error ? error.message : fallback;
 };
-const parseBoolean = (value: unknown): boolean => {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") {
-    return value.toLowerCase() === "true";
-  }
-  return false;
-};
+
 
 const sendControllerError = (
   res: Response,
@@ -38,66 +33,18 @@ const sendControllerError = (
   return res.status(status).json({ error: message });
 };
 
-const pipeStreamResponse = async (
-  req: Request,
-  res: Response,
-  stream: AsyncGenerator<StreamPayload>,
-) => {
-  const firstPayload = await stream.next();
-  if (firstPayload.done) return;
 
-  setSseHeaders(res);
-
-  let clientDisconnected = false;
-  req.on("close", () => {
-    clientDisconnected = true;
-  });
-
-  const writePayload = async (
-    payload: Awaited<typeof firstPayload>["value"],
-  ) => {
-    if (clientDisconnected) return;
-
-    if (payload.chunk) {
-      await splitAndWriteChunk(res, payload.chunk, {
-        requestId: payload.requestId,
-        status: payload.status,
-      });
-    } else {
-      writeSse(res, payload);
-    }
-
-    if (payload.done || payload.error) {
-      res.end();
-    }
-  };
-
-  await writePayload(firstPayload.value);
-
-  for await (const payload of stream) {
-    await writePayload(payload);
-  }
-};
 
 export const createChat = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
 
-      const attachments = typeof req.body.attachments === 'string'
-        ? JSON.parse(req.body.attachments)
-        : (req.body.attachments || []);
-      const selection = req.body.selection
-        ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
-        : undefined;
-      const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
+      const parsed = parseRequestBody(req);
 
       const chat = await chatService.createChat({
         ...req.body,
         userId: req.clerkId!,
-        attachments,
-        selection,
-        webSearchEnabled,
-        attachedFile: (req as any).file || null,
+        ...parsed,
       });
       return res.json(chat);
     } catch (error) {
@@ -111,13 +58,7 @@ export const createChatStream = async (
   res: Response,
 ) => {
   try {
-    const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection
-      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
-    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
+    const parsed = parseRequestBody(req);
 
     await pipeStreamResponse(
       req,
@@ -125,10 +66,7 @@ export const createChatStream = async (
       chatService.createChatStream({
         ...req.body,
         userId: req.clerkId!,
-        attachments,
-        selection,
-        webSearchEnabled,
-        attachedFile: (req as any).file || null,
+        ...parsed,
       }),
     );
   } catch (error) {
@@ -143,20 +81,11 @@ export const createChatStream = async (
 
 export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection
-      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
-    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
+    const parsed = parseRequestBody(req);
     const chat = await chatService.sendMessage({
       chatId: String(req.params.id),
       ...req.body,
-      attachments,
-      selection,
-      webSearchEnabled,
-      attachedFile: (req as any).file || null,
+      ...parsed,
     });
 
     return res.json(chat);
@@ -224,23 +153,14 @@ export const getChatById = asyncHandler(
 
 export const streamMessage = async (req: Request, res: Response) => {
   try {
-    const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection
-      ? (typeof req.body.selection === 'string' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
-    const webSearchEnabled = parseBoolean(req.body.webSearchEnabled);
+    const parsed = parseRequestBody(req);
     await pipeStreamResponse(
       req,
       res,
       chatService.streamMessage({
         chatId: String(req.params.id),
         ...req.body,
-        attachments,
-        selection,
-        webSearchEnabled,
-        attachedFile: (req as any).file || null,
+        ...parsed,
       }),
     );
   } catch (error) {
@@ -409,20 +329,13 @@ export const getStreamUpdates = async (req: Request, res: Response) => {
 
 export const editMessage = asyncHandler(async (req: Request, res: Response) => {
   try {
-    const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection !== undefined
-      ? (typeof req.body.selection === 'string' && req.body.selection !== 'undefined' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
+    const parsed = parseRequestBody(req);
 
     const chat = await chatService.editMessage({
       chatId: String(req.params.id),
       messageId: String(req.params.messageId),
       ...req.body,
-      attachments,
-      selection,
-      attachedFile: (req as any).file || null,
+      ...parsed,
     });
 
     return res.json(chat);
@@ -433,12 +346,7 @@ export const editMessage = asyncHandler(async (req: Request, res: Response) => {
 
 export const streamEditMessage = async (req: Request, res: Response) => {
   try {
-    const attachments = typeof req.body.attachments === 'string'
-      ? JSON.parse(req.body.attachments)
-      : (req.body.attachments || []);
-    const selection = req.body.selection !== undefined
-      ? (typeof req.body.selection === 'string' && req.body.selection !== 'undefined' ? JSON.parse(req.body.selection) : req.body.selection)
-      : undefined;
+    const parsed = parseRequestBody(req);
 
     await pipeStreamResponse(
       req,
@@ -447,9 +355,7 @@ export const streamEditMessage = async (req: Request, res: Response) => {
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
         ...req.body,
-        attachments,
-        selection,
-        attachedFile: (req as any).file || null,
+        ...parsed,
       }),
     );
   } catch (error) {
@@ -468,7 +374,7 @@ export const retryMessage = asyncHandler(
       const chat = await chatService.retryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
-        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
+        webSearchEnabled: req.body.webSearchEnabled === "true" || req.body.webSearchEnabled === true,
         ...req.body,
       });
 
@@ -487,7 +393,7 @@ export const streamRetryMessage = async (req: Request, res: Response) => {
       chatService.streamRetryMessage({
         chatId: String(req.params.id),
         messageId: String(req.params.messageId),
-        webSearchEnabled: parseBoolean(req.body.webSearchEnabled),
+        webSearchEnabled: req.body.webSearchEnabled === "true" || req.body.webSearchEnabled === true,
         ...req.body,
       }),
     );

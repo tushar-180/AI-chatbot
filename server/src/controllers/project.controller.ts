@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { projectService } from "../services/project.service";
+import { projectService } from "../services/project/project.service";
 import { Chat } from "../models/Chat.model";
 import { asyncHandler } from "../utils/asyncHandler";
 

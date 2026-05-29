@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { attachmentSchema } from "./schemas/attachment.schema";
 import { TokenUsage } from "../utils/tokenCounter";
 
 const tokenUsageSchema = new mongoose.Schema(
@@ -41,17 +42,7 @@ const messageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
-    attachments: [
-      {
-        url: String,
-        name: String,
-        mimeType: String,
-        size: Number,
-        storagePath: String,
-        fileHash: String,
-        localPath: String,
-      },
-    ],
+    attachments: [attachmentSchema],
     model: {
       type: String,
       index: true,
@@ -164,37 +155,7 @@ const chatSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-export type ChatMessage = {
-  id?: string;
-  userId: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  type?: "text" | "image" | "file" | "action";
-  metadata?: any;
-  attachments?: {
-    url: string;
-    name?: string;
-    mimeType?: string;
-    size?: number;
-    storagePath: string;
-    fileHash: string;
-    localPath?: string;
-  }[];
-  model?: string;
-  requestId?: string;
-  status: "streaming" | "stopped" | "completed" | "failed";
-  feedback?: "like" | "dislike" | null;
-  tokens?: TokenUsage;
-  createdAt?: Date;
-  updatedAt?: Date;
-  // Branching fields
-  parentId?: string | null;
-  retryOf?: string | null;
-  editedFrom?: string | null;
-  branchId?: string | null;
-  version?: number;
-  isActive?: boolean;
-};
+
 
 export const Chat = mongoose.model("Chat", chatSchema);
 export const Message = mongoose.model("Message", messageSchema);

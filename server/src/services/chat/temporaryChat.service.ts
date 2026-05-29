@@ -1,137 +1,23 @@
-import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
-import { getLimitedMessages } from "../utils/chatHistory";
-import { userService } from "./user.service";
-import { memoryService } from "./memory.service";
-import { webSearchService, type WebGroundingContext } from "../modules/web-search";
-import { ChatMessage, StreamPayload } from "../types/chat.types";
-import { aiService } from "./ai.service";
-import { chatStreamRegistry } from "./chatStreamRegistry.service";
-import { processAttachedFile } from "../modules/file-rag/fileHandler";
-import { retrieveFileContext } from "../modules/file-rag/fileRetrieval";
-import { mcpClientService } from "./mcpClient.service";
+import { BASE_SYSTEM_PROMPT } from "../../constants/prompt.constants";
+import { getLimitedMessages } from "../../utils/chatHistory";
+import { userService } from "../user/user.service";
+import { memoryService } from "../memory/memory.service";
+import { buildTemporaryPromptMessages } from "./promptBuilder.service";
+import { webSearchService, type WebGroundingContext } from "../../modules/web-search";
+import { ChatMessage, StreamPayload } from "../../types/chat.types";
+import { aiService } from "../ai/ai.service";
+import { chatStreamRegistry } from "../streams/streamRegistry.service";
+import { processAttachedFile } from "../../modules/file-rag/fileHandler";
+import { retrieveFileContext } from "../../modules/file-rag/fileRetrieval";
+import { mcpClientService } from "../mcp/mcpClient.service";
+import { getEnabledMcpTools } from "../mcp/mcpToolFilter.service";
+import { finalizeGroundedResponse } from "../../utils/webGrounding";
 import "multer"; // ensures Express.Multer.File namespace is available
 
-const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true) => {
-  const user = await userService.getUserByClerkId(userId);
-  const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
-  const allTools = await mcpClientService.getActiveTools();
 
-  return allTools.filter((tool) => {
-    if (disabledMcpServers.includes(tool._serverName)) return false;
 
-    if (!hasFiles) {
-      const toolName = tool.name.toLowerCase();
-      const serverName = (tool._serverName || "").toLowerCase();
-      if (
-        toolName.includes("excel") || serverName.includes("excel") ||
-        toolName.includes("csv") || serverName.includes("csv") ||
-        toolName.includes("pdf") || serverName.includes("pdf") ||
-        toolName.includes("file") || serverName.includes("file") ||
-        toolName.includes("document") || serverName.includes("document")
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
-};
 
-const finalizeGroundedResponse = (
-  response: string,
-  webGrounding: WebGroundingContext | null,
-) => {
-  if (!webGrounding?.citationsMarkdown) {
-    return { content: response, appendedCitations: "" };
-  }
 
-  const alreadyHasSources = webGrounding.sources.some((source) =>
-    response.includes(source.url),
-  );
-
-  if (alreadyHasSources || /(^|\n)Sources:\s*$/im.test(response)) {
-    return { content: response, appendedCitations: "" };
-  }
-
-  const appendedCitations = webGrounding.citationsMarkdown;
-  return {
-    content: `${response.trimEnd()}${appendedCitations}`,
-    appendedCitations,
-  };
-};
-
-const buildTemporaryPromptMessages = async (
-  userId: string,
-  chatMessages: ChatMessage[],
-  latestUserMessage?: string,
-  webSearchEnabled = false,
-  provider?: string,
-) => {
-  const promptMessages = getLimitedMessages(chatMessages);
-  const systemMessages: ChatMessage[] = [
-    {
-      role: "system",
-      content: BASE_SYSTEM_PROMPT,
-      userId,
-      status: "completed",
-    },
-  ];
-
-  let fileContext: string | null = null;
-  const userMessagesWithFiles = promptMessages
-    .filter((m) => m.role === "user" && m.attachments?.some((a) => a.storagePath))
-    .slice(-1);
-
-  if (userMessagesWithFiles.length > 0) {
-    const lastFileMsg = userMessagesWithFiles[0];
-    const storagePath = lastFileMsg.attachments?.find((a) => a.storagePath)?.storagePath;
-    if (storagePath) {
-      const context = await retrieveFileContext(promptMessages, storagePath);
-      if (context) {
-        fileContext = context;
-      }
-    }
-  }
-
-  if (fileContext) {
-    systemMessages.push({
-      role: "system",
-      content: `The user provided a file. Use its content to answer any questions. The file text:\n\n${fileContext}`,
-      userId,
-      status: "completed",
-    });
-  }
-
-  let webGrounding: WebGroundingContext | null = null;
-  const supportsImages = provider?.startsWith("gemini");
-  if (webSearchEnabled && latestUserMessage) {
-    const result = await webSearchService.buildGroundingContext(
-      latestUserMessage,
-      chatMessages,
-      userId,
-      supportsImages,
-    );
-
-    if (result && "rejected" in result) {
-      console.warn(`[temporary chat] Web search rejected: ${result.reason} — ${result.message}`);
-    } else {
-      webGrounding = result;
-    }
-  }
-
-  if (webGrounding) {
-    systemMessages.push({
-      role: "system",
-      content: webGrounding.systemPrompt,
-      userId,
-      status: "completed",
-    });
-  }
-
-  return {
-    promptMessages: [...systemMessages, ...promptMessages],
-    webGrounding,
-  };
-};
 
 export const temporaryChatService = {
   async *streamTemporaryChat({
@@ -194,7 +80,7 @@ export const temporaryChatService = {
     ) {
       yield {
         type: "sources",
-        sources: webGrounding.sources.map((s) => ({
+        sources: webGrounding.sources.map((s: any) => ({
           id: s.id,
           url: s.url,
           title: s.title,
@@ -213,7 +99,7 @@ export const temporaryChatService = {
       const hasFiles = promptMessages.some((m) =>
         m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
       );
-      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(String(userId), hasFiles);
+      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(String(userId), hasFiles, lastUserMessage?.content || "");
 
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,

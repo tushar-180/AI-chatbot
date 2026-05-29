@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
-import { sharedChatService } from "../services/sharedChat.service";
+import { sharedChatService } from "../services/chat/sharedChat.service";
 
 const sendControllerError = (res: Response, error: any, fallbackMessage: string) => {
   if (error?.name === "NotFoundError") {

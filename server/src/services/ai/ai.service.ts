@@ -1,5 +1,5 @@
-import { AIServiceFactory } from "./ai/ai.factory";
-import { AppConfig } from "../models/AppConfig.model";
+import { AIServiceFactory } from "./ai.factory";
+import { AppConfig } from "../../models/AppConfig.model";
 
 export const aiService = {
   getAvailableProviders() {

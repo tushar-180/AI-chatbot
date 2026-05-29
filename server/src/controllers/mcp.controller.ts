@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { McpServer } from "../models/McpServer.model";
-import { mcpClientService } from "../services/mcpClient.service";
-import { userService } from "../services/user.service";
+import { mcpClientService } from "../services/mcp/mcpClient.service";
+import { userService } from "../services/user/user.service";
 
 export const mcpController = {
   /**

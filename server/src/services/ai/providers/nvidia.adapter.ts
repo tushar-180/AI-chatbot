@@ -7,7 +7,7 @@ import {
   supportsVision,
 } from "../constants";
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
-import { mcpClientService } from "../../mcpClient.service";
+import { mcpClientService } from "../../mcp/mcpClient.service";
 import {
   CORE_VELORA_INSTRUCTIONS,
   MCP_TOOL_ERROR_FALLBACK_MESSAGE,

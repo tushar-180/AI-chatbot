@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { memoryService } from "../services/memory.service";
+import { memoryService } from "../services/memory/memory.service";
 import { UserMemory } from "../models/UserMemory.model";
 
 const router = Router();
