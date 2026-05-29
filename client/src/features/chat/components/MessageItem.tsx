@@ -48,6 +48,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuSeparator,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
 import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
@@ -754,17 +755,17 @@ const MessageItem = ({
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+                        className="group flex items-center gap-2 rounded-lg border border-zinc-800/60 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white cursor-pointer"
                       >
                         {getProviderIcon(editProvider, 12)}
                         <span>{getModelOnlyName(availableProviders.find(p => p.id === editProvider)?.name || editProvider)}</span>
-                        <ChevronDown size={10} className="ml-0.5 text-slate-600 transition-colors" />
+                        <ChevronDown size={10} className="ml-0.5 text-zinc-500 transition-colors" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
                       side="top"
-                      className="w-56 rounded-xl border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl"
+                      className="w-56 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl"
                     >
                       {availableProviders.map((p) => (
                         <DropdownMenuItem
@@ -772,8 +773,8 @@ const MessageItem = ({
                           onClick={() => handleEditProviderChange(p.id)}
                           className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
                             editProvider === p.id
-                              ? "bg-white text-black"
-                              : "text-slate-400 hover:bg-white/5 hover:text-white"
+                              ? "!bg-white !text-black"
+                              : "text-zinc-400 hover:!bg-white/5 hover:!text-white focus:!bg-white/5 focus:!text-white"
                           }`}
                         >
                           {getProviderIcon(p.id, 12)}
@@ -786,10 +787,10 @@ const MessageItem = ({
                   <button
                     type="button"
                     onClick={() => setEditWebSearchEnabled(!editWebSearchEnabled)}
-                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                    className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer ${
                       editWebSearchEnabled
-                        ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20"
-                        : "border-white/10 bg-white/5 text-slate-500 hover:border-white/20 hover:bg-white/10 hover:text-white"
+                        ? "border-zinc-900 dark:border-white bg-zinc-900 dark:bg-white text-white dark:text-black"
+                        : "border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:border-zinc-350 dark:hover:border-white/20 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white"
                     }`}
                   >
                     <Globe size={12} />
@@ -806,7 +807,7 @@ const MessageItem = ({
                     e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
                   }}
                   onKeyDown={handleKeyDown}
-                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-y-auto p-0 text-white placeholder-slate-500 min-h-[1.5em] max-h-[200px]"
+                  className="w-full bg-transparent border-none focus:ring-0 outline-none focus:outline-none resize-none overflow-y-auto p-0 text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 min-h-[1.5em] max-h-[200px]"
                   rows={1}
                 />
 
@@ -820,7 +821,7 @@ const MessageItem = ({
                       return (
                         <div
                           key={`${att.url}-${i}`}
-                          className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5"
+                          className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5"
                         >
                           {isImage ? (
                             <img
@@ -830,8 +831,8 @@ const MessageItem = ({
                             />
                           ) : (
                             <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
-                              <Icon size={20} className="text-slate-300 shrink-0" />
-                              <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
+                              <Icon size={20} className="text-zinc-400 dark:text-zinc-300 shrink-0" />
+                              <span className="mt-1 line-clamp-2 text-[9px] text-zinc-500 dark:text-zinc-400">
                                 {att.name}
                               </span>
                             </div>
@@ -839,7 +840,7 @@ const MessageItem = ({
                           <button
                             type="button"
                             onClick={() => removeAttachment(i)}
-                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity cursor-pointer"
                           >
                             <X size={12} />
                           </button>
@@ -852,15 +853,15 @@ const MessageItem = ({
                 {/* Attached File Preview */}
                 {attachedFile && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex flex-col items-center justify-center">
-                      <FileText size={20} className="text-slate-300 shrink-0" />
-                      <span className="mt-1 line-clamp-2 text-[9px] text-slate-400 text-center">
+                    <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-white/5 flex flex-col items-center justify-center">
+                      <FileText size={20} className="text-zinc-400 dark:text-zinc-300 shrink-0" />
+                      <span className="mt-1 line-clamp-2 text-[9px] text-zinc-500 dark:text-zinc-400 text-center">
                         {attachedFile.name}
                       </span>
                       <button
                         type="button"
                         onClick={() => setAttachedFile(null)}
-                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity cursor-pointer"
                       >
                         <X size={12} />
                       </button>
@@ -868,7 +869,7 @@ const MessageItem = ({
                   </div>
                 )}
 
-                <div className="flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+                <div className="flex items-center justify-between gap-2 border-t border-zinc-150 dark:border-white/10 pt-3">
                   <div className="flex items-center gap-2">
                     <input
                       type="file"
@@ -882,11 +883,11 @@ const MessageItem = ({
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isUploading}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-transparent"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-transparent cursor-pointer"
                         aria-label="Upload file"
                       >
                         {isUploading ? (
-                          <Loader2 size={16} className="animate-spin text-white" />
+                          <Loader2 size={16} className="animate-spin text-zinc-900 dark:text-white" />
                         ) : (
                           <Paperclip size={16} />
                         )}
@@ -894,25 +895,25 @@ const MessageItem = ({
                     )}
                   </div>
                   <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleEditCancel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
-                  >
-                    <X size={14} />
-                    Cancel
-                  </button>
+                    <button
+                      onClick={handleEditCancel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-white/5 hover:bg-zinc-200 dark:hover:bg-white/10 text-xs font-medium text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
 
-                  <button
-                    onClick={handleEditSave}
-                    disabled={!editContent.trim()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
-                  >
-                    <Check size={14} />
-                    Save
-                  </button>
+                    <button
+                      onClick={handleEditSave}
+                      disabled={!editContent.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 dark:bg-white hover:bg-zinc-800 dark:hover:bg-zinc-100 disabled:opacity-50 disabled:hover:bg-zinc-900 text-xs font-medium text-white dark:text-black transition-colors cursor-pointer"
+                    >
+                      <Check size={14} />
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
             ) : isFailed ? (
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-red-300">
@@ -1064,7 +1065,7 @@ const MessageItem = ({
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
+                      className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-white/5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
                       title="Regenerate response"
                     >
                       <RotateCcw size={17} />
@@ -1073,49 +1074,55 @@ const MessageItem = ({
                   <DropdownMenuContent
                     side="right"
                     align="end"
-                    className="w-48 bg-slate-900 border-slate-800"
+                    className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
                     collisionPadding={{ top: 100, bottom: 200 }}
                   >
                     <DropdownMenuCheckboxItem
                       checked={retryWebSearchEnabled}
                       onCheckedChange={setRetryWebSearchEnabled}
                       onSelect={(e) => e.preventDefault()}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=checked]:!text-white cursor-pointer"
                     >
                       <Globe size={14} className="mr-2 opacity-70" />
                       Web Search
                     </DropdownMenuCheckboxItem>
                     
-                    <DropdownMenuSeparator className="bg-slate-800" />
+                    <DropdownMenuSeparator className="bg-zinc-800" />
                     
                     <DropdownMenuItem
                       onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white cursor-pointer"
                     >
                       <RotateCcw size={14} className="mr-2 opacity-70" />
                       Try Again
                     </DropdownMenuItem>
 
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer">
+                      <DropdownMenuSubTrigger className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=open]:!bg-white/5 data-[state=open]:!text-white cursor-pointer">
                         <Bot size={14} className="mr-2 opacity-70" />
                         Select Another Model
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent 
-                        className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
-                        collisionPadding={{ top: 100, bottom: 200 }}
-                      >
-                        {availableProviders.map((provider) => (
-                          <DropdownMenuItem
-                            key={provider.id}
-                            onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
-                            className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
-                          >
-                            {getProviderIcon(provider.id, 12)}
-                            <span className="capitalize">{getModelOnlyName(provider.name)}</span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent 
+                          className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
+                          collisionPadding={{ top: 100, bottom: 200 }}
+                        >
+                          {availableProviders.map((provider) => (
+                            <DropdownMenuItem
+                              key={provider.id}
+                              onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                                provider.id === msg.model
+                                  ? "!bg-white !text-black"
+                                  : "text-zinc-400 hover:!bg-white/5 hover:!text-white focus:!bg-white/5 focus:!text-white"
+                              }`}
+                            >
+                              {getProviderIcon(provider.id, 12)}
+                              <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
                     </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>

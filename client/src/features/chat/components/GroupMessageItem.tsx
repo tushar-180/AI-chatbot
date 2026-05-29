@@ -32,6 +32,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuSeparator,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
@@ -912,8 +913,8 @@ const GroupMessageItem = ({
             {isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px] relative">
                 {showModelDropdown && dropdownOptions.length > 0 && (
-                  <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
-                    <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                  <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-zinc-800/60 bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
+                    <div className="mb-1.5 flex items-center justify-between border-b border-zinc-800/60 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                       <span className="flex items-center gap-1.5">
                         <Sparkles size={10} className="text-emerald-400" />
                         Choose Mention
@@ -921,7 +922,7 @@ const GroupMessageItem = ({
                       <button
                         type="button"
                         onClick={() => setShowModelDropdown(false)}
-                        className="text-slate-600 hover:text-white transition-colors text-[10px]"
+                        className="text-zinc-500 hover:text-white transition-colors text-[10px] cursor-pointer"
                       >
                         ✕
                       </button>
@@ -939,7 +940,7 @@ const GroupMessageItem = ({
                             className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
                               isActive 
                                 ? "bg-white text-black font-semibold shadow-md shadow-white/5" 
-                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                : "text-zinc-400 hover:bg-white/5 hover:text-white"
                             }`}
                           >
                             {opt.type === "model" ? (
@@ -1284,49 +1285,55 @@ const GroupMessageItem = ({
                   <DropdownMenuContent
                     side="right"
                     align="end"
-                    className="w-48 bg-slate-900 border-slate-800"
+                    className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
                     collisionPadding={{ top: 100, bottom: 200 }}
                   >
                     <DropdownMenuCheckboxItem
                       checked={retryWebSearchEnabled}
                       onCheckedChange={setRetryWebSearchEnabled}
                       onSelect={(e) => e.preventDefault()}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=checked]:!text-white cursor-pointer"
                     >
                       <Globe size={14} className="mr-2 opacity-70" />
                       Web Search
                     </DropdownMenuCheckboxItem>
                     
-                    <DropdownMenuSeparator className="bg-slate-800" />
+                    <DropdownMenuSeparator className="bg-zinc-800" />
                     
                     <DropdownMenuItem
                       onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white cursor-pointer"
                     >
                       <RotateCcw size={14} className="mr-2 opacity-70" />
                       Try Again
                     </DropdownMenuItem>
 
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer">
+                      <DropdownMenuSubTrigger className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=open]:!bg-white/5 data-[state=open]:!text-white cursor-pointer">
                         <Bot size={14} className="mr-2 opacity-70" />
                         Select Another Model
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent 
-                        className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
-                        collisionPadding={{ top: 100, bottom: 200 }}
-                      >
-                        {availableProviders.map((provider) => (
-                          <DropdownMenuItem
-                            key={provider.id}
-                            onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
-                            className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
-                          >
-                            {getProviderIcon(provider.id, 12)}
-                            <span className="capitalize">{getModelOnlyName(provider.name)}</span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent 
+                          className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
+                          collisionPadding={{ top: 100, bottom: 200 }}
+                        >
+                          {availableProviders.map((provider) => (
+                            <DropdownMenuItem
+                              key={provider.id}
+                              onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                                provider.id === msg.model
+                                  ? "!bg-white !text-black"
+                                  : "text-zinc-400 hover:!bg-white/5 hover:!text-white focus:!bg-white/5 focus:!text-white"
+                              }`}
+                            >
+                              {getProviderIcon(provider.id, 12)}
+                              <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
                     </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>
