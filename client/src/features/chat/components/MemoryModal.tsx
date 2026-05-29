@@ -44,19 +44,19 @@ const LIMIT = 20;
 const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
   const { user } = useUser();
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isMoreLoading, setIsMoreLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [skip, setSkip] = useState(0);
+  const memorySkipRef = React.useRef(0);
   const [mouseDownOnBackdrop, setMouseDownOnBackdrop] = useState(false);
 
   const MAX_CAPACITY = 100;
-  const memoryCount = memories.length;
-  const percentage = Math.min((memoryCount / MAX_CAPACITY) * 100, 100);
+  const percentage = Math.min((totalCount / MAX_CAPACITY) * 100, 100);
 
   const getProgressColor = () => {
-    if (percentage < 50) return "bg-emerald-500";
-    if (percentage < 80) return "bg-amber-500";
+    if (percentage < 80) return "bg-emerald-500";
+    if (percentage < 100) return "bg-orange-500";
     return "bg-rose-500";
   };
 
@@ -66,25 +66,29 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
 
       if (isInitial) {
         setIsLoading(true);
-        setSkip(0);
+        memorySkipRef.current = 0;
       } else {
         setIsMoreLoading(true);
       }
 
       try {
-        const currentSkip = isInitial ? 0 : skip + LIMIT;
+        const currentSkip = isInitial ? 0 : memorySkipRef.current + LIMIT;
         const { data } = await api.get("/memory", {
           params: { limit: LIMIT, skip: currentSkip },
         });
 
+        const fetchedMemories = data.memories || (Array.isArray(data) ? data : []);
+        const count = data.totalCount ?? fetchedMemories.length;
+
         if (isInitial) {
-          setMemories(data);
+          setMemories(fetchedMemories);
         } else {
-          setMemories((prev) => [...prev, ...data]);
+          setMemories((prev) => [...prev, ...fetchedMemories]);
         }
 
-        setHasMore(data.length === LIMIT);
-        setSkip(currentSkip);
+        setTotalCount(count);
+        setHasMore(fetchedMemories.length === LIMIT);
+        memorySkipRef.current = currentSkip;
       } catch (error) {
         console.error("Memory Fetch Error:", error);
         toast.error("Failed to sync neural bank");
@@ -93,14 +97,21 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
         setIsMoreLoading(false);
       }
     },
-    [user, skip],
+    [user],
   );
 
   const deleteMemory = async (id: string) => {
     if (!user) return;
     try {
       await api.delete(`/memory/${id}`);
-      setMemories((prev) => prev.filter((m) => m._id !== id));
+      setMemories((prev) => {
+        const next = prev.filter((m) => m._id !== id);
+        if (next.length === 0 && totalCount > 1) {
+          fetchMemories(true);
+        }
+        return next;
+      });
+      setTotalCount((prev) => Math.max(0, prev - 1));
       toast.success("Memory purged successfully");
     } catch (error: any) {
       if (error?.response?.status === 404) {
@@ -142,7 +153,8 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
       const root = document.querySelector(".min-h-screen");
       if (root) root.removeAttribute("inert");
     };
-  }, [isOpen, user, onClose]); // Only run when modal opens or user changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]); // Only run when modal opens
 
   if (!isOpen) return null;
 
@@ -184,9 +196,9 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
               Memory Capacity
             </span>
             <span
-              className={`text-[10px] font-bold uppercase tracking-widest ${percentage > 80 ? "text-rose-400" : "text-zinc-500"}`}
+              className={`text-[10px] font-bold uppercase tracking-widest ${percentage >= 100 ? "text-rose-400" : "text-zinc-500"}`}
             >
-              {memoryCount} / {MAX_CAPACITY}
+              {totalCount} / {MAX_CAPACITY}
             </span>
           </div>
           <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
@@ -206,7 +218,7 @@ const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => {
                 Synchronizing...
               </p>
             </div>
-          ) : memories.length === 0 ? (
+          ) : totalCount === 0 ? (
             <div className="text-center py-20">
               <Brain className="w-8 h-8 text-zinc-800 mx-auto mb-4 opacity-20" />
               <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-[0.3em]">

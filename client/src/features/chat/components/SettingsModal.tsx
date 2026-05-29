@@ -288,10 +288,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Memory State
   const [memories, setMemories] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [isMemoryLoading, setIsMemoryLoading] = useState(true);
   const [isMoreMemoryLoading, setIsMoreMemoryLoading] = useState(false);
   const [hasMoreMemory, setHasMoreMemory] = useState(true);
   const memorySkipRef = React.useRef(0);
+
+  const MAX_CAPACITY = 100;
+  const memoryPercentage = Math.min((totalCount / MAX_CAPACITY) * 100, 100);
+
+  const getMemoryProgressColor = () => {
+    if (memoryPercentage < 80) return "bg-emerald-500";
+    if (memoryPercentage < 100) return "bg-orange-500";
+    return "bg-rose-500";
+  };
 
   // Local Archive State
   const [localArchivedChats, setLocalArchivedChats] = useState<any[]>([]);
@@ -357,13 +367,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           params: { limit: LIMIT, skip: currentSkip },
         });
 
+        const fetchedMemories = data.memories || (Array.isArray(data) ? data : []);
+        const count = data.totalCount ?? fetchedMemories.length;
+
         if (isInitial) {
-          setMemories(data);
+          setMemories(fetchedMemories);
         } else {
-          setMemories((prev) => [...prev, ...data]);
+          setMemories((prev) => [...prev, ...fetchedMemories]);
         }
 
-        setHasMoreMemory(data.length === LIMIT);
+        setTotalCount(count);
+        setHasMoreMemory(fetchedMemories.length === LIMIT);
         memorySkipRef.current = currentSkip;
       } catch (error) {
         console.error("Memory Fetch Error:", error);
@@ -517,7 +531,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     } else if (deleteType === "memory") {
       try {
         await Promise.all(ids.map((id) => api.delete(`/memory/${id}`)));
-        setMemories((prev) => prev.filter((m) => !ids.includes(m._id)));
+        setMemories((prev) => {
+          const next = prev.filter((m) => !ids.includes(m._id));
+          if (next.length === 0 && totalCount > ids.length) {
+            fetchMemories(true);
+          }
+          return next;
+        });
+        setTotalCount((prev) => Math.max(0, prev - ids.length));
         toast.success(
           ids.length > 1 ? "Memory fragments purged" : "Memory fragment purged",
         );
@@ -545,15 +566,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       if (activeTab === "sharing" || activeTab === "groups") fetchSharingData();
       if (activeTab === "mcp") fetchMcpServers();
     }
-  }, [
-    isOpen,
-    activeTab,
-    fetchPersonalization,
-    fetchMemories,
-    fetchArchivedChats,
-    fetchSharingData,
-    fetchMcpServers,
-  ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeTab]);
 
   useEffect(() => {
     setSelectedIds([]);
@@ -1020,14 +1034,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
                     <div className="text-left sm:text-right">
-                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                        {memories.length} / 100
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${memoryPercentage >= 100 ? "text-rose-400" : "text-zinc-500"}`}>
+                        {totalCount} / {MAX_CAPACITY}
                       </p>
                       <div className="h-1 w-24 bg-white/5 rounded-full mt-1 overflow-hidden">
                         <div
-                          className="h-full bg-emerald-500"
+                          className={`h-full transition-all duration-500 ${getMemoryProgressColor()}`}
                           style={{
-                            width: `${Math.min(memories.length, 100)}%`,
+                            width: `${memoryPercentage}%`,
                           }}
                         />
                       </div>
@@ -1056,7 +1070,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       Accessing Core fragments...
                     </p>
                   </div>
-                ) : memories.length === 0 ? (
+                ) : totalCount === 0 ? (
                   <div className="text-center py-20 bg-white/2 border border-dashed border-zinc-800/40 rounded-3xl">
                     <Brain className="w-10 h-10 text-zinc-800 mx-auto mb-4 opacity-50" />
                     <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest">
