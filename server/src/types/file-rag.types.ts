@@ -14,3 +14,7 @@ export interface ParseOptions {
   maxLength?: number;
   timeoutMs?: number;
 }
+
+export type ExcelCell = string | number | boolean | Date | null;
+
+export type ExcelRow = ExcelCell[];

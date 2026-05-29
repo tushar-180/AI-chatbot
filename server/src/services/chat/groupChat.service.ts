@@ -13,7 +13,7 @@ import {
 } from "../../modules/web-search";
 import { groupStreamRegistry } from "../streams/streamRegistry.service";
 import type { ChatMessage } from "../../types/chat.types";
-import type { AIMessage, AIRole } from "../ai/types";
+import type { AIMessage, AIRole } from "../../types/ai.types";
 import { parseMultimedia } from "../../utils/chatHistory";
 import crypto from "crypto";
 import { processAttachedFile } from "../../modules/file-rag/fileHandler";

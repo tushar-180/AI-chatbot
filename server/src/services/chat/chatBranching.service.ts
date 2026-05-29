@@ -4,17 +4,18 @@ import { buildPromptMessages } from "./promptBuilder.service";
 import { streamAssistantResponse } from "./chatResponseHandler.service";
 import { processAttachedFile } from "../../modules/file-rag/fileHandler";
 import { buildGroundingMetadata, finalizeGroundedResponse } from "../../utils/webGrounding";
-import { serializePromptMessages, calculateUsage, TokenUsage } from "../../utils/tokenCounter";
+import { serializePromptMessages, calculateUsage } from "../../utils/tokenCounter";
 import {
   nextVersionForParent,
   resolveActiveBranch,
   getContextBeforeMessage,
-  type RawMessage,
 } from "../../utils/branchUtils";
+import type { RawMessage } from "../../types/branch.types";
 import { parseMultimedia } from "../../utils/chatHistory";
 import { createTitle, resolveAssistantTokens, createAssistantMessage } from "./chat.service";
 import { requireMessage, requireRequestId } from "../../utils/validation";
 import { ChatMessage, EditMessageInput } from "../../types/chat.types";
+import type { TokenUsage } from "../../types/token.types";
 
 const requireChat = async (chatId: string) => {
   const chat = await chatRepository.findById(chatId);

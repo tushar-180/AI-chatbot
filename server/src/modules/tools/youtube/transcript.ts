@@ -4,7 +4,7 @@ import type {
   YouTubeTranscriptOptions,
   YouTubeTranscriptResult,
   TranscriptEntry,
-} from './types';
+} from '../../../types/youtube.types';
 
 /**
  * Validates that the input is a valid YouTube video ID.

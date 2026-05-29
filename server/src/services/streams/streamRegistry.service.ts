@@ -1,19 +1,6 @@
 import { EventEmitter } from "events";
 import type { ActiveStream } from "../../types/chat.types";
-
-export interface ActiveGroupStream {
-  groupId: string;
-  tempId: string;
-  assistantUsername: string;
-  fullResponse: string;
-  webSearchEnabled: boolean;
-  model: string;
-  requesterId?: string;
-  abortController: AbortController;
-  promptMessages?: any[];
-  targetProvider?: string;
-  clerkId?: string;
-}
+import type { ActiveGroupStream } from "../../types/stream.types";
 
 const activeStreams = new Map<string, ActiveStream>();
 const activeChatRequests = new Map<string, string>();

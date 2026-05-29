@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../../../types/ai.types";
 import {
   AI_PROVIDERS,
   getDisplayProviderName,

@@ -1,23 +1,5 @@
 import { checkQuota, getQuotaConfig } from "./rateLimiter";
-
-export type QuotaUIStatus =
-    | {
-          allowed: false;
-          reason:
-              | "global_quota_exceeded"
-              | "user_quota_exceeded"
-              | "cooldown_active"
-              | "monthly_credits_exhausted";
-          scope: "global" | "user" | "cooldown" | "monthly";
-          message: string;
-          retryAfterMs?: number;
-      }
-    | {
-          allowed: true;
-          scope: "ok";
-          remainingGlobal: number;
-          remainingUser?: number;
-      };
+import type { QuotaUIStatus } from "../../types/quota.types";
 
 export const getQuotaStatus = async (
     userId?: string,

@@ -31,22 +31,7 @@
  */
 
 import { randomUUID } from "crypto";
-
-export type RawMessage = {
-  _id: string;
-  id?: string;
-  role: string;
-  content: string;
-  status?: string;
-  createdAt: Date | string;
-  branchId?: string | null;
-  parentId?: string | null;
-  retryOf?: string | null;
-  editedFrom?: string | null;
-  version?: number;
-  isActive?: boolean;
-  [key: string]: any;
-};
+import type { RawMessage } from "../types/branch.types";
 
 /** Generate a new unique branchId. */
 export const newBranchId = (): string => randomUUID();

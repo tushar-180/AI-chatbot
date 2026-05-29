@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { User } from "../models/User.model";
 import { Chat, Message, TokenUsageRecord } from "../models/Chat.model";
 import { AI_PROVIDERS } from "../services/ai/constants";
+import type { ModelUsageItem, UserAggregatedStats } from "../types/admin.types";
 
 const normalizeModelName = (modelName: string): string => {
   if (!modelName) return "None";
@@ -121,21 +122,6 @@ export const adminController = {
           } 
         },
       ]);
-
-      // Normalize and find user-specific favorite model and breakdown
-      interface ModelUsageItem {
-        model: string;
-        count: number;
-        tokens: number;
-        promptTokens: number;
-        completionTokens: number;
-      }
-
-      interface UserAggregatedStats {
-        favoriteModel: string;
-        favoriteModelCount: number;
-        modelUsage: ModelUsageItem[];
-      }
 
       const userModelCounts = new Map<string, Map<string, ModelUsageItem>>();
       for (const item of userStats) {

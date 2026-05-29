@@ -2,7 +2,7 @@ import type {
     ConfidenceEstimate,
     SearchSource,
     WebGroundingContext,
-} from "./webSearch.types";
+} from "../../types/web-search.types";
 
 const clamp = (value: number, min: number, max: number) =>
     Math.min(max, Math.max(min, value));

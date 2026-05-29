@@ -4,7 +4,7 @@
 
 import { aiService } from "../../services/ai/ai.service";
 import type { ChatMessage } from "../../types/chat.types";
-import type { ResolvedSearchQuery } from "./webSearch.types";
+import type { ResolvedSearchQuery } from "../../types/web-search.types";
 import { QUERY_RESOLUTION_PROMPT } from "./webSearch.prompts";
 
 /**

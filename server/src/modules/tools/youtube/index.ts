@@ -8,4 +8,4 @@ export type {
   YouTubeErrorCode,
   TranscriptEntry,
   YouTubeToolConfig,
-} from './types';
+} from '../../../types/youtube.types';

@@ -1,6 +1,6 @@
 import { projectRepository } from "../../repositories/project.repository";
 import { CreateProjectInput, UpdateProjectInput } from "../../types/project.types";
-import { Chat, Message } from "../../models/Chat.model";
+import { chatRepository } from "../../repositories/chat.repository";
 
 export const projectService = {
   async createProject(userId: string, data: CreateProjectInput) {
@@ -19,6 +19,12 @@ export const projectService = {
     return project;
   },
 
+  async getProjectWithChats(userId: string, projectId: string) {
+    const project = await this.getProject(userId, projectId);
+    const chats = await chatRepository.findAllByProjectAndUser(projectId, userId);
+    return { project, chats };
+  },
+
   async getAllProjects(userId: string) {
     if (!userId) throw new Error("User ID is required");
     return await projectRepository.findAllByUserId(userId);
@@ -31,19 +37,21 @@ export const projectService = {
   },
 
   async deleteProject(userId: string, projectId: string) {
-    // Verify ownership
     await this.getProject(userId, projectId);
-    
-    // Find all chats belonging to the project
-    const chats = await Chat.find({ projectId });
-    const chatIds = chats.map((chat) => chat._id);
-    
-    // Delete all messages belonging to those chats
-    if (chatIds.length > 0) {
-      await Message.deleteMany({ chatId: { $in: chatIds } });
-      await Chat.deleteMany({ _id: { $in: chatIds } });
-    }
-    
+    await chatRepository.deleteManyByProjectId(projectId);
     return await projectRepository.deleteById(projectId);
+  },
+
+  async moveChatToProject(userId: string, projectId: string, chatId: string) {
+    await this.getProject(userId, projectId);
+    const chat = await chatRepository.moveToProject(chatId, userId, projectId);
+
+    if (!chat) {
+      const error = new Error("Chat not found");
+      error.name = "NotFoundError";
+      throw error;
+    }
+
+    return chat;
   },
 };
