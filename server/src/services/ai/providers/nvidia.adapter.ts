@@ -297,7 +297,6 @@ export class NvidiaAdapter implements IAIService {
             hasToolCalls = false;
 
             let streamOptions: { include_usage: boolean } | undefined = { include_usage: true };
-            console.log("NVIDIA request messages:", JSON.stringify(finalMessages, null, 2));
 
             const stream = await adapter.openai.chat.completions.create(
               {

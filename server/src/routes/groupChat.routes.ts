@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { GroupChatController } from "../controllers/groupChat.controller";
 import multer from "multer";
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+import os from "node:os";
+
+const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const router = Router();
 
