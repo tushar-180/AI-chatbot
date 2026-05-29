@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/react";
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type SubmitEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
@@ -7,11 +7,15 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Copy,
   Cpu,
   Database,
+  Download,
   EyeOff,
+  FileJson,
+  FileSpreadsheet,
   Flame,
   Gauge,
   Paperclip,
@@ -93,6 +97,12 @@ const estimateUsage = (prompt: string, output: string) => ({
   totalTokens: Math.round((prompt.length + output.length) / 4),
 });
 
+const truncateString = (str: string, maxLength = 100) => {
+  if (!str) return "";
+  const trimmed = str.trim();
+  return trimmed.length > maxLength ? `${trimmed.substring(0, maxLength)}...` : trimmed;
+};
+
 const CompareModeView = ({
   currentChatId,
   selectedProvider,
@@ -112,6 +122,8 @@ const CompareModeView = ({
   const [replacingModelId, setReplacingModelId] = useState<string | null>(null);
   const compareFileInputRef = useRef<HTMLInputElement>(null);
   const compareAbortControllersRef = useRef<Record<string, AbortController>>({});
+  const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (compareModels.length > 0) return;
@@ -142,6 +154,126 @@ const CompareModeView = ({
       compareAbortControllersRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(event.target as Node)) {
+        setIsExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const exportToJSON = () => {
+    try {
+      const dataToExport = {
+        comparisonId: `compare-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        prompt: truncateString(comparePrompt),
+        models: compareModels.map((modelId) => {
+          const state = compareStreams[modelId] || createInitialStreamState();
+          return {
+            modelId,
+            brandName: getModelBrandName(modelId),
+            modelName: getCleanModelName(modelId),
+            status: state.status,
+            latencyMs: state.ttft,
+            speedTokensPerSecond: state.speed,
+            tokens: state.usage,
+            durationSeconds: state.duration,
+            responseText: truncateString(state.text),
+            error: state.error,
+          };
+        }),
+      };
+
+      const jsonString = JSON.stringify(dataToExport, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `model_comparison_${Date.now()}.json`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Successfully exported comparison to JSON!");
+      setIsExportDropdownOpen(false);
+    } catch (error) {
+      console.error("Failed to export to JSON:", error);
+      toast.error("Failed to export to JSON.");
+    }
+  };
+
+  const escapeCsvCell = (val: any): string => {
+    if (val === null || val === undefined) return "";
+    let str = String(val);
+    str = str.replace(/"/g, '""');
+    if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
+      return `"${str}"`;
+    }
+    return str;
+  };
+
+  const exportToCSV = () => {
+    try {
+      const headers = [
+        "Prompt",
+        "Model ID",
+        "Model Name",
+        "Brand",
+        "Status",
+        "Latency (ms)",
+        "Tokens (Prompt)",
+        "Tokens (Completion)",
+        "Tokens (Total)",
+        "Speed (t/s)",
+        "Duration (s)",
+        "Response/Output",
+        "Error",
+      ];
+
+      const rows = compareModels.map((modelId) => {
+        const state = compareStreams[modelId] || createInitialStreamState();
+        return [
+          truncateString(comparePrompt),
+          modelId,
+          getCleanModelName(modelId),
+          getModelBrandName(modelId),
+          state.status,
+          state.ttft !== null ? state.ttft : "",
+          state.usage ? state.usage.promptTokens : "",
+          state.usage ? state.usage.completionTokens : "",
+          state.usage ? state.usage.totalTokens : "",
+          state.speed !== null ? state.speed : "",
+          state.duration !== null ? state.duration : "",
+          truncateString(state.text),
+          state.error || "",
+        ];
+      });
+
+      const csvContent = [
+        headers.map(escapeCsvCell).join(","),
+        ...rows.map((row) => row.map(escapeCsvCell).join(",")),
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `model_comparison_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Successfully exported comparison to CSV!");
+      setIsExportDropdownOpen(false);
+    } catch (error) {
+      console.error("Failed to export to CSV:", error);
+      toast.error("Failed to export to CSV.");
+    }
+  };
 
   const updateSingleStream = (modelId: string, updates: Partial<StreamState>) => {
     setCompareStreams((prev) => ({
@@ -458,7 +590,7 @@ const CompareModeView = ({
     setActivePlusCardDropdown(false);
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isComparing) {
       handleStopCompareComparison();
@@ -477,6 +609,50 @@ const CompareModeView = ({
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-5 pb-36 md:px-6 md:py-6 z-10">
+        {!isComparing && Object.values(compareStreams).some((state) => state.text.trim().length > 0) && (
+          <div className="relative z-40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 p-4 rounded-xl border border-white/[0.06] bg-zinc-950/40 backdrop-blur-md">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.05] bg-white/[0.02] text-purple-400">
+                <Sparkles size={14} className="animate-pulse" />
+              </div>
+              <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Comparison Report</h2>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Evaluate metrics and export results</p>
+              </div>
+            </div>
+
+            <div className="relative" ref={exportDropdownRef}>
+              <button
+                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-zinc-900/60 hover:bg-zinc-800/80 px-4 text-xs font-semibold text-zinc-200 hover:text-white transition cursor-pointer select-none"
+              >
+                <Download size={13} />
+                <span>Export Analysis</span>
+                <ChevronDown size={12} className={`transition-transform duration-200 ${isExportDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isExportDropdownOpen && (
+                <div className="absolute right-0 mt-1.5 w-44 rounded-lg border border-white/[0.08] bg-zinc-950 p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-top-1 duration-100">
+                  <button
+                    onClick={exportToJSON}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-semibold text-zinc-400 hover:bg-white/5 hover:text-white transition cursor-pointer"
+                  >
+                    <FileJson size={14} className="text-amber-400" />
+                    <span>Export as JSON</span>
+                  </button>
+                  <button
+                    onClick={exportToCSV}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-xs font-semibold text-zinc-400 hover:bg-white/5 hover:text-white transition cursor-pointer"
+                  >
+                    <FileSpreadsheet size={14} className="text-emerald-400" />
+                    <span>Export as CSV</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className={`grid ${getCompareGridClass()} gap-4 md:gap-5 h-full min-h-[360px]`}>
           {compareModels.map((modelId) => {
             const state = compareStreams[modelId] || createInitialStreamState();
