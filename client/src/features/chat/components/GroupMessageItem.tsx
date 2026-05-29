@@ -44,6 +44,8 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { supportsVision } from "@/features/chat/constants/chat.constants";
@@ -826,6 +828,11 @@ const GroupMessageItem = ({
   // Escape any unrecognized HTML tags to prevent custom element warning in React & preserve plain text display
   processedContent = escapeUnrecognizedHtmlTags(processedContent);
 
+  // Convert LaTeX block math \[ \] to $$ $$
+  processedContent = processedContent.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+  // Convert LaTeX inline math \( \) to $ $
+  processedContent = processedContent.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+
   const citationComponents = isAssistant
     ? {
         ...assistantMarkdownComponents,
@@ -1089,8 +1096,8 @@ const GroupMessageItem = ({
                 </span>
 
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
                   components={assistantMarkdownComponents}
                 >
                   {msg.content ||
@@ -1121,8 +1128,8 @@ const GroupMessageItem = ({
                         />
                       ) : (
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeRaw, rehypeKatex]}
                           components={citationComponents}
                         >
                           {processedContent}

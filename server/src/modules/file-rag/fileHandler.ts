@@ -20,8 +20,18 @@ export async function processAttachedFile(
     fileText: string | null;
     attachments: Attachment[];
 }> {
-    const fileHash = sha256(file.buffer);
-    const existingStoragePath = await chatRepository.findAttachmentByHash(userId, fileHash);
+    let fileBuffer: Buffer;
+    if (file.buffer) {
+        fileBuffer = file.buffer;
+    } else if (file.path) {
+        fileBuffer = await fs.readFile(file.path);
+    } else {
+        throw new Error("No file buffer or path provided.");
+    }
+
+    try {
+        const fileHash = sha256(fileBuffer);
+        const existingStoragePath = await chatRepository.findAttachmentByHash(userId, fileHash);
 
     let storagePath = "";
     let url = "";
@@ -35,7 +45,7 @@ export async function processAttachedFile(
         const tmpDir = path.join("/tmp", "velora-files");
         await fs.mkdir(tmpDir, { recursive: true });
         localPath = path.join(tmpDir, `${fileHash}-${file.originalname}`);
-        await fs.writeFile(localPath, file.buffer);
+        await fs.writeFile(localPath, fileBuffer);
     } catch (err) {
         console.warn(`[FileHandler] Failed to save local file for MCP servers:`, err);
     }
@@ -57,7 +67,7 @@ export async function processAttachedFile(
     } else {
         // 2. Upload to Supabase (using fileHash to prevent race conditions)
         const uploaded = await supabaseStorageService.uploadDocument(
-            file.buffer,
+            fileBuffer,
             file.originalname,
             file.mimetype,
             userId,
@@ -73,7 +83,7 @@ export async function processAttachedFile(
         try {
             // Hard limit text to 100k chars (~25k tokens) to guarantee we stay under the 30k TPM limit
             // and complete the embedding process in a few seconds.
-            const parsed = await parseFile(file.buffer, file.originalname, file.mimetype, { maxLength: 100000 });
+            const parsed = await parseFile(fileBuffer, file.originalname, file.mimetype, { maxLength: 100000 });
 
             if (!parsed.success) {
                 // If it's an unsupported file type (like an image), we gracefully bypass RAG.
@@ -164,6 +174,11 @@ export async function processAttachedFile(
         fileText: null, // No longer returning full text, relying on RAG
         attachments: [...existingAttachments, newAttachment],
     };
+    } finally {
+        if (file.path) {
+            await fs.unlink(file.path).catch(err => console.error(`Failed to delete temp file ${file.path}:`, err));
+        }
+    }
 }
 
 export async function cleanupChatFiles(chatId: string): Promise<void> {

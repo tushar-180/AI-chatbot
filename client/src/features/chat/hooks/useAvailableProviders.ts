@@ -44,6 +44,7 @@ export const useAvailableProviders = (
   const [availableProviders, setAvailableProviders] = useState<Provider[]>(
     cachedProviders || [],
   );
+  const [isLoadingProviders, setIsLoadingProviders] = useState<boolean>(!cachedProviders);
 
   useEffect(() => {
     listeners.push(setAvailableProviders);
@@ -59,6 +60,7 @@ export const useAvailableProviders = (
     }
 
     const fetchProviders = async () => {
+      setIsLoadingProviders(true);
       if (!providersPromise) {
         providersPromise = api
           .get("/ai/providers")
@@ -80,6 +82,8 @@ export const useAvailableProviders = (
         }
       } catch (err) {
         console.error("Error fetching providers", err);
+      } finally {
+        setIsLoadingProviders(false);
       }
     };
 
@@ -110,5 +114,6 @@ export const useAvailableProviders = (
   return {
     availableProviders,
     currentProvider,
+    isLoadingProviders,
   };
 };

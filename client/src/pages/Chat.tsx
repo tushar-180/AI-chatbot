@@ -26,7 +26,7 @@ import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
-import { resolveActiveBranch } from "@/features/chat/utils/branchUtils";
+
 
 /**
  * Chat Page Component

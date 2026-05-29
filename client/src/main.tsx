@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import "katex/dist/katex.min.css";
 import App from "./App.tsx";
 import { ClerkProvider } from "@clerk/react";
 import { Toaster } from "@/components/ui/sonner";
