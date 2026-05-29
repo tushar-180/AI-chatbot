@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { attachmentSchema } from "./schemas/attachment.schema";
 
 const groupMessageSchema = new mongoose.Schema(
   {
@@ -52,17 +53,7 @@ const groupMessageSchema = new mongoose.Schema(
         type: { type: String, enum: ["like", "dislike"], required: true },
       },
     ],
-    attachments: [
-      {
-        url: String,
-        name: String,
-        mimeType: String,
-        size: Number,
-        storagePath: String,
-        fileHash: String,
-        localPath: String,
-      },
-    ],
+    attachments: [attachmentSchema],
   },
   { timestamps: true },
 );

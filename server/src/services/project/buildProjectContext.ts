@@ -1,15 +1,15 @@
-import { BASE_SYSTEM_PROMPT } from "../constants/prompt.constants";
-import { projectRepository } from "../repositories/project.repository";
-import { ChatMessage } from "../types/chat.types";
-import { getLimitedMessages } from "../utils/chatHistory";
-import { userService } from "./user.service";
-import { memoryService } from "./memory.service";
+import { BASE_SYSTEM_PROMPT } from "../../constants/prompt.constants";
+import { projectRepository } from "../../repositories/project.repository";
+import { ChatMessage } from "../../types/chat.types";
+import { getLimitedMessages } from "../../utils/chatHistory";
+import { userService } from "../user/user.service";
+import { memoryService } from "../memory/memory.service";
 import {
   type WebGroundingContext,
   type SearchRejection,
   webSearchService,
-} from "../modules/web-search";
-import { chatRepository } from "../repositories/chat.repository";
+} from "../../modules/web-search";
+import { chatRepository } from "../../repositories/chat.repository";
 
 
 export const buildProjectContext = async (

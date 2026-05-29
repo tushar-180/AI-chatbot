@@ -1,6 +1,6 @@
-import { projectRepository } from "../repositories/project.repository";
-import { CreateProjectInput, UpdateProjectInput } from "../types/project.types";
-import { Chat, Message } from "../models/Chat.model";
+import { projectRepository } from "../../repositories/project.repository";
+import { CreateProjectInput, UpdateProjectInput } from "../../types/project.types";
+import { Chat, Message } from "../../models/Chat.model";
 
 export const projectService = {
   async createProject(userId: string, data: CreateProjectInput) {

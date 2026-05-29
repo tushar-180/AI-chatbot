@@ -1,5 +1,5 @@
-import { SharedChat } from "../models/SharedChat.model";
-import { chatRepository } from "../repositories/chat.repository";
+import { SharedChat } from "../../models/SharedChat.model";
+import { chatRepository } from "../../repositories/chat.repository";
 
 export const sharedChatService = {
   async shareChat(chatId: string, userId: string) {

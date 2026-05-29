@@ -1,68 +1,22 @@
 import { Request, Response } from "express";
-import { temporaryChatService } from "../services/temporaryChat.service";
-import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
+import { temporaryChatService } from "../services/chat/temporaryChat.service";
+import { setSseHeaders, splitAndWriteChunk, writeSse, pipeStreamResponse } from "../utils/sse";
 import { StreamPayload } from "../types/chat.types";
-import { chatStreamRegistry } from "../services/chatStreamRegistry.service";
+import { chatStreamRegistry } from "../services/streams/streamRegistry.service";
+import { parseRequestBody } from "../utils/requestParser";
 
 interface AuthenticatedRequest extends Request {
   clerkId?: string;
 }
 
-const pipeStreamResponse = async (
-  req: Request,
-  res: Response,
-  stream: AsyncGenerator<StreamPayload>,
-  requestId?: string,
-) => {
-  const firstPayload = await stream.next();
-  if (firstPayload.done) return;
-
-  setSseHeaders(res);
-
-  let clientDisconnected = false;
-  req.on("close", () => {
-    clientDisconnected = true;
-    if (requestId) {
-      chatStreamRegistry.stop(requestId);
-    }
-  });
-
-  const writePayload = async (
-    payload: Awaited<typeof firstPayload>["value"],
-  ) => {
-    if (clientDisconnected) return;
-
-    if (payload.chunk) {
-      await splitAndWriteChunk(res, payload.chunk, {
-        requestId: payload.requestId,
-        status: payload.status,
-      });
-    } else {
-      writeSse(res, payload);
-    }
-
-    if (payload.done || payload.error) {
-      res.end();
-    }
-  };
-
-  await writePayload(firstPayload.value);
-
-  for await (const payload of stream) {
-    if (clientDisconnected) {
-      break;
-    }
-    await writePayload(payload);
-  }
-};
 
 export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const rawMessages = req.body.messages;
     const messages = typeof rawMessages === "string" ? JSON.parse(rawMessages) : rawMessages;
     const { provider, requestId } = req.body;
-    const webSearchEnabled = req.body.webSearchEnabled === true || req.body.webSearchEnabled === "true";
     const userId = req.clerkId!;
+    const parsed = parseRequestBody(req);
 
     await pipeStreamResponse(
       req,
@@ -72,10 +26,14 @@ export const createTemporaryChatStream = async (req: AuthenticatedRequest, res: 
         messages,
         provider,
         requestId,
-        webSearchEnabled,
-        attachedFile: (req as any).file || null,
+        webSearchEnabled: parsed.webSearchEnabled,
+        attachedFile: parsed.attachedFile,
       }),
-      requestId,
+      () => {
+        if (requestId) {
+          chatStreamRegistry.stop(requestId);
+        }
+      }
     );
   } catch (error) {
     console.error("Error in createTemporaryChatStream:", error);

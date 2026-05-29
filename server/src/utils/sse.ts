@@ -1,4 +1,5 @@
-import type { Response } from "express";
+import type { Request, Response } from "express";
+import type { StreamPayload } from "../types/chat.types";
 
 export const setSseHeaders = (res: Response) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -33,4 +34,50 @@ export const splitAndWriteChunk = async (
   }
 
   writeSse(res, { ...meta, chunk });
+};
+
+export const pipeStreamResponse = async (
+  req: Request,
+  res: Response,
+  stream: AsyncGenerator<StreamPayload>,
+  onClientDisconnect?: () => void,
+) => {
+  const firstPayload = await stream.next();
+  if (firstPayload.done) return;
+
+  setSseHeaders(res);
+
+  let clientDisconnected = false;
+  req.on("close", () => {
+    clientDisconnected = true;
+    if (onClientDisconnect) {
+      onClientDisconnect();
+    }
+  });
+
+  const writePayload = async (
+    payload: Awaited<typeof firstPayload>["value"],
+  ) => {
+    if (clientDisconnected) return;
+
+    if (payload.chunk) {
+      await splitAndWriteChunk(res, payload.chunk, {
+        requestId: payload.requestId,
+        status: payload.status,
+      });
+    } else {
+      writeSse(res, payload);
+    }
+
+    if (payload.done || payload.error) {
+      res.end();
+    }
+  };
+
+  await writePayload(firstPayload.value);
+
+  for await (const payload of stream) {
+    if (clientDisconnected) break;
+    await writePayload(payload);
+  }
 };
