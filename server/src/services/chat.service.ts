@@ -538,12 +538,15 @@ async function* streamAssistantResponse(
   const providerName = aiProvider.getProviderName();
   const chatId = getChatId(chat);
 
+  // Resolve the active path messages for prompt building so we only include the visible conversation history
+  const activeMessages = resolveActiveBranch(chat.messages as RawMessage[]) as any[] as ChatMessage[];
+
   // If retrying, we filter out the message being retried from the prompt context
   const messagesForPrompt = existingAssistantMessageId
-    ? (chat.messages as ChatMessage[]).filter(
-      (m) => (m as any).id !== existingAssistantMessageId,
+    ? activeMessages.filter(
+      (m) => String(m.id || m._id || m.requestId) !== String(existingAssistantMessageId),
     )
-    : (chat.messages as ChatMessage[]);
+    : activeMessages;
 
   const lastUserMessage = messagesForPrompt
     .filter((m) => m.role === "user")
@@ -586,8 +589,8 @@ async function* streamAssistantResponse(
       requestId,
       status: "streaming",
       metadata: buildGroundingMetadata(webGrounding),
+      parentId: branchMeta?.parentId || (lastUserMessage ? String(lastUserMessage._id || lastUserMessage.id) : undefined),
       ...(branchMeta ? {
-        parentId: branchMeta.parentId,
         retryOf: branchMeta.retryOf,
         editedFrom: branchMeta.editedFrom,
         branchId: branchMeta.branchId,
@@ -1055,6 +1058,16 @@ export const chatService = {
     const trimmedMessage = message?.trim() || (selection ? "Explain this" : "");
     const chat = await requireChat(chatId);
 
+    // Resolve the parentId (the last active assistant message on the active branch path)
+    const allMessages = chat.messages as RawMessage[];
+    const activeMessages = resolveActiveBranch(allMessages);
+    const lastActiveAssistant = [...activeMessages]
+      .filter((m) => m.role === "assistant")
+      .pop();
+    const parentId = lastActiveAssistant
+      ? String(lastActiveAssistant._id || lastActiveAssistant.id)
+      : undefined;
+
     // Save User Message
     const userMsg = createUserMessage(
       trimmedMessage,
@@ -1062,6 +1075,7 @@ export const chatService = {
       provider,
       attachments,
     );
+    userMsg.parentId = parentId;
     let fileText: string | null = null;
     let allAttachments = attachments || [];
     if (attachedFile) {
@@ -1083,7 +1097,7 @@ export const chatService = {
       completionTokens: 0,
       totalTokens: estimateTokenCount(userPromptText, attachmentCount),
     };
-    await chatRepository.saveMessage(chatId, userMsg);
+    const savedUserMsg = await chatRepository.saveMessage(chatId, userMsg);
 
     if (!chat.title || chat.title === DEFAULT_CHAT_TITLE) {
       const newTitle = createTitle(trimmedMessage);
@@ -1095,11 +1109,12 @@ export const chatService = {
     const aiProvider = aiService.getProvider(provider);
     const providerName = aiProvider.getProviderName();
 
-    // Fetch updated history
+    // Fetch updated history and resolve its active branch
     const updatedChat = await chatRepository.findById(chatId);
+    const activeMessagesForPrompt = resolveActiveBranch(updatedChat?.messages as RawMessage[]) as any[] as ChatMessage[];
     const { promptMessages, webGrounding } = await buildPromptMessages(
       String(chat.userId),
-      updatedChat?.messages as ChatMessage[],
+      activeMessagesForPrompt,
       trimmedMessage,
       webSearchEnabled,
       provider,
@@ -1145,6 +1160,7 @@ export const chatService = {
         "completed",
         buildGroundingMetadata(webGrounding),
       ),
+      parentId: savedUserMsg ? String(savedUserMsg._id || savedUserMsg.id) : undefined,
       attachments: [],
       type: "text",
       tokens: assistantTokens,
@@ -1176,6 +1192,16 @@ export const chatService = {
     const resolvedRequestId = requireRequestId(requestId);
     const chat = await requireChat(chatId);
 
+    // Resolve the parentId (the last active assistant message on the active branch path)
+    const allMessages = chat.messages as RawMessage[];
+    const activeMessages = resolveActiveBranch(allMessages);
+    const lastActiveAssistant = [...activeMessages]
+      .filter((m) => m.role === "assistant")
+      .pop();
+    const parentId = lastActiveAssistant
+      ? String(lastActiveAssistant._id || lastActiveAssistant.id)
+      : undefined;
+
     // Save User Message
     const userMsg = createUserMessage(
       trimmedMessage,
@@ -1183,6 +1209,7 @@ export const chatService = {
       provider,
       attachments,
     );
+    userMsg.parentId = parentId;
     let fileText: string | null = null;
     let allAttachments = attachments || [];
     if (attachedFile) {
