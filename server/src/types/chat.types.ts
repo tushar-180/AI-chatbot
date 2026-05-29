@@ -40,6 +40,7 @@ export type Attachment = {
 
 export type ChatMessage = {
   id?: string;
+  _id?: string;
   userId?: string;
   role: ChatRole;
   content: string;
@@ -53,6 +54,12 @@ export type ChatMessage = {
   tokens?: TokenUsage;
   createdAt?: Date;
   updatedAt?: Date;
+  parentId?: string | null;
+  branchId?: string | null;
+  retryOf?: string | null;
+  editedFrom?: string | null;
+  version?: number;
+  isActive?: boolean;
 };
 
 export type CreateChatInput = {

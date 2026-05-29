@@ -82,16 +82,31 @@ const getModelOnlyName = (fullName: string) => {
   return fullName.includes(" : ") ? fullName.split(" : ")[1] : fullName;
 };
 
+type SelectionContext = NonNullable<Message["metadata"]>["selection"];
+type MessageMetadataWithWebSearch = Message["metadata"] & {
+  webSearchEnabled?: boolean;
+};
+
+type EditOptions = {
+  provider?: string;
+  webSearchEnabled?: boolean;
+  attachments?: Attachment[];
+  attachedFile?: File | null;
+  selection?: SelectionContext | null;
+};
+
 interface MessageItemProps {
   message: Message;
   isStreaming?: boolean;
-  onEdit?: (content: string, options?: { provider?: string; webSearchEnabled?: boolean; attachments?: any[]; attachedFile?: File | null; selection?: any }) => void;
+  onEdit?: (content: string, options?: EditOptions) => void;
   onEditStart?: () => void;
   onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
   highlight?: string;
   onCitationClick?: (id: number) => void;
   onSourcesClick?: (sources: WebSource[], activeId?: number) => void;
+  /** Rendered inside the action bar — the ◀ 1/N ▶ generation navigator */
+  generationSwitcher?: React.ReactNode;
 }
 
 /**
@@ -273,6 +288,7 @@ const MessageItem = ({
   highlight,
   onCitationClick,
   onSourcesClick,
+  generationSwitcher,
 }: MessageItemProps) => {
   const { user } = useUser();
   const dbUser = useChatStore((state) => state.dbUser);
@@ -286,20 +302,31 @@ const MessageItem = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [attachments, setAttachments] = useState<any[]>(msg.attachments || []);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [editSelectionContext, setEditSelectionContext] = useState<any>(
-    msg.metadata?.selection || null
+  const [attachments, setAttachments] = useState<Attachment[]>(
+    msg.attachments || [],
   );
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
+  const [editSelectionContext, setEditSelectionContext] =
+    useState<SelectionContext | null>(msg.metadata?.selection || null);
 
   // Edit-local provider & web search state
   const [editProvider, setEditProvider] = useState(getStoredProvider);
   const [editWebSearchEnabled, setEditWebSearchEnabled] = useState(false);
-  const { availableProviders } = useAvailableProviders(editProvider, setEditProvider);
+  const handleEditProviderChange = (providerId: string) => {
+    setEditProvider(providerId);
+    if (!supportsVision(providerId)) {
+      setAttachments([]);
+      setAttachedFile(null);
+    }
+  };
+  const { availableProviders } = useAvailableProviders(
+    editProvider,
+    handleEditProviderChange,
+  );
 
   // State for the retry web search toggle
   const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
-    Boolean((msg.metadata as any)?.webSearchEnabled)
+    Boolean((msg.metadata as MessageMetadataWithWebSearch)?.webSearchEnabled)
   );
   const canUpload = supportsVision(editProvider);
 
@@ -430,7 +457,7 @@ const MessageItem = ({
     setIsEditing(true);
     setEditContent(msg.content);
     setEditSelectionContext(msg.metadata?.selection || null);
-    setEditProvider(getStoredProvider());
+    handleEditProviderChange(getStoredProvider());
     setEditWebSearchEnabled(false);
     onEditStart?.();
   };
@@ -442,14 +469,6 @@ const MessageItem = ({
     setAttachments(msg.attachments || []);
     setAttachedFile(null);
   };
-
-  // Clear attachments when switching to a non-vision model
-  useEffect(() => {
-    if (isEditing && !canUpload) {
-      setAttachments([]);
-      setAttachedFile(null);
-    }
-  }, [isEditing, canUpload]);
 
   const handleEditSave = () => {
     const contentChanged = editContent.trim() !== msg.content;
@@ -614,7 +633,11 @@ const MessageItem = ({
   const citationComponents = !isUser
     ? {
       ...assistantMarkdownComponents,
-      cite: ({ node }: any) => {
+      cite: ({
+        node,
+      }: {
+        node?: { properties?: { dataId?: string | number } };
+      }) => {
         const id = Number(node?.properties?.dataId);
 
         if (isNaN(id)) return null;
@@ -740,7 +763,7 @@ const MessageItem = ({
                       {availableProviders.map((p) => (
                         <DropdownMenuItem
                           key={p.id}
-                          onClick={() => setEditProvider(p.id)}
+                          onClick={() => handleEditProviderChange(p.id)}
                           className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
                             editProvider === p.id
                               ? "!bg-white !text-black"
@@ -982,6 +1005,9 @@ const MessageItem = ({
 
           {!isUser && !isStreaming && (msg.content || isFailed) && (
             <div className="flex items-center gap-1 transition-all duration-200 opacity-100">
+              {/* Generation switcher (◀ 1/N ▶) for retry siblings */}
+              {generationSwitcher}
+
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -1116,6 +1142,9 @@ const MessageItem = ({
 
           {isUser && !isEditing && (
             <div className="flex items-center gap-1 opacity-100 transition-all duration-200">
+              {/* Generation switcher (◀ 1/N ▶) for edit siblings */}
+              {generationSwitcher}
+
               <button
                 onClick={handleCopy}
                 className="p-2 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors"
@@ -1160,7 +1189,8 @@ const areEqual = (
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===
     next.message.tokens?.completionTokens &&
-    prev.message.sources === next.message.sources
+    prev.message.sources === next.message.sources &&
+    prev.generationSwitcher === next.generationSwitcher
   );
 };
 

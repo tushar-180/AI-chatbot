@@ -168,4 +168,12 @@ export const chatService = {
   async unpinChat(chatId: string) {
     return api.post(`/chat/${chatId}/unpin`);
   },
+
+  async setActiveBranch(chatId: string, branchId: string, messageId: string) {
+    return api.post("/chat/branch/active", {
+      chatId,
+      branchId,
+      messageId,
+    });
+  },
 };

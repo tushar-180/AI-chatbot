@@ -60,4 +60,8 @@ router.post("/:id/messages/:messageId/retry/stream", ChatController.streamRetryM
 // Message Feedback
 router.patch("/:id/messages/:messageId/feedback", ChatController.updateMessageFeedback);
 
+// Branch / generation navigation
+router.post("/branch/active", ChatController.setActiveBranch);
+router.get("/:chatId/messages/:parentId/generations", ChatController.getMessageGenerations);
+
 export default router;
