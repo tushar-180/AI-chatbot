@@ -415,25 +415,19 @@ const Chat = () => {
                         return m;
                       });
 
-                      const activePath = resolveActiveBranch(updated);
-                      setMessages(activePath);
+                      setMessages(updated);
 
                       if (currentChatId && newMsg.branchId) {
-                        try {
-                          await chatService.setActiveBranch(
-                            currentChatId,
-                            newMsg.branchId,
-                            newMsg.id,
-                          );
-                          const realMessages =
-                            await chatService.fetchMessages(currentChatId, true);
-                          setMessages(realMessages);
-                        } catch (err) {
+                        chatService.setActiveBranch(
+                          currentChatId,
+                          newMsg.branchId,
+                          newMsg.id,
+                        ).catch((err) => {
                           console.error(
                             "Failed to switch active branch on server",
                             err,
                           );
-                        }
+                        });
                       }
                     }}
                   />

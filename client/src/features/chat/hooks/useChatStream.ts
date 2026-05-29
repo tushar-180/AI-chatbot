@@ -10,6 +10,7 @@ import {
 import { CHAT_TITLE_MAX_LENGTH } from "@/features/chat/constants/chat.constants";
 import { toast } from "sonner";
 import type { Attachment, WebSource } from "../types/chat.types";
+import { resolveActiveBranch } from "../utils/branchUtils";
 
 const NEW_CHAT_STREAM_KEY = "__new_chat_stream__";
 
@@ -803,6 +804,15 @@ export const useChatStream = (hookOptions?: {
     const activeKey = getActiveChatKey(effectiveCurrentChatId);
     if (loadingChatIds[activeKey]) return;
 
+    // Resolve the parentId (the last active assistant message on the active branch path)
+    const activeMessages = resolveActiveBranch(storeState.messages);
+    const lastActiveAssistant = [...activeMessages]
+      .filter((m) => m.role === "assistant")
+      .pop();
+    const parentId = lastActiveAssistant
+      ? String(lastActiveAssistant.id || (lastActiveAssistant as any)._id)
+      : undefined;
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
@@ -810,6 +820,7 @@ export const useChatStream = (hookOptions?: {
       model: provider,
       status: "completed",
       attachments: finalAttachments,
+      parentId,
       metadata: options?.selection
         ? { selection: options.selection }
         : undefined,
@@ -822,6 +833,7 @@ export const useChatStream = (hookOptions?: {
       model: provider,
       requestId,
       status: "streaming",
+      parentId: userMessage.id,
       isWebSearching: webSearchEnabled,
       isParsingDocument: !!options?.attachedFile,
     };
