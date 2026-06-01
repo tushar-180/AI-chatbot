@@ -26,7 +26,6 @@ import { useTextSelection } from "@/features/chat/hooks/useTextSelection";
 import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
-import { resolveActiveBranch } from "@/features/chat/utils/branchUtils";
 
 /**
  * Chat Page Component
@@ -418,16 +417,18 @@ const Chat = () => {
                       setMessages(updated);
 
                       if (currentChatId && newMsg.branchId) {
-                        chatService.setActiveBranch(
-                          currentChatId,
-                          newMsg.branchId,
-                          newMsg.id,
-                        ).catch((err) => {
-                          console.error(
-                            "Failed to switch active branch on server",
-                            err,
-                          );
-                        });
+                        chatService
+                          .setActiveBranch(
+                            currentChatId,
+                            newMsg.branchId,
+                            newMsg.id,
+                          )
+                          .catch((err) => {
+                            console.error(
+                              "Failed to switch active branch on server",
+                              err,
+                            );
+                          });
                       }
                     }}
                   />
@@ -456,7 +457,9 @@ const Chat = () => {
                 webSearchEnabled={webSearchEnabled}
                 onWebSearchToggle={setWebSearchEnabled}
                 isArchived={isArchived}
-                onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
+                onUnarchive={() =>
+                  currentChatId && unarchiveChat(currentChatId)
+                }
                 quotaStatus={quotaStatus}
                 isQuotaLoading={isQuotaLoading}
               />

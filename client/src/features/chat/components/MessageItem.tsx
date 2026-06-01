@@ -27,7 +27,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { DEFAULT_CHAT_PROVIDER, supportsVision } from "../constants/chat.constants";
+import {
+  DEFAULT_CHAT_PROVIDER,
+  supportsVision,
+} from "../constants/chat.constants";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -122,15 +125,25 @@ const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-            attachment.url?.startsWith("data:image") ? (
+          attachment.url?.startsWith("data:image") ? (
             <img
               src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-[32rem] bg-slate-950/40"
+              className="h-auto w-full object-contain max-h-[32rem] bg-slate-950/40 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               fetchPriority="high"
+              onClick={(e) => {
+                e.stopPropagation();
+                useChatStore.getState().setActiveZoomedAttachment(attachment);
+              }}
             />
           ) : (
-            <div className="flex items-center gap-3 p-4">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                useChatStore.getState().setActiveZoomedAttachment(attachment);
+              }}
+              className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-all"
+            >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
                 <span className="text-xs font-bold uppercase tracking-tighter">
                   File
@@ -167,12 +180,17 @@ const MessageAvatar = ({
   failed?: boolean;
 }) => (
   <div
-    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl overflow-hidden transition-all duration-300 ${isUser ? "border border-white/[0.08] shadow-sm" : ""
-      } ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
+    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl overflow-hidden transition-all duration-300 ${
+      isUser ? "border border-white/[0.08] shadow-sm" : ""
+    } ${failed ? "bg-red-500/10 border-red-500/20" : ""}`}
   >
     {isUser ? (
       imageUrl ? (
-        <img src={optimizeImageUrl(imageUrl, 64)} alt="User" className="h-full w-full object-cover" />
+        <img
+          src={optimizeImageUrl(imageUrl, 64)}
+          alt="User"
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-white/5 text-slate-500">
           <User size={16} />
@@ -216,20 +234,24 @@ const MessageMetadata = ({
   content?: string;
   isEdited?: boolean;
 }) => {
-  const estimatedCompletionTokens = content
-    ? Math.ceil(content.length / 4)
-    : 0;
+  const estimatedCompletionTokens = content ? Math.ceil(content.length / 4) : 0;
 
   return (
     <div
-      className={`flex items-center gap-2.5 not-selectable ${isUser ? "flex-row-reverse" : "flex-row"
-        }`}
+      className={`flex items-center gap-2.5 not-selectable ${
+        isUser ? "flex-row-reverse" : "flex-row"
+      }`}
     >
       <span
-        className={`text-[11px] font-semibold uppercase tracking-[0.18em] flex items-center gap-1 ${isUser ? "text-slate-400" : "text-slate-500"
-          } ${isUser ? "mr-0.5" : "ml-0.5"}`}
+        className={`text-[11px] font-semibold uppercase tracking-[0.18em] flex items-center gap-1 ${
+          isUser ? "text-slate-400" : "text-slate-500"
+        } ${isUser ? "mr-0.5" : "ml-0.5"}`}
       >
-        {Boolean(isEdited) && isUser && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
+        {Boolean(isEdited) && isUser && (
+          <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">
+            (edited)
+          </span>
+        )}
         <span>{isUser ? "You" : "Velora"}</span>
       </span>
 
@@ -263,18 +285,48 @@ const MessageMetadata = ({
 };
 
 const ALLOWED_HTML_TAGS = new Set([
-  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
-  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
-  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+  "a",
+  "b",
+  "i",
+  "u",
+  "strong",
+  "em",
+  "br",
+  "hr",
+  "code",
+  "pre",
+  "ul",
+  "ol",
+  "li",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "blockquote",
+  "span",
+  "div",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "cite",
 ]);
 
 function escapeUnrecognizedHtmlTags(text: string): string {
-  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
-    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
-      return match;
-    }
-    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
-  });
+  return text.replace(
+    /<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g,
+    (match, closing, tagName, attributes) => {
+      if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+        return match;
+      }
+      return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+    },
+  );
 }
 
 const MessageItem = ({
@@ -293,7 +345,13 @@ const MessageItem = ({
   const dbUser = useChatStore((state) => state.dbUser);
   const isUser = msg.role === "user";
   const isFailed = msg.status === "failed";
-  const isEdited = Boolean(msg.role === "user" && msg.updatedAt && msg.createdAt && new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() > 2000);
+  const isEdited = Boolean(
+    msg.role === "user" &&
+    msg.updatedAt &&
+    msg.createdAt &&
+    new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() >
+      2000,
+  );
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(msg.content);
@@ -325,7 +383,7 @@ const MessageItem = ({
 
   // State for the retry web search toggle
   const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
-    Boolean((msg.metadata as MessageMetadataWithWebSearch)?.webSearchEnabled)
+    Boolean((msg.metadata as MessageMetadataWithWebSearch)?.webSearchEnabled),
   );
   const canUpload = supportsVision(editProvider);
 
@@ -355,10 +413,7 @@ const MessageItem = ({
       return;
     }
 
-    if (
-      highlightedRef.current &&
-      lastHighlightedTerm.current === highlight
-    ) {
+    if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
       return;
     }
 
@@ -367,7 +422,7 @@ const MessageItem = ({
 
       const walker = document.createTreeWalker(
         contentRef.current,
-        NodeFilter.SHOW_TEXT
+        NodeFilter.SHOW_TEXT,
       );
 
       let node: Node | null;
@@ -475,14 +530,20 @@ const MessageItem = ({
       JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
     const hasNewFile = Boolean(attachedFile);
     const selectionChanged =
-      JSON.stringify(editSelectionContext) !== JSON.stringify(msg.metadata?.selection || null);
+      JSON.stringify(editSelectionContext) !==
+      JSON.stringify(msg.metadata?.selection || null);
 
     if (!editContent.trim()) {
       setIsEditing(false);
       return;
     }
 
-    if (contentChanged || attachmentsChanged || hasNewFile || selectionChanged) {
+    if (
+      contentChanged ||
+      attachmentsChanged ||
+      hasNewFile ||
+      selectionChanged
+    ) {
       onEdit?.(editContent, {
         provider: editProvider,
         webSearchEnabled: editWebSearchEnabled,
@@ -504,7 +565,8 @@ const MessageItem = ({
     if (mimeType.startsWith("image/")) return ImageIcon;
     if (mimeType.includes("word") || mimeType.includes("pdf")) return FileText;
     if (mimeType.includes("excel") || mimeType.includes("sheet")) return Table;
-    if (mimeType.includes("powerpoint") || mimeType.includes("presentation")) return MonitorPlay;
+    if (mimeType.includes("powerpoint") || mimeType.includes("presentation"))
+      return MonitorPlay;
     return FileIcon;
   };
 
@@ -558,7 +620,12 @@ const MessageItem = ({
 
       setAttachments((prev) => [
         ...prev,
-        { url: res.data.url, name: file.name, mimeType: file.type, size: file.size },
+        {
+          url: res.data.url,
+          name: file.name,
+          mimeType: file.type,
+          size: file.size,
+        },
       ]);
       toast.success("Image uploaded");
     } catch (err) {
@@ -611,67 +678,69 @@ const MessageItem = ({
 
   if (processedContent) {
     processedContent = escapeUnrecognizedHtmlTags(processedContent);
-    
+
     // Replace completed tools
     processedContent = processedContent.replace(
       /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_COMPLETED:\1\]/g,
-      '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>'
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>',
     );
     // Replace failed tools
     processedContent = processedContent.replace(
       /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_ERROR:\1:(.*?)\]/g,
-      '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>'
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>',
     );
     // Replace still running tools
     processedContent = processedContent.replace(
       /\[TOOL_RUNNING:([^\]]+)\]/g,
-      '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>'
+      '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>',
     );
   }
 
   const citationComponents = !isUser
     ? {
-      ...assistantMarkdownComponents,
-      cite: ({
-        node,
-      }: {
-        node?: { properties?: { dataId?: string | number } };
-      }) => {
-        const id = Number(node?.properties?.dataId);
+        ...assistantMarkdownComponents,
+        cite: ({
+          node,
+        }: {
+          node?: { properties?: { dataId?: string | number } };
+        }) => {
+          const id = Number(node?.properties?.dataId);
 
-        if (isNaN(id)) return null;
+          if (isNaN(id)) return null;
 
-        return (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
+          return (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
 
-              if (msg.sources?.length) {
-                onSourcesClick?.(msg.sources, id);
-              } else {
-                onCitationClick?.(id);
-              }
-            }}
-            className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
-            title={`Source ${id}`}
-          >
-            {id}
-          </button>
-        );
-      },
-    }
+                if (msg.sources?.length) {
+                  onSourcesClick?.(msg.sources, id);
+                } else {
+                  onCitationClick?.(id);
+                }
+              }}
+              className="inline-flex items-center justify-center w-5 h-5 mx-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px] font-bold hover:bg-indigo-500/40 transition"
+              title={`Source ${id}`}
+            >
+              {id}
+            </button>
+          );
+        },
+      }
     : undefined;
 
   return (
     <div
-      className={`group flex w-full ${isUser ? "justify-end" : "justify-start"
-        }`}
+      className={`group flex w-full ${
+        isUser ? "justify-end" : "justify-start"
+      }`}
     >
       <div
-        className={`flex w-full gap-4 md:gap-6 ${isUser
-          ? "max-w-full md:max-w-4xl flex-row-reverse"
-          : "max-w-full md:max-w-5xl flex-row items-start"
-          }`}
+        className={`flex w-full gap-4 md:gap-6 ${
+          isUser
+            ? "max-w-full md:max-w-4xl flex-row-reverse"
+            : "max-w-full md:max-w-5xl flex-row items-start"
+        }`}
       >
         <div className="hidden xs:block">
           <MessageAvatar
@@ -682,13 +751,15 @@ const MessageItem = ({
         </div>
 
         <div
-          className={`flex flex-col gap-2 ${isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
-            }`}
+          className={`flex flex-col gap-2 ${
+            isUser ? "items-end min-w-0 flex-1" : "min-w-0 flex-1"
+          }`}
         >
           {!isFailed && (
             <div
-              className={`flex items-center gap-3 ${isUser ? "flex-row-reverse" : "flex-row"
-                }`}
+              className={`flex items-center gap-3 ${
+                isUser ? "flex-row-reverse" : "flex-row"
+              }`}
             >
               <MessageMetadata
                 isUser={isUser}
@@ -702,15 +773,17 @@ const MessageItem = ({
           )}
 
           <div
-            className={`transition-all duration-200 ease-out ${isUser
-              ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${isEditing
-                ? "border-white/20 bg-white/5 ring-1 ring-white/5"
-                : "border-white/10 bg-white/3"
-              } px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
-              : isFailed
-                ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
-                : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
-              }`}
+            className={`transition-all duration-200 ease-out ${
+              isUser
+                ? `max-w-full min-w-0 overflow-hidden rounded-2xl border ${
+                    isEditing
+                      ? "border-white/20 bg-white/5 ring-1 ring-white/5"
+                      : "border-white/10 bg-white/3"
+                  } px-5 py-3 text-[0.95rem] md:text-base leading-relaxed text-white`
+                : isFailed
+                  ? "w-fit max-w-full min-w-0 overflow-hidden rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-3.5 text-base leading-[1.8] text-red-300 shadow-sm"
+                  : "w-full max-w-full min-w-0 overflow-hidden py-1 text-[0.95rem] md:text-base leading-relaxed text-slate-200"
+            }`}
             ref={contentRef}
             key={highlight || "no-highlight"}
             data-message-role={msg.role}
@@ -750,8 +823,17 @@ const MessageItem = ({
                         className="group flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
                       >
                         {getProviderIcon(editProvider, 12)}
-                        <span>{getModelOnlyName(availableProviders.find(p => p.id === editProvider)?.name || editProvider)}</span>
-                        <ChevronDown size={10} className="ml-0.5 text-slate-600 transition-colors" />
+                        <span>
+                          {getModelOnlyName(
+                            availableProviders.find(
+                              (p) => p.id === editProvider,
+                            )?.name || editProvider,
+                          )}
+                        </span>
+                        <ChevronDown
+                          size={10}
+                          className="ml-0.5 text-slate-600 transition-colors"
+                        />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -770,7 +852,9 @@ const MessageItem = ({
                           }`}
                         >
                           {getProviderIcon(p.id, 12)}
-                          <span className="capitalize">{getModelOnlyName(p.name)}</span>
+                          <span className="capitalize">
+                            {getModelOnlyName(p.name)}
+                          </span>
                         </DropdownMenuItem>
                       ))}
                     </DropdownMenuContent>
@@ -778,7 +862,9 @@ const MessageItem = ({
 
                   <button
                     type="button"
-                    onClick={() => setEditWebSearchEnabled(!editWebSearchEnabled)}
+                    onClick={() =>
+                      setEditWebSearchEnabled(!editWebSearchEnabled)
+                    }
                     className={`flex items-center gap-2 rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest transition-all ${
                       editWebSearchEnabled
                         ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-400/20"
@@ -823,7 +909,10 @@ const MessageItem = ({
                             />
                           ) : (
                             <div className="flex h-full w-full flex-col items-center justify-center p-1 text-center">
-                              <Icon size={20} className="text-slate-300 shrink-0" />
+                              <Icon
+                                size={20}
+                                className="text-slate-300 shrink-0"
+                              />
                               <span className="mt-1 line-clamp-2 text-[9px] text-slate-400">
                                 {att.name}
                               </span>
@@ -879,7 +968,10 @@ const MessageItem = ({
                         aria-label="Upload file"
                       >
                         {isUploading ? (
-                          <Loader2 size={16} className="animate-spin text-white" />
+                          <Loader2
+                            size={16}
+                            className="animate-spin text-white"
+                          />
                         ) : (
                           <Paperclip size={16} />
                         )}
@@ -887,25 +979,25 @@ const MessageItem = ({
                     )}
                   </div>
                   <div className="flex justify-end gap-2">
-                  <button
-                    onClick={handleEditCancel}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
-                  >
-                    <X size={14} />
-                    Cancel
-                  </button>
+                    <button
+                      onClick={handleEditCancel}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition-colors"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
 
-                  <button
-                    onClick={handleEditSave}
-                    disabled={!editContent.trim()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
-                  >
-                    <Check size={14} />
-                    Save
-                  </button>
+                    <button
+                      onClick={handleEditSave}
+                      disabled={!editContent.trim()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:hover:bg-indigo-500 text-xs font-medium text-white transition-colors"
+                    >
+                      <Check size={14} />
+                      Save
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
             ) : isFailed ? (
               <div className="flex flex-col gap-1">
                 <span className="font-semibold text-red-300">
@@ -925,9 +1017,7 @@ const MessageItem = ({
               <>
                 {msg.content && (
                   <div
-                    className={
-                      isUser ? "break-words whitespace-pre-wrap" : ""
-                    }
+                    className={isUser ? "break-words whitespace-pre-wrap" : ""}
                   >
                     <div>
                       {isUser ? (
@@ -1023,10 +1113,11 @@ const MessageItem = ({
                 onClick={() =>
                   onFeedback?.(msg.feedback === "like" ? null : "like")
                 }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "like"
-                  ? "text-indigo-400 bg-indigo-500/10"
-                  : "text-slate-500 hover:text-slate-300"
-                  }`}
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
+                  msg.feedback === "like"
+                    ? "text-indigo-400 bg-indigo-500/10"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
                 title="Like"
               >
                 <ThumbsUp
@@ -1037,14 +1128,13 @@ const MessageItem = ({
 
               <button
                 onClick={() =>
-                  onFeedback?.(
-                    msg.feedback === "dislike" ? null : "dislike"
-                  )
+                  onFeedback?.(msg.feedback === "dislike" ? null : "dislike")
                 }
-                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${msg.feedback === "dislike"
-                  ? "text-red-400 bg-red-500/10"
-                  : "text-slate-500 hover:text-slate-300"
-                  }`}
+                className={`p-2 rounded-lg hover:bg-white/5 transition-colors ${
+                  msg.feedback === "dislike"
+                    ? "text-red-400 bg-red-500/10"
+                    : "text-slate-500 hover:text-slate-300"
+                }`}
                 title="Dislike"
               >
                 <ThumbsDown
@@ -1078,9 +1168,9 @@ const MessageItem = ({
                       <Globe size={14} className="mr-2 opacity-70" />
                       Web Search
                     </DropdownMenuCheckboxItem>
-                    
+
                     <DropdownMenuSeparator className="bg-slate-800" />
-                    
+
                     <DropdownMenuItem
                       onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
                       className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
@@ -1094,18 +1184,22 @@ const MessageItem = ({
                         <Bot size={14} className="mr-2 opacity-70" />
                         Select Another Model
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent 
+                      <DropdownMenuSubContent
                         className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
                         collisionPadding={{ top: 100, bottom: 200 }}
                       >
                         {availableProviders.map((provider) => (
                           <DropdownMenuItem
                             key={provider.id}
-                            onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                            onClick={() =>
+                              onRetry(provider.id, retryWebSearchEnabled)
+                            }
                             className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
                           >
                             {getProviderIcon(provider.id, 12)}
-                            <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                            <span className="capitalize">
+                              {getModelOnlyName(provider.name)}
+                            </span>
                           </DropdownMenuItem>
                         ))}
                       </DropdownMenuSubContent>
@@ -1118,10 +1212,7 @@ const MessageItem = ({
                 <button
                   onClick={() => {
                     if (msg.sources?.length) {
-                      onSourcesClick?.(
-                        msg.sources,
-                        msg.sources[0]?.id
-                      );
+                      onSourcesClick?.(msg.sources, msg.sources[0]?.id);
                     }
                   }}
                   className="px-2.5 py-1.5 rounded-lg hover:bg-slate-800 bg-slate-900 text-sm font-medium text-slate-500 hover:text-slate-300 transition-colors"
@@ -1165,10 +1256,7 @@ const MessageItem = ({
   );
 };
 
-const areEqual = (
-  prev: MessageItemProps,
-  next: MessageItemProps
-) => {
+const areEqual = (prev: MessageItemProps, next: MessageItemProps) => {
   return (
     prev.message.id === next.message.id &&
     prev.message.content === next.message.content &&
@@ -1181,7 +1269,7 @@ const areEqual = (
     prev.message.feedback === next.message.feedback &&
     prev.highlight === next.highlight &&
     prev.message.tokens?.completionTokens ===
-    next.message.tokens?.completionTokens &&
+      next.message.tokens?.completionTokens &&
     prev.message.sources === next.message.sources &&
     prev.generationSwitcher === next.generationSwitcher
   );

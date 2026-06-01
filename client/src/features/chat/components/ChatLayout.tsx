@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import Loading from "./Loading";
 import { cleanupGroupChatStream } from "../hooks/useGroupChat";
 import { cleanupTemporaryChatStream } from "../hooks/useTemporaryChat";
+import ImageLightbox from "./ImageLightbox";
 
 export default function ChatLayout() {
   const location = useLocation();
@@ -27,6 +28,7 @@ export default function ChatLayout() {
       <Suspense fallback={<Loading />}>
         <Outlet />
       </Suspense>
+      <ImageLightbox />
     </div>
   );
 }
