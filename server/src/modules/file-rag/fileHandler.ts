@@ -54,16 +54,6 @@ export async function processAttachedFile(
         // Reuse
         storagePath = existingStoragePath;
         url = await supabaseStorageService.createSignedUrl(storagePath);
-
-        // Check if chunks exist in Supabase (optimized)
-        const { count, error } = await supabaseAdmin
-            .from('file_chunks')
-            .select('id', { count: 'exact', head: true })
-            .eq('storage_path', storagePath);
-
-        if (!error && count && count > 0) {
-            hasChunks = true;
-        }
     } else {
         // 2. Upload to Supabase (using fileHash to prevent race conditions)
         const uploaded = await supabaseStorageService.uploadDocument(
@@ -76,6 +66,16 @@ export async function processAttachedFile(
         storagePath = uploaded.path;
         url = uploaded.url;
         isNewUpload = true;
+    }
+
+    // Always check if chunks exist in Supabase (optimized)
+    const { count, error } = await supabaseAdmin
+        .from('file_chunks')
+        .select('id', { count: 'exact', head: true })
+        .eq('storage_path', storagePath);
+
+    if (!error && count && count > 0) {
+        hasChunks = true;
     }
 
     // 3. Extract text, chunk, and embed if we don't have chunks yet

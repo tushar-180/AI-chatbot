@@ -1,5 +1,6 @@
 import React from "react";
 import CodeBlock from "./CodeBlock";
+import { useChatStore } from "../store/useChatStore";
 
 export const assistantMarkdownComponents = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
@@ -48,7 +49,7 @@ export const assistantMarkdownComponents = {
   ),
   li: (props: React.ComponentPropsWithoutRef<"li">) => {
     // Check if parent is ol by looking for counter style
-    
+
     return (
       <li
         className="relative pl-6 text-base leading-[1.85] tracking-[0.01em] before:absolute before:left-0 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-indigo-400/60 [ol_&]:before:content-[counter(item)'._'] [ol_&]:before:bg-transparent [ol_&]:before:text-indigo-400/80 [ol_&]:before:font-semibold [ol_&]:before:text-[0.9em] [ol_&]:before:top-0 [ol_&]:[counter-increment:item]"
@@ -72,8 +73,13 @@ export const assistantMarkdownComponents = {
           <img
             src={props.href}
             alt={props.title || "Image"}
-            className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/10 shadow-md transition-transform hover:scale-[1.01]"
+            className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/10 shadow-md transition-all hover:scale-[1.01] cursor-pointer hover:opacity-90 active:scale-[0.99]"
             loading="lazy"
+            onClick={() =>
+              useChatStore
+                .getState()
+                .setActiveZoomedAttachment(props.href || "")
+            }
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
             }}
@@ -156,10 +162,13 @@ export const assistantMarkdownComponents = {
   img: (props: React.ComponentPropsWithoutRef<"img">) => (
     <span className="my-6 block">
       <img
-        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20 bg-slate-950/40"
+        className="h-auto max-h-[450px] max-w-full object-contain rounded-xl border border-white/[0.08] shadow-lg shadow-black/20 bg-slate-950/40 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
         style={{ aspectRatio: "auto 16 / 9" }}
         {...props}
         loading="lazy"
+        onClick={() =>
+          useChatStore.getState().setActiveZoomedAttachment(props.src || "")
+        }
         onError={(e) => {
           const target = e.target as HTMLImageElement;
           target.style.display = "none";
@@ -175,9 +184,16 @@ export const assistantMarkdownComponents = {
       )}
     </span>
   ),
-  string: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
-  number: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
-  boolean: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
-  any: (props: any) => <span className="font-mono text-indigo-300" {...props} />,
+  string: (props: any) => (
+    <span className="font-mono text-indigo-300" {...props} />
+  ),
+  number: (props: any) => (
+    <span className="font-mono text-indigo-300" {...props} />
+  ),
+  boolean: (props: any) => (
+    <span className="font-mono text-indigo-300" {...props} />
+  ),
+  any: (props: any) => (
+    <span className="font-mono text-indigo-300" {...props} />
+  ),
 };
-

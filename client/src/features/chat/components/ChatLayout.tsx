@@ -4,6 +4,7 @@ import { Suspense, useEffect, useRef } from "react";
 import Loading from "./Loading";
 import { cleanupGroupChatStream } from "../hooks/useGroupChat";
 import { cleanupTemporaryChatStream } from "../hooks/useTemporaryChat";
+import ImageLightbox from "./ImageLightbox";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -58,6 +59,7 @@ export default function ChatLayout() {
       <Suspense fallback={<Loading />}>
         <Outlet />
       </Suspense>
+      <ImageLightbox />
     </div>
   );
 }
