@@ -1,5 +1,5 @@
 import { EventEmitter } from "events";
-import { TokenUsage } from "../utils/tokenCounter";
+import type { TokenUsage } from "./token.types";
 
 export type Personalization = {
   nickname: string;

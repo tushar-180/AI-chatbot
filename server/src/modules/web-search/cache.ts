@@ -2,7 +2,7 @@
 import { Redis } from "@upstash/redis";
 import { deflate, inflate } from "zlib";
 import { promisify } from "util";
-import type { SearchCandidate, WebGroundingContext } from "./webSearch.types";
+import type { SearchCandidate, WebGroundingContext } from "../../types/web-search.types";
 
 const redis = Redis.fromEnv();
 

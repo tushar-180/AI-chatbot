@@ -1,6 +1,6 @@
 import { OpenAI } from "openai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../../../types/ai.types";
 import {
   AI_PROVIDERS,
   getDisplayProviderName,
@@ -8,7 +8,7 @@ import {
 } from "../constants";
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
 import dotenv from "dotenv";
-import { mcpClientService } from "../../mcpClient.service";
+import { mcpClientService } from "../../mcp/mcpClient.service";
 import {
   CORE_VELORA_INSTRUCTIONS,
   MCP_TOOL_ERROR_FALLBACK_MESSAGE,

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { userService } from "../services/user.service";
+import { userService } from "../services/user/user.service";
 import { createClerkClient } from "@clerk/express";
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });

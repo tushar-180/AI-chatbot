@@ -1,9 +1,9 @@
-import { UserMemory } from "../models/UserMemory.model";
-import { aiService } from "./ai.service";
+import { UserMemory } from "../../models/UserMemory.model";
+import { aiService } from "../ai/ai.service";
 import {
     MEMORY_CONTEXT_PROMPT,
     MEMORY_EXTRACTION_PROMPT,
-} from "../constants/prompt.constants";
+} from "../../constants/prompt.constants";
 
 export const memoryService = {
     /**
@@ -125,6 +125,10 @@ export const memoryService = {
         content: string,
         category: string = "general",
     ) {
+        // Enforce max capacity limit
+        const count = await UserMemory.countDocuments({ userId });
+        if (count >= 100) return null;
+
         // Deduplication
         const existing = await UserMemory.findOne({ userId, content });
         if (existing) return existing;

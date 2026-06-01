@@ -32,6 +32,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuSeparator,
+  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu";
 
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
@@ -44,6 +45,8 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 import { assistantMarkdownComponents } from "./MarkdownConfig";
 import { supportsVision } from "@/features/chat/constants/chat.constants";
@@ -51,13 +54,18 @@ import { supportsVision } from "@/features/chat/constants/chat.constants";
 import type { Attachment } from "../types/chat.types";
 import type { GroupMessage, GroupMember } from "../store/useGroupStore";
 
+type GroupSource = NonNullable<GroupMessage["sources"]>[number];
+type MarkdownAstNode = {
+  properties?: Record<string, unknown>;
+};
+
 interface GroupMessageItemProps {
   message: GroupMessage;
   members: GroupMember[];
   isRequester: boolean;
 
   onCitationClick?: (id: number) => void;
-  onSourcesClick?: (sources: any[], activeId?: number) => void;
+  onSourcesClick?: (sources: GroupSource[], activeId?: number) => void;
 
   onEdit?: (
     content: string,
@@ -200,7 +208,7 @@ const MessageAvatar = ({
   </div>
 );
 
-const AttachmentList = ({ attachments }: { attachments: any[] }) => {
+const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
   if (!attachments || attachments.length === 0) return null;
 
   return (
@@ -211,7 +219,7 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-          attachment.url.startsWith("data:image") ? (
+          (attachment.url || "").startsWith("data:image") ? (
             <img
               src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
@@ -396,10 +404,6 @@ const GroupMessageItem = ({
   }, [editContent]);
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [filterText]);
-
-  useEffect(() => {
     if (activeItemRef.current) {
       activeItemRef.current.scrollIntoView({ block: "nearest" });
     }
@@ -439,16 +443,9 @@ const GroupMessageItem = ({
 
   const mentionedModelId = getMentionedModelId();
   const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : true;
-
-  useEffect(() => {
-    if (!hasMention) {
-      setWebSearchEnabled(false);
-    }
-    if (!canUpload) {
-      setAttachments([]);
-      setAttachedFile(null);
-    }
-  }, [hasMention, canUpload]);
+  const effectiveWebSearchEnabled = hasMention && webSearchEnabled;
+  const effectiveAttachments = canUpload ? attachments : [];
+  const effectiveAttachedFile = canUpload ? attachedFile : null;
 
   const highlightMentions = (text: string) => {
     if (!text) return null;
@@ -586,8 +583,9 @@ const GroupMessageItem = ({
   const handleEditSave = () => {
     const contentChanged = editContent.trim() !== msg.content;
     const attachmentsChanged =
-      JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
-    const hasNewFile = Boolean(attachedFile);
+      JSON.stringify(effectiveAttachments) !==
+      JSON.stringify(msg.attachments || []);
+    const hasNewFile = Boolean(effectiveAttachedFile);
 
     if (!editContent.trim()) {
       setIsEditing(false);
@@ -596,7 +594,12 @@ const GroupMessageItem = ({
     }
 
     if (contentChanged || attachmentsChanged || hasNewFile) {
-      onEdit?.(editContent, webSearchEnabled, attachments, attachedFile);
+      onEdit?.(
+        editContent,
+        effectiveWebSearchEnabled,
+        effectiveAttachments,
+        effectiveAttachedFile,
+      );
     }
     setIsEditing(false);
     setShowModelDropdown(false);
@@ -799,9 +802,11 @@ const GroupMessageItem = ({
     if (lastWord.startsWith("@")) {
       setShowModelDropdown(true);
       setFilterText(lastWord.substring(1).toLowerCase());
+      setActiveIndex(0);
     } else {
       setShowModelDropdown(false);
       setFilterText("");
+      setActiveIndex(0);
     }
   };
 
@@ -970,11 +975,32 @@ const GroupMessageItem = ({
   // Escape any unrecognized HTML tags to prevent custom element warning in React & preserve plain text display
   processedContent = escapeUnrecognizedHtmlTags(processedContent);
 
+  // Replace completed tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_COMPLETED:\1\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>',
+  );
+  // Replace failed tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_ERROR:\1:(.*?)\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>',
+  );
+  // Replace still running tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>',
+  );
+
+  // Convert LaTeX block math \[ \] to $$ $$
+  processedContent = processedContent.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+  // Convert LaTeX inline math \( \) to $ $
+  processedContent = processedContent.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+
   const citationComponents = isAssistant
     ? {
         ...assistantMarkdownComponents,
 
-        cite: ({ node }: any) => {
+        cite: ({ node }: { node?: MarkdownAstNode }) => {
           const id = Number(node?.properties?.dataId);
 
           if (isNaN(id)) return null;
@@ -1049,8 +1075,8 @@ const GroupMessageItem = ({
             {isEditing ? (
               <div className="flex flex-col gap-3 w-full min-w-[200px] md:min-w-[400px] relative">
                 {showModelDropdown && dropdownOptions.length > 0 && (
-                  <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
-                    <div className="mb-1.5 flex items-center justify-between border-b border-white/5 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                  <div className="absolute bottom-[calc(100%+0.5rem)] left-0 z-50 mb-2 max-h-64 w-56 overflow-y-auto rounded-xl border border-zinc-800/60 bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200 scrollbar-hide">
+                    <div className="mb-1.5 flex items-center justify-between border-b border-zinc-800/60 px-3 py-2 text-[9px] font-bold uppercase tracking-widest text-zinc-500">
                       <span className="flex items-center gap-1.5">
                         <Sparkles size={10} className="text-emerald-400" />
                         Choose Mention
@@ -1058,7 +1084,7 @@ const GroupMessageItem = ({
                       <button
                         type="button"
                         onClick={() => setShowModelDropdown(false)}
-                        className="text-slate-600 hover:text-white transition-colors text-[10px]"
+                        className="text-zinc-500 hover:text-white transition-colors text-[10px] cursor-pointer"
                       >
                         ✕
                       </button>
@@ -1078,7 +1104,7 @@ const GroupMessageItem = ({
                             className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
                               isActive
                                 ? "bg-white text-black font-semibold shadow-md shadow-white/5"
-                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                : "text-zinc-400 hover:bg-white/5 hover:text-white"
                             }`}
                           >
                             {opt.type === "model" ? (
@@ -1108,9 +1134,9 @@ const GroupMessageItem = ({
                   </div>
                 )}
 
-                {attachments.length > 0 && (
+                {effectiveAttachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {attachments.map((attachment, index) => (
+                    {effectiveAttachments.map((attachment, index) => (
                       <div key={index} className="group relative">
                         <button
                           type="button"
@@ -1124,8 +1150,8 @@ const GroupMessageItem = ({
                             <img
                               src={
                                 attachment.url ||
-                                (attachedFile
-                                  ? URL.createObjectURL(attachedFile)
+                                (effectiveAttachedFile
+                                  ? URL.createObjectURL(effectiveAttachedFile)
                                   : "")
                               }
                               alt={attachment.name}
@@ -1192,7 +1218,7 @@ const GroupMessageItem = ({
                   <div className="flex items-center gap-2">
                     {hasMention && (
                       <WebSearchToggle
-                        enabled={webSearchEnabled}
+                        enabled={effectiveWebSearchEnabled}
                         onToggle={setWebSearchEnabled}
                       />
                     )}
@@ -1247,8 +1273,8 @@ const GroupMessageItem = ({
                 </span>
 
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
                   components={assistantMarkdownComponents}
                 >
                   {msg.content ||
@@ -1279,8 +1305,8 @@ const GroupMessageItem = ({
                         />
                       ) : (
                         <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          rehypePlugins={[rehypeRaw]}
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[rehypeRaw, rehypeKatex]}
                           components={citationComponents}
                         >
                           {processedContent}
@@ -1430,53 +1456,55 @@ const GroupMessageItem = ({
                   <DropdownMenuContent
                     side="right"
                     align="end"
-                    className="w-48 bg-slate-900 border-slate-800"
+                    className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
                     collisionPadding={{ top: 100, bottom: 200 }}
                   >
                     <DropdownMenuCheckboxItem
                       checked={retryWebSearchEnabled}
                       onCheckedChange={setRetryWebSearchEnabled}
                       onSelect={(e) => e.preventDefault()}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=checked]:!text-white cursor-pointer"
                     >
                       <Globe size={14} className="mr-2 opacity-70" />
                       Web Search
                     </DropdownMenuCheckboxItem>
 
-                    <DropdownMenuSeparator className="bg-slate-800" />
+                    <DropdownMenuSeparator className="bg-zinc-800" />
 
                     <DropdownMenuItem
                       onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
-                      className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer"
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white cursor-pointer"
                     >
                       <RotateCcw size={14} className="mr-2 opacity-70" />
                       Try Again
                     </DropdownMenuItem>
 
                     <DropdownMenuSub>
-                      <DropdownMenuSubTrigger className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer">
+                      <DropdownMenuSubTrigger className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white data-[state=open]:!bg-white/5 data-[state=open]:!text-white cursor-pointer">
                         <Bot size={14} className="mr-2 opacity-70" />
                         Select Another Model
                       </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent
-                        className="bg-slate-900 border-slate-800 max-h-48 overflow-y-auto"
-                        collisionPadding={{ top: 100, bottom: 200 }}
-                      >
-                        {availableProviders.map((provider) => (
-                          <DropdownMenuItem
-                            key={provider.id}
-                            onClick={() =>
-                              onRetry(provider.id, retryWebSearchEnabled)
-                            }
-                            className="text-slate-200 focus:bg-slate-800 focus:text-slate-100 cursor-pointer flex items-center gap-2"
-                          >
-                            {getProviderIcon(provider.id, 12)}
-                            <span className="capitalize">
-                              {getModelOnlyName(provider.name)}
-                            </span>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
+                      <DropdownMenuPortal>
+                        <DropdownMenuSubContent
+                          className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
+                          collisionPadding={{ top: 100, bottom: 200 }}
+                        >
+                          {availableProviders.map((provider) => (
+                            <DropdownMenuItem
+                              key={provider.id}
+                              onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                              className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
+                                provider.id === msg.model
+                                  ? "!bg-white !text-black"
+                                  : "text-zinc-400 hover:!bg-white/5 hover:!text-white focus:!bg-white/5 focus:!text-white"
+                              }`}
+                            >
+                              {getProviderIcon(provider.id, 12)}
+                              <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuPortal>
                     </DropdownMenuSub>
                   </DropdownMenuContent>
                 </DropdownMenu>

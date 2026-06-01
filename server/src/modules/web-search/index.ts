@@ -19,4 +19,4 @@ export type {
     SearchRejection,
     SearchSource,
     WebGroundingContext,
-} from "./webSearch.types";
+} from "../../types/web-search.types";

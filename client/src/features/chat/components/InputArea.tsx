@@ -178,6 +178,7 @@ const ModelSelector = ({
   onWebSearchToggle,
   quotaStatus,
   isQuotaLoading,
+  isLoadingProviders,
 }: {
   availableProviders: Provider[];
   selectedProvider: string;
@@ -186,10 +187,24 @@ const ModelSelector = ({
   onWebSearchToggle: (enabled: boolean) => void;
   quotaStatus?: InputAreaProps["quotaStatus"];
   isQuotaLoading?: boolean;
+  isLoadingProviders?: boolean;
 }) => {
   const currentProviderName =
     availableProviders.find((p) => p.id === selectedProvider)?.name ||
     selectedProvider;
+
+  if (isLoadingProviders) {
+    return (
+      <div className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 pt-2 lg:pt-3 ">
+        <div className="group flex items-center gap-1.5 lg:gap-2 rounded-lg border border-zinc-800/60 bg-white/5 px-2 py-0.5 lg:px-2.5 lg:py-1 text-[10px] font-semibold lg:font-bold lg:uppercase tracking-normal lg:tracking-widest text-zinc-400 lg:text-zinc-500 transition-all">
+          <Loader2 size={12} className="animate-spin text-zinc-500" />
+          <span className="max-w-[100px] lg:max-w-none truncate">
+            Loading...
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (availableProviders.length === 0) {
     return (
@@ -336,7 +351,19 @@ const InputArea = ({
       if (files && files.length > 0) {
         const file = files[0];
         const isImage = file.type.startsWith("image/");
-        const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+        const fileExt = file.name.split(".").pop()?.toLowerCase();
+        const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv"];
+        const isDocument = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExt || "");
+
+        if (!isImage && !isDocument) {
+          toast.error("Unsupported file type!");
+          return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error("Please select a file under 5MB");
+          return;
+        }
 
         if (attachments.length > 0 || attachedFile) {
           toast.error("You can only upload one file per message.");
@@ -346,19 +373,6 @@ const InputArea = ({
         if (isDocument) {
           setAttachedFile(file);
           toast.success(`Document attached: ${file.name}`);
-          return;
-        }
-
-        if (!isImage && !isDocument) {
-          toast.error("Unsupported file type!");
-          return;
-        }
-
-        const MAX_SIZE = isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
-        const maxMB = MAX_SIZE / (1024 * 1024);
-
-        if (file.size > MAX_SIZE) {
-          toast.error(`Image size must be less than ${maxMB}MB`);
           return;
         }
 
@@ -414,7 +428,7 @@ const InputArea = ({
     },
   });
 
-  const { availableProviders } = useAvailableProviders(
+  const { availableProviders, isLoadingProviders } = useAvailableProviders(
     selectedProvider,
     onProviderChange,
   );
@@ -474,7 +488,21 @@ const InputArea = ({
     if (!file) return;
 
     const isImage = file.type.startsWith("image/");
-    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+    const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv"];
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExt || "");
+
+    if (!isImage && !isDocument) {
+      toast.error("Unsupported file type!");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Please select a file under 5MB");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
     if (attachments.length > 0 || attachedFile) {
       toast.error("You can only upload one file per message.");
@@ -485,20 +513,6 @@ const InputArea = ({
     if (isDocument) {
       setAttachedFile(file);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    // Basic validation
-    if (!isImage && !isDocument) {
-      toast.error("Unsupported file type!");
-      return;
-    }
-
-    const MAX_SIZE = isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
-    const maxMB = MAX_SIZE / (1024 * 1024);
-
-    if (file.size > MAX_SIZE) {
-      toast.error(`Image size must be less than ${maxMB}MB`);
       return;
     }
 
@@ -652,6 +666,7 @@ const InputArea = ({
                 onWebSearchToggle={onWebSearchToggle}
                 quotaStatus={quotaStatus}
                 isQuotaLoading={isQuotaLoading}
+                isLoadingProviders={isLoadingProviders}
               />
 
               {/* Attachment Previews */}
@@ -858,7 +873,8 @@ const InputArea = ({
                         cooldown > 0 ||
                         (!input.trim() &&
                           attachments.length === 0 &&
-                          !selectionContext)
+                          !selectionContext &&
+                          !attachedFile)
                           ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
                           : "bg-white text-zinc-900 hover:bg-zinc-200"
                       }`}

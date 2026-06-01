@@ -4,20 +4,13 @@ import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 
 import readXlsxFile from 'read-excel-file/node';
-type ExcelCell =
-  | string
-  | number
-  | boolean
-  | Date
-  | null;
-
-type ExcelRow = ExcelCell[];
-
 
 import type {
+  ExcelCell,
+  ExcelRow,
   ParsedFile,
   ParseOptions,
-} from './types';
+} from '../../types/file-rag.types';
 
 
 const SUPPORTED_EXTENSIONS = new Set([

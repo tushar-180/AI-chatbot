@@ -22,7 +22,7 @@ import type {
     SearchRejection,
     SearchSource,
     WebGroundingContext,
-} from "./webSearch.types";
+} from "../../types/web-search.types";
 
 const MAX_SEARCH_RESULTS = 10;
 const MAX_SOURCE_COUNT = 3;

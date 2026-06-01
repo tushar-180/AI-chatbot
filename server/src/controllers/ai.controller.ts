@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { aiService } from "../services/ai.service";
+import { aiService } from "../services/ai/ai.service";
 import { TokenUsageRecord } from "../models/Chat.model";
 import { setSseHeaders, splitAndWriteChunk, writeSse } from "../utils/sse";
 

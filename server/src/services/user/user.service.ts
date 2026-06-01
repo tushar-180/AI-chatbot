@@ -1,8 +1,8 @@
-import { User } from "../models/User.model";
-import { UserMemory } from "../models/UserMemory.model";
-import { aiService } from "./ai.service";
-import { Personalization, UserProfile } from "../types/chat.types";
-import { EXPORT_DATA_PROMPT } from "../constants/prompt.constants";
+import { User } from "../../models/User.model";
+import { UserMemory } from "../../models/UserMemory.model";
+import { aiService } from "../ai/ai.service";
+import { Personalization, UserProfile } from "../../types/chat.types";
+import { EXPORT_DATA_PROMPT } from "../../constants/prompt.constants";
 
 export const userService = {
   async syncUser(data: Partial<UserProfile>) {

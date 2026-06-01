@@ -47,7 +47,8 @@ const Chat = () => {
   // a specific chatId), redirect to a normal global new chat instead. This prevents
   // stale project context from persisting across refreshes.
   useEffect(() => {
-    if (projectId && !chatId) {
+    const state = location.state as any;
+    if (projectId && !chatId && !state?.pendingInput && !state?.pendingAttachedFile) {
       setActiveProjectId(null);
       navigate("/chat", { replace: true });
     }
@@ -236,7 +237,7 @@ const Chat = () => {
       canAutoStartFromSeededMessages ||
       currentChatId === null;
     if (
-      pendingState?.pendingInput &&
+      (pendingState?.pendingInput || pendingState?.pendingAttachedFile) &&
       isReady &&
       !isStreaming &&
       !hasAutoStartedRef.current
@@ -248,7 +249,7 @@ const Chat = () => {
 
       // Trigger message
       streamMessage(
-        pendingState.pendingInput,
+        pendingState.pendingInput || "",
         pendingState.pendingProvider || selectedProvider,
         pendingState.pendingAttachments || [],
         {
@@ -305,11 +306,10 @@ const Chat = () => {
   return (
     <div className="flex flex-1 min-w-0 h-screen overflow-hidden bg-[#09090b] text-zinc-100 font-sans antialiased">
       <main
-        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${
-          isTemporaryChatActive
+        className={`relative flex flex-1 flex-col h-screen overflow-hidden transition-all duration-500 ${isTemporaryChatActive
             ? "bg-[#09090b] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-950/10 via-[#09090b] to-[#09090b]"
             : "bg-[#09090b]"
-        }`}
+          }`}
       >
         {isCompareMode ? (
           <CompareModeView
@@ -351,8 +351,8 @@ const Chat = () => {
                       isTransitioning
                         ? !chatId
                         : !currentChatId ||
-                          loadedChatId === currentChatId ||
-                          canAutoStartFromSeededMessages
+                        loadedChatId === currentChatId ||
+                        canAutoStartFromSeededMessages
                     }
                     isStreaming={isTransitioning ? false : isStreaming}
                     currentChatId={

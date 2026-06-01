@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { McpServer } from "../models/McpServer.model";
+import { McpServer } from "../../models/McpServer.model";
 import { EventSource } from "eventsource";
 
 // Set global EventSource for SSE transport if not already defined (required by SSEClientTransport in Node environment)

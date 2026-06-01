@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { AIServiceError } from "../services/ai/types";
+import { AIServiceError } from "../types/ai.types";
 
 export const errorHandler = (
   err: any,

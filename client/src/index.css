@@ -513,3 +513,10 @@ input {
 textarea {
   -webkit-touch-callout: default !important;
 }
+
+/* Override KaTeX \boxed borders as they clash with our dark mode design */
+.katex .fbox,
+.katex .fcolorbox {
+  border: none !important;
+  padding: 0 !important;
+}

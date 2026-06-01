@@ -1,5 +1,5 @@
 // import { IAIService } from "../ai.interface";
-// import { AIMessage, AIServiceError } from "../types";
+// import { AIMessage, AIServiceError } from "../../../types/ai.types";
 // import { AI_PROVIDERS, getDisplayProviderName } from "../constants";
 
 // /**

@@ -1,9 +1,12 @@
 import { EventEmitter } from "events";
-import type { ActiveStream } from "../types/chat.types";
+import type { ActiveStream } from "../../types/chat.types";
+import type { ActiveGroupStream } from "../../types/stream.types";
 
 const activeStreams = new Map<string, ActiveStream>();
 const activeChatRequests = new Map<string, string>();
 const stoppedRequestIds = new Set<string>();
+
+const activeGroupStreams = new Map<string, ActiveGroupStream>();
 
 export const chatStreamRegistry = {
   create({
@@ -59,7 +62,6 @@ export const chatStreamRegistry = {
 
   updateResponse(requestId: string, fullResponse: string, chunk: string) {
     const activeStream = activeStreams.get(requestId);
-
     if (!activeStream) return;
 
     activeStream.fullResponse = fullResponse;
@@ -69,15 +71,12 @@ export const chatStreamRegistry = {
 
   updateUsage(requestId: string, usage: ActiveStream["usage"]) {
     const activeStream = activeStreams.get(requestId);
-
     if (!activeStream || !usage) return;
-
     activeStream.usage = usage;
   },
 
   complete(requestId: string) {
     const activeStream = activeStreams.get(requestId);
-
     if (!activeStream) return;
 
     activeStream.status = "completed";
@@ -93,7 +92,6 @@ export const chatStreamRegistry = {
     }, 60000);
 
     const activeStream = activeStreams.get(requestId);
-
     if (!activeStream) return null;
 
     activeStream.status = "stopped";
@@ -110,7 +108,6 @@ export const chatStreamRegistry = {
 
   fail(requestId: string, message: string) {
     const activeStream = activeStreams.get(requestId);
-
     if (!activeStream) return;
 
     if (activeStream.emitter.listenerCount("error") > 0) {
@@ -118,5 +115,66 @@ export const chatStreamRegistry = {
     }
     activeStreams.delete(requestId);
     activeChatRequests.delete(activeStream.chatId);
+  },
+};
+
+export const groupStreamRegistry = {
+  create({
+    groupId,
+    tempId,
+    assistantUsername,
+    webSearchEnabled,
+    promptMessages,
+    targetProvider,
+    clerkId,
+  }: {
+    groupId: string;
+    tempId: string;
+    assistantUsername: string;
+    webSearchEnabled: boolean;
+    promptMessages?: any[];
+    targetProvider?: string;
+    clerkId?: string;
+  }) {
+    const activeStream: ActiveGroupStream = {
+      groupId,
+      tempId,
+      assistantUsername,
+      fullResponse: "",
+      webSearchEnabled,
+      model: targetProvider || "",
+      requesterId: clerkId,
+      abortController: new AbortController(),
+      promptMessages,
+      targetProvider,
+      clerkId,
+    };
+
+    activeGroupStreams.set(groupId, activeStream);
+    return activeStream;
+  },
+
+  get(groupId: string) {
+    return activeGroupStreams.get(groupId);
+  },
+
+  updateResponse(groupId: string, fullResponse: string) {
+    const activeStream = activeGroupStreams.get(groupId);
+    if (activeStream) {
+      activeStream.fullResponse = fullResponse;
+    }
+  },
+
+  stop(groupId: string) {
+    const activeStream = activeGroupStreams.get(groupId);
+    if (!activeStream) return null;
+
+    activeStream.abortController.abort();
+    activeGroupStreams.delete(groupId);
+    return activeStream;
+  },
+
+  delete(groupId: string) {
+    activeGroupStreams.delete(groupId);
   },
 };

@@ -1,13 +1,13 @@
 import OpenAI from "openai";
 import { IAIService } from "../ai.interface";
-import { AIMessage, AIServiceError, AIStreamResponse } from "../types";
+import { AIMessage, AIServiceError, AIStreamResponse } from "../../../types/ai.types";
 import {
   AI_PROVIDERS,
   getDisplayProviderName,
   supportsVision,
 } from "../constants";
 import { normalizeOpenAIUsage } from "../../../utils/tokenCounter";
-import { mcpClientService } from "../../mcpClient.service";
+import { mcpClientService } from "../../mcp/mcpClient.service";
 import {
   CORE_VELORA_INSTRUCTIONS,
   MCP_TOOL_ERROR_FALLBACK_MESSAGE,
@@ -297,7 +297,6 @@ export class NvidiaAdapter implements IAIService {
             hasToolCalls = false;
 
             let streamOptions: { include_usage: boolean } | undefined = { include_usage: true };
-            console.log("NVIDIA request messages:", JSON.stringify(finalMessages, null, 2));
 
             const stream = await adapter.openai.chat.completions.create(
               {

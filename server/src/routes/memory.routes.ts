@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { memoryService } from "../services/memory.service";
+import { memoryService } from "../services/memory/memory.service";
 import { UserMemory } from "../models/UserMemory.model";
 
 const router = Router();
@@ -16,7 +16,9 @@ router.get("/", async (req, res) => {
     const skip = parseInt(req.query.skip as string) || 0;
 
     const memories = await memoryService.getMemories(userId, limit, skip);
-    res.json(memories);
+    const totalCount = await UserMemory.countDocuments({ userId });
+    
+    res.json({ memories, totalCount });
   } catch (error) {
     console.error("Failed to fetch memories:", error);
     res.status(500).json({ error: "Internal server error" });

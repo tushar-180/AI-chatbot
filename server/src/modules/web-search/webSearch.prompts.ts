@@ -1,4 +1,4 @@
-import type { SearchImage, SearchSource } from "./webSearch.types";
+import type { SearchImage, SearchSource } from "../../types/web-search.types";
 
 export const WEB_GROUNDING_SYSTEM_PROMPT = (
     query: string,

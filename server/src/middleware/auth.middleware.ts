@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { getAuth, createClerkClient } from "@clerk/express";
-import { userService } from "../services/user.service";
+import { userService } from "../services/user/user.service";
 import { UserProfile } from "../types/chat.types";
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });

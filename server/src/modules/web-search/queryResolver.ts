@@ -2,9 +2,9 @@
 // Overhauled to use LLM for query resolution.
 // Support for multi-language and removal of hardcoded patterns.
 
-import { aiService } from "../../services/ai.service";
+import { aiService } from "../../services/ai/ai.service";
 import type { ChatMessage } from "../../types/chat.types";
-import type { ResolvedSearchQuery } from "./webSearch.types";
+import type { ResolvedSearchQuery } from "../../types/web-search.types";
 import { QUERY_RESOLUTION_PROMPT } from "./webSearch.prompts";
 
 /**

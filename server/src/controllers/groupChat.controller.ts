@@ -1,16 +1,17 @@
 import { Request, Response } from "express";
-import { GroupChatService } from "../services/groupChat.service";
+import { GroupChatService } from "../services/chat/groupChat.service";
+import { resolveClerkId, parseRequestBody } from "../utils/requestParser";
+import { sendControllerError } from "../utils/controller";
 
 export class GroupChatController {
+  private static handleError(res: Response, error: unknown, fallback: string) {
+    return sendControllerError(res, error, fallback);
+  }
+
   static async createGroup(req: Request, res: Response) {
-    console.log("Create Group called with:", req.body);
     try {
-      const { chatId, userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { chatId } = req.body;
+      const clerkId = resolveClerkId(req);
 
       if (!chatId) return res.status(400).json({ error: "chatId is required" });
 
@@ -19,9 +20,8 @@ export class GroupChatController {
         clerkId,
       );
       res.json(group);
-    } catch (error: any) {
-      console.error("Error in createGroup:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to create group");
     }
   }
 
@@ -31,54 +31,40 @@ export class GroupChatController {
       const group = await GroupChatService.getGroupByInviteCode(inviteCode);
       if (!group) return res.status(404).json({ error: "Group not found" });
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch group");
     }
   }
 
   static async joinGroup(req: Request, res: Response) {
     try {
       const inviteCode = req.params.inviteCode as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const group = await GroupChatService.joinGroup(inviteCode, clerkId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to join group");
     }
   }
 
   static async leaveGroup(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const result = await GroupChatService.leaveGroup(groupId, clerkId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to leave group");
     }
   }
 
   static async removeMember(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { memberId, userId } = req.body;
-      const adminClerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!adminClerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { memberId } = req.body;
+      const adminClerkId = resolveClerkId(req);
       if (!memberId)
         return res.status(400).json({ error: "Member ID is required" });
 
@@ -88,103 +74,76 @@ export class GroupChatController {
         memberId,
       );
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to remove member");
     }
   }
 
   static async getGroupDetails(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const messages = await GroupChatService.getGroupMessages(groupId);
       res.json({ messages });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch group details");
     }
   }
 
   static async sendMessage(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { content, userId, webSearchEnabled } = req.body;
-      const attachments = typeof req.body.attachments === 'string'
-        ? JSON.parse(req.body.attachments)
-        : (req.body.attachments || []);
-      const attachedFile = req.file || null;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { content } = req.body;
+      const clerkId = resolveClerkId(req);
+      const parsed = parseRequestBody(req);
 
       const message = await GroupChatService.addMessage(
         groupId,
         clerkId,
         content,
         "user",
-        Boolean(webSearchEnabled),
-        attachments || [],
-        attachedFile,
+        Boolean(parsed.webSearchEnabled),
+        parsed.attachments || [],
+        parsed.attachedFile,
       );
       res.json(message);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to send group message");
     }
   }
 
   static async getUserGroups(req: Request, res: Response) {
     try {
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const groups = await GroupChatService.getUserGroups(clerkId);
       res.json(groups);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch user groups");
     }
   }
 
   static async getUserCreatedGroups(req: Request, res: Response) {
     try {
-      const userId = req.query.userId as string;
-      const clerkId =
-        userId ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const groups = await GroupChatService.getUserCreatedGroups(clerkId);
       res.json(groups);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to fetch created groups");
     }
   }
 
   static async deleteGroup(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const clerkId = resolveClerkId(req);
 
       const result = await GroupChatService.deleteGroup(groupId, clerkId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to delete group");
     }
   }
 
@@ -193,20 +152,16 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const result = await GroupChatService.stopGroupStream(groupId);
       res.json(result);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to stop group stream");
     }
   }
 
   static async updateGroupTitle(req: Request, res: Response) {
     try {
       const groupId = req.params.groupId as string;
-      const { title, userId } = req.body;
-      const clerkId =
-        (userId as string) ||
-        (req as any).auth?.userId ||
-        (req.headers["x-user-id"] as string);
-      if (!clerkId) return res.status(401).json({ error: "Unauthorized" });
+      const { title } = req.body;
+      const clerkId = resolveClerkId(req);
 
       const group = await GroupChatService.updateGroupTitle(
         groupId,
@@ -214,8 +169,8 @@ export class GroupChatController {
         clerkId,
       );
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to update group title");
     }
   }
 
@@ -224,8 +179,8 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const group = await GroupChatService.pinGroup(groupId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to pin group");
     }
   }
 
@@ -234,8 +189,8 @@ export class GroupChatController {
       const groupId = req.params.groupId as string;
       const group = await GroupChatService.unpinGroup(groupId);
       res.json(group);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to unpin group");
     }
   }
 
@@ -243,26 +198,21 @@ export class GroupChatController {
     try {
       const groupId = req.params.groupId as string;
       const messageId = req.params.messageId as string;
-      const { content, provider, webSearchEnabled } = req.body;
-
-      const attachments = typeof req.body.attachments === 'string'
-        ? JSON.parse(req.body.attachments)
-        : (req.body.attachments || []);
-      const attachedFile = req.file || null;
+      const { content, provider } = req.body;
+      const parsed = parseRequestBody(req);
 
       const message = await GroupChatService.editGroupMessage(
         groupId,
         messageId,
         content,
         provider,
-        Boolean(webSearchEnabled),
-        attachments,
-        attachedFile
+        Boolean(parsed.webSearchEnabled),
+        parsed.attachments,
+        parsed.attachedFile
       );
       res.json(message);
-    } catch (error: any) {
-      console.error("Error in editGroupMessage:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to edit group message");
     }
   }
 
@@ -280,16 +230,16 @@ export class GroupChatController {
         webSearchEnabled,
       );
       res.json(result);
-    } catch (error: any) {
-      console.error("Error in retryGroupMessage:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to retry group message");
     }
   }
 
   static async updateGroupMessageFeedback(req: Request, res: Response) {
     try {
       const messageId = req.params.messageId as string;
-      const { feedback, userId, username } = req.body;
+      const { feedback, username } = req.body;
+      const userId = resolveClerkId(req);
 
       const message = await GroupChatService.updateGroupMessageReaction(
         messageId,
@@ -298,9 +248,8 @@ export class GroupChatController {
         feedback,
       );
       res.json(message);
-    } catch (error: any) {
-      console.error("Error in updateGroupMessageFeedback:", error);
-      res.status(500).json({ error: error.message });
+    } catch (error) {
+      return GroupChatController.handleError(res, error, "Failed to update group message feedback");
     }
   }
 }

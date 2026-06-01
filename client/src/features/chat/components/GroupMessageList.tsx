@@ -254,10 +254,10 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 rounded-2xl bg-slate-900/80 px-5 py-4 ring-1 ring-slate-800/60">
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
+              <div className="flex items-center gap-1.5 rounded-2xl bg-zinc-900/80 px-5 py-4 ring-1 ring-zinc-800/60">
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
+                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400" />
               </div>
             </div>
           </div>
@@ -328,9 +328,9 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                           </div>
                         ) : (
                           <>
-                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.3s]" />
-                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400 [animation-delay:-0.15s]" />
-                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-emerald-400" />
+                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
+                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
+                            <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400" />
                             <span className="ml-1 text-xs font-medium tracking-wide text-slate-400 animate-pulse">
                               generating response
                             </span>

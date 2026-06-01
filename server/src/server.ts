@@ -6,7 +6,7 @@ import { Server } from "socket.io";
 import app, { allowedOrigins } from "./app";
 import { connectDB } from "./config/db";
 import { groupSocketManager } from "./utils/groupSocket";
-import { mcpClientService } from "./services/mcpClient.service";
+import { mcpClientService } from "./services/mcp/mcpClient.service";
 
 const PORT = process.env.PORT || 5000;
 

@@ -32,13 +32,13 @@ export interface YouTubeTranscriptError {
 export type YouTubeTranscriptResult = YouTubeTranscriptSuccess | YouTubeTranscriptError;
 
 export type YouTubeErrorCode =
-  | 'VIDEO_NOT_FOUND'
-  | 'TRANSCRIPT_DISABLED'
-  | 'TRANSCRIPT_NOT_FOUND'
-  | 'INVALID_URL'
-  | 'RATE_LIMITED'
-  | 'NETWORK_ERROR'
-  | 'UNKNOWN';
+  | "VIDEO_NOT_FOUND"
+  | "TRANSCRIPT_DISABLED"
+  | "TRANSCRIPT_NOT_FOUND"
+  | "INVALID_URL"
+  | "RATE_LIMITED"
+  | "NETWORK_ERROR"
+  | "UNKNOWN";
 
 export interface YouTubeToolConfig {
   enableCache?: boolean;

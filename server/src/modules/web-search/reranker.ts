@@ -1,6 +1,6 @@
 import MiniSearch from "minisearch";
 import { differenceInDays, parseISO, isValid } from "date-fns";
-import type { SearchCandidate } from "./webSearch.types";
+import type { SearchCandidate } from "../../types/web-search.types";
 
 // ---------------------------------------------------------------------------
 //  Freshness scoring (no changes)
