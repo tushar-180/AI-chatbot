@@ -8,33 +8,34 @@ import { connectDB } from "./config/db";
 import { groupSocketManager } from "./utils/groupSocket";
 import { mcpClientService } from "./services/mcp/mcpClient.service";
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
 
-connectDB().then(() => {
-  const httpServer = createServer(app);
-  
-  const io = new Server(httpServer, {
-    cors: {
-      origin: allowedOrigins,
-      credentials: true,
-    },
-  });
+const httpServer = createServer(app);
 
-  groupSocketManager.init(io);
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
 
-  httpServer.listen(PORT, () => {
-    console.log(`Server Running On Port ${PORT}`);
+groupSocketManager.init(io);
 
-    // Initialize MCP client service in the background after the server starts listening
-    mcpClientService
-      .initialize()
-      .then(() => {
-        console.log("[MCP] Dynamic client service initialized.");
-      })
-      .catch((err) => {
-        console.error("[MCP] Initialization error:", err);
-      });
-  });
+httpServer.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server Running On Port ${PORT}`);
+
+  // Connect to the database and initialize services after the port is open
+  connectDB()
+    .then(() => {
+      // Initialize MCP client service in the background after database connection
+      return mcpClientService.initialize();
+    })
+    .then(() => {
+      console.log("[MCP] Dynamic client service initialized.");
+    })
+    .catch((err) => {
+      console.error("Initialization error:", err);
+    });
 });
 
 const handleShutdown = async () => {
