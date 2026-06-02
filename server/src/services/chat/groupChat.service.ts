@@ -781,7 +781,8 @@ export class GroupChatService {
 
       console.error("AI Group Generation Error:", err);
 
-      const errorContent = `**Failed to generate response.** The model \`${displayName}\` encountered an error or is temporarily unavailable. Please try again.`;
+      const rawErrorMessage = err instanceof Error ? err.message : String(err);
+      const errorContent = `**Failed to generate response.** The model \`${displayName}\` encountered an error: \`${rawErrorMessage}\`. Please try again.`;
 
       // Save the error message so it persists in the chat history
       const errorMsg = await GroupMessage.create({

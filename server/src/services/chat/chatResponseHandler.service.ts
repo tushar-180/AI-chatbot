@@ -339,7 +339,8 @@ export async function* streamAssistantResponse(
       "",
       promptAttachmentCount,
     );
-    const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
+    const rawErrorMessage = aiError instanceof Error ? aiError.message : String(aiError);
+    const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error: \`${rawErrorMessage}\`. Please try again.`;
     await chatRepository.updateMessage((assistantMessageDoc as any)._id, {
       content: detailedErrorMessage,
       status: "failed",

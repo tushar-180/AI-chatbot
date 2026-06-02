@@ -184,7 +184,8 @@ export const temporaryChatService = {
       }
 
       console.error("AI Error in temporary chat stream:", aiError);
-      const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error or is temporarily unavailable. Please try again.`;
+      const rawErrorMessage = aiError instanceof Error ? aiError.message : String(aiError);
+      const detailedErrorMessage = `**Failed to generate response.** The model \`${providerName}\` encountered an error: \`${rawErrorMessage}\`. Please try again.`;
       chatStreamRegistry.fail(requestId, detailedErrorMessage);
       yield { error: detailedErrorMessage, status: "failed" };
     }
