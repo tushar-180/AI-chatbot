@@ -775,7 +775,7 @@ export const useChatStream = (hookOptions?: {
       attachedFile?: File;
     },
   ) => {
-    if (!input.trim() && attachments.length === 0 && !options?.selection)
+    if (!input.trim() && attachments.length === 0 && !options?.selection && !options?.attachedFile)
       return;
     if (!user?.id) return;
 
@@ -913,6 +913,10 @@ export const useChatStream = (hookOptions?: {
         fd.append("webSearchEnabled", String(webSearchEnabled));
         if (options?.selection) {
           fd.append("selection", JSON.stringify(options.selection));
+        }
+        const activeProjectId = useProjectStore.getState().activeProjectId;
+        if (activeProjectId) {
+          fd.append("projectId", activeProjectId);
         }
         fd.append("file", options.attachedFile!);
         body = fd;
@@ -1236,6 +1240,8 @@ export const useChatStream = (hookOptions?: {
         Authorization: `Bearer ${await getToken()}`,
       };
 
+      const activeProjectId = useProjectStore.getState().activeProjectId;
+
       if (options?.attachedFile) {
         body = new FormData();
         body.append("content", newContent);
@@ -1250,6 +1256,9 @@ export const useChatStream = (hookOptions?: {
         if (options?.selection !== undefined) {
           body.append("selection", typeof options.selection === 'string' ? options.selection : JSON.stringify(options.selection));
         }
+        if (activeProjectId) {
+          body.append("projectId", activeProjectId);
+        }
         body.append("file", options.attachedFile);
       } else {
         headers["Content-Type"] = "application/json";
@@ -1260,6 +1269,7 @@ export const useChatStream = (hookOptions?: {
           webSearchEnabled,
           attachments: options?.attachments,
           selection: options?.selection,
+          projectId: activeProjectId || undefined,
         });
       }
 
@@ -1406,6 +1416,7 @@ export const useChatStream = (hookOptions?: {
           provider,
           requestId,
           webSearchEnabled,
+          projectId: useProjectStore.getState().activeProjectId || undefined,
         }),
       });
 

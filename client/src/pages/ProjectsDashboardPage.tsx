@@ -253,7 +253,6 @@ export default function ProjectsPage() {
   const [deleteConfig, setDeleteConfig] = useState<{ id: string; type: "project" | "chat" } | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState("gemini:gemini-2.5-pro");
 
@@ -373,7 +372,20 @@ export default function ProjectsPage() {
         pendingProvider: selectedProvider,
         pendingAttachments: attachments,
         pendingWebSearch: webSearchEnabled,
-        pendingAttachedFile: attachedFile,
+        pendingAttachedFile: null,
+      },
+    });
+  };
+
+  const handleDocumentSubmit = (file: File) => {
+    if (!projectId) return;
+    navigate(`/projects/${projectId}/new`, {
+      state: { 
+        pendingInput: chatInput, 
+        pendingProvider: selectedProvider,
+        pendingAttachments: attachments,
+        pendingWebSearch: webSearchEnabled,
+        pendingAttachedFile: file,
       },
     });
   };
@@ -437,7 +449,7 @@ export default function ProjectsPage() {
                   onAttachmentsChange={setAttachments}
                   webSearchEnabled={webSearchEnabled}
                   onWebSearchToggle={setWebSearchEnabled}
-                  onSubmitDocument={setAttachedFile}
+                  onSubmitDocument={handleDocumentSubmit}
                 />
               </div>
 

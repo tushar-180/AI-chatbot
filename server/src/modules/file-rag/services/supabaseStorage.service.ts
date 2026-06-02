@@ -32,8 +32,12 @@ export const supabaseStorageService = {
             });
 
         if (error) {
-            console.error('Supabase upload error:', error);
-            throw new Error(`File upload failed: ${error.message}`);
+            if (error.message.includes('already exists') || error.message.includes('The resource already exists')) {
+                console.log(`[Supabase Storage] File already exists at path: ${filePath}, reusing it.`);
+            } else {
+                console.error('Supabase upload error:', error);
+                throw new Error(`File upload failed: ${error.message}`);
+            }
         }
 
         // Since the bucket is private, generate a signed URL that expires in 24 hours.

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Chat, Message } from "@/features/chat/types/chat.types";
+import type { Chat, Message, Attachment } from "@/features/chat/types/chat.types";
 
 type ChatState = {
   chats: Chat[];
@@ -22,6 +22,10 @@ type ChatState = {
   // Used by GenerationSwitcher to track which generation is shown per branch
   generationIndexByChatId: Record<string, Record<string, string>>;
   setDbUser: (dbUser: any) => void;
+  activeZoomedImage: string | null;
+  setActiveZoomedImage: (url: string | null) => void;
+  activeZoomedAttachment: Attachment | null;
+  setActiveZoomedAttachment: (attachment: Attachment | string | null) => void;
 
   setSidebarOpen: (open: boolean) => void;
   setChats: (chats: Chat[]) => void;
@@ -70,8 +74,48 @@ export const useChatStore = create<ChatState>()(
       currentChat: null,
       dbUser: null,
       generationIndexByChatId: {},
-
+      activeZoomedImage: null,
+      activeZoomedAttachment: null,
+ 
       setDbUser: (dbUser) => set({ dbUser }),
+      setActiveZoomedImage: (url) => {
+        if (url === null) {
+          set({ activeZoomedImage: null, activeZoomedAttachment: null });
+        } else {
+          set({
+            activeZoomedImage: url,
+            activeZoomedAttachment: { url, mimeType: "image/png", name: "Image Preview" },
+          });
+        }
+      },
+      setActiveZoomedAttachment: (attachment) => {
+        if (typeof attachment === "string") {
+          const urlLower = attachment.toLowerCase();
+          let mime = "application/octet-stream";
+          let name = "Document Preview";
+          if (urlLower.includes(".pdf")) {
+            mime = "application/pdf";
+            name = "PDF Preview";
+          } else if (urlLower.includes(".png") || urlLower.includes(".jpg") || urlLower.includes(".jpeg") || urlLower.includes(".webp") || urlLower.includes(".gif")) {
+            mime = "image/png";
+            name = "Image Preview";
+          } else if (urlLower.includes(".txt")) {
+            mime = "text/plain";
+            name = "Text Preview";
+          }
+          set({
+            activeZoomedAttachment: { url: attachment, mimeType: mime, name },
+            activeZoomedImage: attachment,
+          });
+        } else if (attachment === null) {
+          set({ activeZoomedAttachment: null, activeZoomedImage: null });
+        } else {
+          set({
+            activeZoomedAttachment: attachment,
+            activeZoomedImage: attachment.url || null,
+          });
+        }
+      },
 
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
@@ -329,7 +373,7 @@ export const useChatStore = create<ChatState>()(
         Object.fromEntries(
           Object.entries(state).filter(
             ([key]) =>
-              !["loading", "isStreaming", "streamingChatId", "loadingChatIds", "streamingChatIds", "generationIndexByChatId"].includes(key),
+              !["loading", "isStreaming", "streamingChatId", "loadingChatIds", "streamingChatIds", "generationIndexByChatId", "activeZoomedImage", "activeZoomedAttachment"].includes(key),
           ),
         ) as ChatState,
     },

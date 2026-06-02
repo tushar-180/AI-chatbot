@@ -27,7 +27,6 @@ import { SelectionToolbar } from "@/features/chat/components/SelectionToolbar";
 import { useComposerStore } from "@/features/chat/store/useComposerStore";
 import { useProjectStore } from "@/features/chat/store/useProjectStore";
 
-
 /**
  * Chat Page Component
  * Handles the main layout and orchestrates chat logic via custom hooks.
@@ -48,7 +47,8 @@ const Chat = () => {
   // a specific chatId), redirect to a normal global new chat instead. This prevents
   // stale project context from persisting across refreshes.
   useEffect(() => {
-    if (projectId && !chatId) {
+    const state = location.state as any;
+    if (projectId && !chatId && !state?.pendingInput && !state?.pendingAttachedFile) {
       setActiveProjectId(null);
       navigate("/chat", { replace: true });
     }
@@ -237,7 +237,7 @@ const Chat = () => {
       canAutoStartFromSeededMessages ||
       currentChatId === null;
     if (
-      pendingState?.pendingInput &&
+      (pendingState?.pendingInput || pendingState?.pendingAttachedFile) &&
       isReady &&
       !isStreaming &&
       !hasAutoStartedRef.current
@@ -249,7 +249,7 @@ const Chat = () => {
 
       // Trigger message
       streamMessage(
-        pendingState.pendingInput,
+        pendingState.pendingInput || "",
         pendingState.pendingProvider || selectedProvider,
         pendingState.pendingAttachments || [],
         {
@@ -417,16 +417,18 @@ const Chat = () => {
                       setMessages(updated);
 
                       if (currentChatId && newMsg.branchId) {
-                        chatService.setActiveBranch(
-                          currentChatId,
-                          newMsg.branchId,
-                          newMsg.id,
-                        ).catch((err) => {
-                          console.error(
-                            "Failed to switch active branch on server",
-                            err,
-                          );
-                        });
+                        chatService
+                          .setActiveBranch(
+                            currentChatId,
+                            newMsg.branchId,
+                            newMsg.id,
+                          )
+                          .catch((err) => {
+                            console.error(
+                              "Failed to switch active branch on server",
+                              err,
+                            );
+                          });
                       }
                     }}
                   />
@@ -455,7 +457,9 @@ const Chat = () => {
                 webSearchEnabled={webSearchEnabled}
                 onWebSearchToggle={setWebSearchEnabled}
                 isArchived={isArchived}
-                onUnarchive={() => currentChatId && unarchiveChat(currentChatId)}
+                onUnarchive={() =>
+                  currentChatId && unarchiveChat(currentChatId)
+                }
                 quotaStatus={quotaStatus}
                 isQuotaLoading={isQuotaLoading}
               />

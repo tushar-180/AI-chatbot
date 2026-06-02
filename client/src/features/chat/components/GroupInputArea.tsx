@@ -421,7 +421,21 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({
     if (!file) return;
 
     const isImage = file.type.startsWith("image/");
-    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+    const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv"];
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExt || "");
+
+    if (!isImage && !isDocument) {
+      toast.error("Only images and documents (.pdf, .doc, etc) are supported.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Please select a file under 5MB");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
     if (attachments.length > 0 || attachedFile) {
       toast.error("You can only upload one file per message.");
@@ -432,17 +446,6 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({
     if (isDocument) {
       setAttachedFile(file);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    if (!isImage) {
-      toast.error("Only images and documents (.pdf, .doc, etc) are supported.");
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size must be less than 5MB");
       return;
     }
 
@@ -925,13 +928,13 @@ const GroupInputArea: React.FC<GroupInputAreaProps> = ({
                     isSending ||
                     isUploading ||
                     cooldown > 0 ||
-                    (!input.trim() && attachments.length === 0)
+                    (!input.trim() && attachments.length === 0 && !attachedFile)
                   }
                   className={`flex h-9 w-9 lg:h-10 lg:w-10 shrink-0 items-center justify-center rounded-full transition-all duration-300 ${
                     isSending ||
                     isUploading ||
                     cooldown > 0 ||
-                    (!input.trim() && attachments.length === 0)
+                    (!input.trim() && attachments.length === 0 && !attachedFile)
                       ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
                       : "bg-white text-zinc-900 hover:bg-zinc-200 cursor-pointer"
                   }`}

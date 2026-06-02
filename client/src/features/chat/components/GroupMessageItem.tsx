@@ -54,15 +54,25 @@ import { supportsVision } from "@/features/chat/constants/chat.constants";
 import type { Attachment } from "../types/chat.types";
 import type { GroupMessage, GroupMember } from "../store/useGroupStore";
 
+type GroupSource = NonNullable<GroupMessage["sources"]>[number];
+type MarkdownAstNode = {
+  properties?: Record<string, unknown>;
+};
+
 interface GroupMessageItemProps {
   message: GroupMessage;
   members: GroupMember[];
   isRequester: boolean;
 
   onCitationClick?: (id: number) => void;
-  onSourcesClick?: (sources: any[], activeId?: number) => void;
+  onSourcesClick?: (sources: GroupSource[], activeId?: number) => void;
 
-  onEdit?: (content: string, webSearchEnabled?: boolean, attachments?: Attachment[], attachedFile?: File | null) => void;
+  onEdit?: (
+    content: string,
+    webSearchEnabled?: boolean,
+    attachments?: Attachment[],
+    attachedFile?: File | null,
+  ) => void;
   onEditStart?: () => void;
 
   onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
@@ -93,7 +103,9 @@ const getModelOnlyName = (fullName: string) => {
 
 const getCleanModelName = (id: string) => {
   const afterColon = id.includes(":") ? id.split(":")[1] : id;
-  return afterColon.includes("/") ? afterColon.split("/").pop() || afterColon : afterColon;
+  return afterColon.includes("/")
+    ? afterColon.split("/").pop() || afterColon
+    : afterColon;
 };
 
 let cachedProviders: Provider[] | null = null;
@@ -102,23 +114,31 @@ let providersPromise: Promise<Provider[]> | null = null;
 const fetchProvidersGlobally = async () => {
   if (cachedProviders) return cachedProviders;
   if (providersPromise) return providersPromise;
-  
-  providersPromise = api.get("/ai/providers").then(res => {
-    const rawProviders: Provider[] = res.data.providers || [];
-    const defaultModelId = "gemini:gemini-3.1-flash-lite";
-    const defaultModel = rawProviders.find((p: Provider) => p.id === defaultModelId);
-    let sortedProviders = [...rawProviders];
-    if (defaultModel) {
-      sortedProviders = [defaultModel, ...rawProviders.filter((p: Provider) => p.id !== defaultModelId)];
-    }
-    cachedProviders = sortedProviders;
-    return sortedProviders;
-  }).catch(err => {
-    console.error("Error fetching providers", err);
-    providersPromise = null;
-    return [];
-  });
-  
+
+  providersPromise = api
+    .get("/ai/providers")
+    .then((res) => {
+      const rawProviders: Provider[] = res.data.providers || [];
+      const defaultModelId = "gemini:gemini-3.1-flash-lite";
+      const defaultModel = rawProviders.find(
+        (p: Provider) => p.id === defaultModelId,
+      );
+      let sortedProviders = [...rawProviders];
+      if (defaultModel) {
+        sortedProviders = [
+          defaultModel,
+          ...rawProviders.filter((p: Provider) => p.id !== defaultModelId),
+        ];
+      }
+      cachedProviders = sortedProviders;
+      return sortedProviders;
+    })
+    .catch((err) => {
+      console.error("Error fetching providers", err);
+      providersPromise = null;
+      return [];
+    });
+
   return providersPromise;
 };
 
@@ -166,7 +186,11 @@ const MessageAvatar = ({
   >
     {isUser ? (
       imageUrl ? (
-        <img src={optimizeImageUrl(imageUrl, (size || 18) * 2)} alt="User" className="h-full w-full object-cover" />
+        <img
+          src={optimizeImageUrl(imageUrl, (size || 18) * 2)}
+          alt="User"
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center bg-emerald-500/10 text-emerald-500 font-bold text-[8px]">
           {username.substring(0, 1).toUpperCase()}
@@ -184,7 +208,7 @@ const MessageAvatar = ({
   </div>
 );
 
-const AttachmentList = ({ attachments }: { attachments: any[] }) => {
+const AttachmentList = ({ attachments }: { attachments: Attachment[] }) => {
   if (!attachments || attachments.length === 0) return null;
 
   return (
@@ -195,15 +219,25 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
           className="group relative max-w-sm overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-md transition-all hover:border-white/20"
         >
           {attachment.mimeType?.startsWith("image/") ||
-          attachment.url.startsWith("data:image") ? (
+          (attachment.url || "").startsWith("data:image") ? (
             <img
               src={optimizeImageUrl(attachment.url || "", 600)}
               alt={attachment.name || "Attachment"}
-              className="h-auto w-full object-contain max-h-128 bg-slate-950/40"
+              className="h-auto w-full object-contain max-h-128 bg-slate-950/40 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               fetchPriority="high"
+              onClick={(e) => {
+                e.stopPropagation();
+                useChatStore.getState().setActiveZoomedAttachment(attachment);
+              }}
             />
           ) : (
-            <div className="flex items-center gap-3 p-4">
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                useChatStore.getState().setActiveZoomedAttachment(attachment);
+              }}
+              className="flex items-center gap-3 p-4 cursor-pointer hover:bg-white/5 active:scale-[0.98] transition-all"
+            >
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
                 <span className="text-xs font-bold uppercase tracking-tighter">
                   File
@@ -230,18 +264,48 @@ const AttachmentList = ({ attachments }: { attachments: any[] }) => {
 };
 
 const ALLOWED_HTML_TAGS = new Set([
-  "a", "b", "i", "u", "strong", "em", "br", "hr", "code", "pre",
-  "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td",
-  "blockquote", "span", "div", "p", "h1", "h2", "h3", "h4", "h5", "h6", "cite"
+  "a",
+  "b",
+  "i",
+  "u",
+  "strong",
+  "em",
+  "br",
+  "hr",
+  "code",
+  "pre",
+  "ul",
+  "ol",
+  "li",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "blockquote",
+  "span",
+  "div",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "cite",
 ]);
 
 function escapeUnrecognizedHtmlTags(text: string): string {
-  return text.replace(/<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g, (match, closing, tagName, attributes) => {
-    if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
-      return match;
-    }
-    return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
-  });
+  return text.replace(
+    /<(\/?)([a-zA-Z0-9-]+)([^>]*)>/g,
+    (match, closing, tagName, attributes) => {
+      if (ALLOWED_HTML_TAGS.has(tagName.toLowerCase())) {
+        return match;
+      }
+      return `&lt;${closing || ""}${tagName}${attributes || ""}&gt;`;
+    },
+  );
 }
 
 const GroupMessageItem = ({
@@ -265,7 +329,13 @@ const GroupMessageItem = ({
   const isUser = msg.role === "user";
 
   const isFailed = msg.status === "failed";
-  const isEdited = Boolean(msg.role === "user" && msg.updatedAt && msg.createdAt && new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() > 2000);
+  const isEdited = Boolean(
+    msg.role === "user" &&
+    msg.updatedAt &&
+    msg.createdAt &&
+    new Date(msg.updatedAt).getTime() - new Date(msg.createdAt).getTime() >
+      2000,
+  );
 
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -278,7 +348,7 @@ const GroupMessageItem = ({
   const [activeIndex, setActiveIndex] = useState(0);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [retryWebSearchEnabled, setRetryWebSearchEnabled] = useState(
-    Boolean(msg.metadata?.webSearchEnabled)
+    Boolean(msg.metadata?.webSearchEnabled),
   );
   const [isFocused, setIsFocused] = useState(false);
 
@@ -299,7 +369,9 @@ const GroupMessageItem = ({
 
   // Fetch providers unconditionally so valid mentions can be highlighted in sent messages
   useEffect(() => {
-    fetchProvidersGlobally().then(providers => setAvailableProviders(providers));
+    fetchProvidersGlobally().then((providers) =>
+      setAvailableProviders(providers),
+    );
   }, []);
 
   useEffect(() => {
@@ -332,10 +404,6 @@ const GroupMessageItem = ({
   }, [editContent]);
 
   useEffect(() => {
-    setActiveIndex(0);
-  }, [filterText]);
-
-  useEffect(() => {
     if (activeItemRef.current) {
       activeItemRef.current.scrollIntoView({ block: "nearest" });
     }
@@ -349,7 +417,9 @@ const GroupMessageItem = ({
         mentionText === "velora" ||
         availableProviders.some((p) => {
           const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionText || p.id.toLowerCase() === mentionText;
+          return (
+            cleanName === mentionText || p.id.toLowerCase() === mentionText
+          );
         })
       );
     });
@@ -373,16 +443,9 @@ const GroupMessageItem = ({
 
   const mentionedModelId = getMentionedModelId();
   const canUpload = mentionedModelId ? supportsVision(mentionedModelId) : true;
-
-  useEffect(() => {
-    if (!hasMention) {
-      setWebSearchEnabled(false);
-    }
-    if (!canUpload) {
-      setAttachments([]);
-      setAttachedFile(null);
-    }
-  }, [hasMention, canUpload]);
+  const effectiveWebSearchEnabled = hasMention && webSearchEnabled;
+  const effectiveAttachments = canUpload ? attachments : [];
+  const effectiveAttachedFile = canUpload ? attachedFile : null;
 
   const highlightMentions = (text: string) => {
     if (!text) return null;
@@ -402,46 +465,64 @@ const GroupMessageItem = ({
       const trailingSpace = match[2]; // "" or " "
       const mentionText = fullToken.substring(1).toLowerCase();
 
-      const isValidModel = mentionText === "velora" || availableProviders.some((p) => {
-        const cleanName = getCleanModelName(p.id).toLowerCase();
-        return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-      });
+      const isValidModel =
+        mentionText === "velora" ||
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return (
+            cleanName === mentionText || p.id.toLowerCase() === mentionText
+          );
+        });
 
       // Check if user is still typing (partial prefix, no trailing space)
-      const isPartialMatch = !trailingSpace && !isValidModel && availableProviders.some((p) => {
-        const cleanName = getCleanModelName(p.id).toLowerCase();
-        return cleanName.startsWith(mentionText) || p.id.toLowerCase().startsWith(mentionText);
-      });
+      const isPartialMatch =
+        !trailingSpace &&
+        !isValidModel &&
+        availableProviders.some((p) => {
+          const cleanName = getCleanModelName(p.id).toLowerCase();
+          return (
+            cleanName.startsWith(mentionText) ||
+            p.id.toLowerCase().startsWith(mentionText)
+          );
+        });
 
-      const isUserMatch = mentionText === "everyone" || members.some(m => m.username.toLowerCase() === mentionText);
-      const isUserPartialMatch = !trailingSpace && !isUserMatch && ("everyone".startsWith(mentionText) || members.some(m => m.username.toLowerCase().startsWith(mentionText)));
+      const isUserMatch =
+        mentionText === "everyone" ||
+        members.some((m) => m.username.toLowerCase() === mentionText);
+      const isUserPartialMatch =
+        !trailingSpace &&
+        !isUserMatch &&
+        ("everyone".startsWith(mentionText) ||
+          members.some((m) =>
+            m.username.toLowerCase().startsWith(mentionText),
+          ));
 
       if (isValidModel) {
         parts.push(
           <span key={match.index} className="text-emerald-400 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isPartialMatch) {
         parts.push(
           <span key={match.index} className="text-emerald-400/60 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isUserMatch) {
         parts.push(
           <span key={match.index} className="text-orange-400 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else if (isUserPartialMatch) {
         parts.push(
           <span key={match.index} className="text-orange-400/60 font-medium">
             {fullToken}
-          </span>
+          </span>,
         );
         if (trailingSpace) parts.push(trailingSpace);
       } else {
@@ -502,8 +583,9 @@ const GroupMessageItem = ({
   const handleEditSave = () => {
     const contentChanged = editContent.trim() !== msg.content;
     const attachmentsChanged =
-      JSON.stringify(attachments) !== JSON.stringify(msg.attachments || []);
-    const hasNewFile = Boolean(attachedFile);
+      JSON.stringify(effectiveAttachments) !==
+      JSON.stringify(msg.attachments || []);
+    const hasNewFile = Boolean(effectiveAttachedFile);
 
     if (!editContent.trim()) {
       setIsEditing(false);
@@ -512,7 +594,12 @@ const GroupMessageItem = ({
     }
 
     if (contentChanged || attachmentsChanged || hasNewFile) {
-      onEdit?.(editContent, webSearchEnabled, attachments, attachedFile);
+      onEdit?.(
+        editContent,
+        effectiveWebSearchEnabled,
+        effectiveAttachments,
+        effectiveAttachedFile,
+      );
     }
     setIsEditing(false);
     setShowModelDropdown(false);
@@ -571,7 +658,10 @@ const GroupMessageItem = ({
     });
   };
 
-  const handleSelectMention = (mentionName: string, type: "user" | "model" | "everyone") => {
+  const handleSelectMention = (
+    mentionName: string,
+    type: "user" | "model" | "everyone",
+  ) => {
     if (!textareaRef.current) return;
     const selectionStart = textareaRef.current.selectionStart;
     const textBeforeCursor = editContent.substring(0, selectionStart);
@@ -582,13 +672,19 @@ const GroupMessageItem = ({
         const textBeforeAt = editContent.substring(0, lastAtPos);
         const textAfterAt = editContent.substring(selectionStart);
         const textWithoutCurrentTrigger = textBeforeAt + textAfterAt;
-        const otherMentions: string[] = textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
+        const otherMentions: string[] =
+          textWithoutCurrentTrigger.match(/@([a-zA-Z0-9-:_/.]+)/g) || [];
         const hasAnotherModel = otherMentions.some((m) => {
           const mentionText = m.substring(1).toLowerCase();
-          return mentionText === "velora" || availableProviders.some((p) => {
-            const cleanName = getCleanModelName(p.id).toLowerCase();
-            return cleanName === mentionText || p.id.toLowerCase() === mentionText;
-          });
+          return (
+            mentionText === "velora" ||
+            availableProviders.some((p) => {
+              const cleanName = getCleanModelName(p.id).toLowerCase();
+              return (
+                cleanName === mentionText || p.id.toLowerCase() === mentionText
+              );
+            })
+          );
         });
         if (hasAnotherModel) {
           toast.error("Multiple AI model mentions are not allowed");
@@ -597,7 +693,8 @@ const GroupMessageItem = ({
         }
       }
       const insertText = `@${mentionName} `;
-      const newInput = editContent.substring(0, lastAtPos) + insertText + textAfterCursor;
+      const newInput =
+        editContent.substring(0, lastAtPos) + insertText + textAfterCursor;
       setEditContent(newInput);
       setShowModelDropdown(false);
       setFilterText("");
@@ -611,7 +708,9 @@ const GroupMessageItem = ({
     }
   };
 
-  const filteredUsers = filterText ? members.filter((m) => m.username.toLowerCase().includes(filterText)) : members;
+  const filteredUsers = filterText
+    ? members.filter((m) => m.username.toLowerCase().includes(filterText))
+    : members;
   const filteredModels = availableProviders.filter((p) => {
     const cleanModelName = getCleanModelName(p.id).toLowerCase();
     const searchString = `${cleanModelName} ${p.name}`.toLowerCase();
@@ -619,9 +718,30 @@ const GroupMessageItem = ({
   });
   const isEveryoneMatch = "everyone".includes(filterText);
   const dropdownOptions = [
-    ...(isEveryoneMatch ? [{ type: "everyone" as const, id: "everyone", name: "everyone", originalName: "everyone", avatar: undefined }] : []),
-    ...filteredUsers.map(m => ({ type: "user" as const, id: m.userId, name: m.username, originalName: m.username, avatar: m.userImage })),
-    ...filteredModels.map(p => ({ type: "model" as const, id: p.id, name: getCleanModelName(p.id), originalName: p.name }))
+    ...(isEveryoneMatch
+      ? [
+          {
+            type: "everyone" as const,
+            id: "everyone",
+            name: "everyone",
+            originalName: "everyone",
+            avatar: undefined,
+          },
+        ]
+      : []),
+    ...filteredUsers.map((m) => ({
+      type: "user" as const,
+      id: m.userId,
+      name: m.username,
+      originalName: m.username,
+      avatar: m.userImage,
+    })),
+    ...filteredModels.map((p) => ({
+      type: "model" as const,
+      id: p.id,
+      name: getCleanModelName(p.id),
+      originalName: p.name,
+    })),
   ];
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -633,12 +753,19 @@ const GroupMessageItem = ({
       }
       if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((prev) => (prev - 1 + dropdownOptions.length) % dropdownOptions.length);
+        setActiveIndex(
+          (prev) =>
+            (prev - 1 + dropdownOptions.length) % dropdownOptions.length,
+        );
         return;
       }
       if (e.key === "Tab") {
         e.preventDefault();
-        setActiveIndex((prev) => e.shiftKey ? (prev - 1 + dropdownOptions.length) % dropdownOptions.length : (prev + 1) % dropdownOptions.length);
+        setActiveIndex((prev) =>
+          e.shiftKey
+            ? (prev - 1 + dropdownOptions.length) % dropdownOptions.length
+            : (prev + 1) % dropdownOptions.length,
+        );
         return;
       }
       if (e.key === "Enter") {
@@ -675,9 +802,11 @@ const GroupMessageItem = ({
     if (lastWord.startsWith("@")) {
       setShowModelDropdown(true);
       setFilterText(lastWord.substring(1).toLowerCase());
+      setActiveIndex(0);
     } else {
       setShowModelDropdown(false);
       setFilterText("");
+      setActiveIndex(0);
     }
   };
 
@@ -708,7 +837,9 @@ const GroupMessageItem = ({
     );
   }
 
-  const displayImageUrl = isMe ? (dbUser?.imageUrl || user?.imageUrl) : msg.userImage;
+  const displayImageUrl = isMe
+    ? dbUser?.imageUrl || user?.imageUrl
+    : msg.userImage;
 
   const formatBadgeText = (model: string) => {
     if (model.toLowerCase().startsWith("gemini-")) {
@@ -733,7 +864,11 @@ const GroupMessageItem = ({
     if (isMe) {
       return (
         <span className="flex items-center gap-1">
-          {isEdited && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
+          {isEdited && (
+            <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">
+              (edited)
+            </span>
+          )}
           <span className="text-emerald-400">You</span>
         </span>
       );
@@ -778,7 +913,11 @@ const GroupMessageItem = ({
         >
           {name}
         </span>
-        {isEdited && !isAssistant && <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">(edited)</span>}
+        {isEdited && !isAssistant && (
+          <span className="text-[12px] lowercase text-slate-500 font-normal tracking-normal">
+            (edited)
+          </span>
+        )}
       </span>
     );
   };
@@ -802,12 +941,19 @@ const GroupMessageItem = ({
         const mentionText = match.trim();
         const mentionTarget = mentionText.substring(1).toLowerCase();
 
-        const isValidModel = mentionTarget === "velora" || availableProviders.some((p) => {
-          const cleanName = getCleanModelName(p.id).toLowerCase();
-          return cleanName === mentionTarget || p.id.toLowerCase() === mentionTarget;
-        });
+        const isValidModel =
+          mentionTarget === "velora" ||
+          availableProviders.some((p) => {
+            const cleanName = getCleanModelName(p.id).toLowerCase();
+            return (
+              cleanName === mentionTarget ||
+              p.id.toLowerCase() === mentionTarget
+            );
+          });
 
-        const isUserMatch = mentionTarget === "everyone" || members.some(m => m.username.toLowerCase() === mentionTarget);
+        const isUserMatch =
+          mentionTarget === "everyone" ||
+          members.some((m) => m.username.toLowerCase() === mentionTarget);
 
         if (isValidModel) {
           return (
@@ -829,6 +975,22 @@ const GroupMessageItem = ({
   // Escape any unrecognized HTML tags to prevent custom element warning in React & preserve plain text display
   processedContent = escapeUnrecognizedHtmlTags(processedContent);
 
+  // Replace completed tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_COMPLETED:\1\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">✅</span> <span>Tool <strong>$1</strong> completed</span></span>',
+  );
+  // Replace failed tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]([\s\S]*?)\[TOOL_ERROR:\1:(.*?)\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="font-bold">❌</span> <span>Tool <strong>$1</strong> failed: $3</span></span>',
+  );
+  // Replace still running tools
+  processedContent = processedContent.replace(
+    /\[TOOL_RUNNING:([^\]]+)\]/g,
+    '<span class="flex items-center gap-2 my-2 text-[13px] text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 rounded-xl w-fit font-medium"><span class="inline-block animate-spin">⚙️</span> <span>Running tool <strong>$1</strong>...</span></span>',
+  );
+
   // Convert LaTeX block math \[ \] to $$ $$
   processedContent = processedContent.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
   // Convert LaTeX inline math \( \) to $ $
@@ -838,7 +1000,7 @@ const GroupMessageItem = ({
     ? {
         ...assistantMarkdownComponents,
 
-        cite: ({ node }: any) => {
+        cite: ({ node }: { node?: MarkdownAstNode }) => {
           const id = Number(node?.properties?.dataId);
 
           if (isNaN(id)) return null;
@@ -935,11 +1097,13 @@ const GroupMessageItem = ({
                             key={opt.id + opt.type}
                             ref={isActive ? activeItemRef : undefined}
                             type="button"
-                            onClick={() => handleSelectMention(opt.name, opt.type)}
+                            onClick={() =>
+                              handleSelectMention(opt.name, opt.type)
+                            }
                             data-active={isActive}
                             className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] font-medium transition-colors group ${
-                              isActive 
-                                ? "bg-white text-black font-semibold shadow-md shadow-white/5" 
+                              isActive
+                                ? "bg-white text-black font-semibold shadow-md shadow-white/5"
                                 : "text-zinc-400 hover:bg-white/5 hover:text-white"
                             }`}
                           >
@@ -950,7 +1114,11 @@ const GroupMessageItem = ({
                                 @
                               </div>
                             ) : opt.avatar ? (
-                              <img src={opt.avatar} alt={opt.name} className="w-4 h-4 rounded-full object-cover shrink-0" />
+                              <img
+                                src={opt.avatar}
+                                alt={opt.name}
+                                className="w-4 h-4 rounded-full object-cover shrink-0"
+                              />
                             ) : (
                               <div className="w-4 h-4 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center text-[8px] font-bold shrink-0">
                                 {opt.name.charAt(0).toUpperCase()}
@@ -965,10 +1133,10 @@ const GroupMessageItem = ({
                     </div>
                   </div>
                 )}
-                
-                {attachments.length > 0 && (
+
+                {effectiveAttachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 pt-2">
-                    {attachments.map((attachment, index) => (
+                    {effectiveAttachments.map((attachment, index) => (
                       <div key={index} className="group relative">
                         <button
                           type="button"
@@ -980,7 +1148,12 @@ const GroupMessageItem = ({
                         {attachment.mimeType?.startsWith("image/") ? (
                           <div className="relative h-16 w-16 overflow-hidden rounded-lg border border-white/10">
                             <img
-                              src={attachment.url || (attachedFile ? URL.createObjectURL(attachedFile) : "")}
+                              src={
+                                attachment.url ||
+                                (effectiveAttachedFile
+                                  ? URL.createObjectURL(effectiveAttachedFile)
+                                  : "")
+                              }
                               alt={attachment.name}
                               className="h-full w-full object-cover"
                             />
@@ -996,7 +1169,8 @@ const GroupMessageItem = ({
                               </p>
                               {attachment.size && (
                                 <p className="text-[10px] text-slate-400">
-                                  {(attachment.size / 1024 / 1024).toFixed(2)} MB
+                                  {(attachment.size / 1024 / 1024).toFixed(2)}{" "}
+                                  MB
                                 </p>
                               )}
                             </div>
@@ -1006,7 +1180,7 @@ const GroupMessageItem = ({
                     ))}
                   </div>
                 )}
-                
+
                 <div className="relative w-full rounded-2xl border border-white/20 bg-white/5 ring-1 ring-white/5">
                   <div
                     ref={backdropRef}
@@ -1029,10 +1203,12 @@ const GroupMessageItem = ({
                     onSelect={(e) => {
                       if (!isFocused) {
                         const el = e.currentTarget;
-                        requestAnimationFrame(() => el.selectionStart = el.selectionEnd);
+                        requestAnimationFrame(
+                          () => (el.selectionStart = el.selectionEnd),
+                        );
                       }
                     }}
-                    className={`${ isFocused ? "" : "selection:bg-transparent select-none" } not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-base text-transparent caret-white placeholder-slate-500 outline-none focus:ring-0 overflow-y-auto block min-h-[1.5em] border-none`}
+                    className={`${isFocused ? "" : "selection:bg-transparent select-none"} not-selectable relative w-full resize-none bg-transparent px-4 py-3.5 text-[0.95rem] md:text-base text-transparent caret-white placeholder-slate-500 outline-none focus:ring-0 overflow-y-auto block min-h-[1.5em] border-none`}
                     rows={1}
                     style={sharedTextStyles}
                   />
@@ -1042,7 +1218,7 @@ const GroupMessageItem = ({
                   <div className="flex items-center gap-2">
                     {hasMention && (
                       <WebSearchToggle
-                        enabled={webSearchEnabled}
+                        enabled={effectiveWebSearchEnabled}
                         onToggle={setWebSearchEnabled}
                       />
                     )}
@@ -1161,7 +1337,6 @@ const GroupMessageItem = ({
                 {!isAssistant && (
                   <AttachmentList attachments={msg.attachments || []} />
                 )}
-
               </>
             )}
           </div>
@@ -1189,9 +1364,7 @@ const GroupMessageItem = ({
                 return (
                   <div className="relative group/like">
                     <button
-                      onClick={() =>
-                        onFeedback?.(myLike ? null : "like")
-                      }
+                      onClick={() => onFeedback?.(myLike ? null : "like")}
                       className={`p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1 ${
                         myLike
                           ? "text-indigo-400 bg-indigo-500/10"
@@ -1235,9 +1408,7 @@ const GroupMessageItem = ({
                 return (
                   <div className="relative group/dislike">
                     <button
-                      onClick={() =>
-                        onFeedback?.(myDislike ? null : "dislike")
-                      }
+                      onClick={() => onFeedback?.(myDislike ? null : "dislike")}
                       className={`p-2 rounded-lg hover:bg-white/5 transition-colors flex items-center gap-1 ${
                         myDislike
                           ? "text-red-400 bg-red-500/10"
@@ -1297,9 +1468,9 @@ const GroupMessageItem = ({
                       <Globe size={14} className="mr-2 opacity-70" />
                       Web Search
                     </DropdownMenuCheckboxItem>
-                    
+
                     <DropdownMenuSeparator className="bg-zinc-800" />
-                    
+
                     <DropdownMenuItem
                       onClick={() => onRetry(msg.model, retryWebSearchEnabled)}
                       className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors text-zinc-400 focus:!bg-white/5 focus:!text-white cursor-pointer"
@@ -1314,7 +1485,7 @@ const GroupMessageItem = ({
                         Select Another Model
                       </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
-                        <DropdownMenuSubContent 
+                        <DropdownMenuSubContent
                           className="w-48 rounded-xl border border-zinc-800/60 !bg-zinc-900 p-1 shadow-2xl backdrop-blur-xl !text-zinc-400"
                           collisionPadding={{ top: 100, bottom: 200 }}
                         >
@@ -1385,10 +1556,7 @@ const GroupMessageItem = ({
   );
 };
 
-const areEqual = (
-  prev: GroupMessageItemProps,
-  next: GroupMessageItemProps,
-) => {
+const areEqual = (prev: GroupMessageItemProps, next: GroupMessageItemProps) => {
   return (
     prev.message._id === next.message._id &&
     prev.message.content === next.message.content &&
@@ -1398,7 +1566,8 @@ const areEqual = (
     prev.message.userImage === next.message.userImage &&
     prev.message.attachments === next.message.attachments &&
     prev.message.sources === next.message.sources &&
-    prev.message.metadata?.webSearchEnabled === next.message.metadata?.webSearchEnabled &&
+    prev.message.metadata?.webSearchEnabled ===
+      next.message.metadata?.webSearchEnabled &&
     prev.isRequester === next.isRequester &&
     prev.members === next.members
   );

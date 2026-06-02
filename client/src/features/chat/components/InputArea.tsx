@@ -23,6 +23,7 @@ import {
   MonitorPlay,
   File as FileIcon,
 } from "lucide-react";
+import { useChatStore } from "../store/useChatStore";
 
 import GeminiColor from "@lobehub/icons/es/Gemini/components/Color";
 import AnthropicMono from "@lobehub/icons/es/Anthropic/components/Mono";
@@ -83,6 +84,15 @@ export interface InputAreaProps {
   onUnarchive?: () => void;
   onSubmitDocument?: (file: File) => void;
 }
+
+const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/csv",
+];
 
 /**
  * Helper to get provider icon
@@ -303,6 +313,106 @@ const InputArea = ({
   const selectionContext = useComposerStore((state) => state.selectionContext);
   const [isFocused, setIsFocused] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const [, setDragCounter] = useState(0);
+
+  // Global window drag-and-drop file upload listeners
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+        setDragCounter((prev) => prev + 1);
+        setIsDragActive(true);
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      setDragCounter((prev) => {
+        const next = prev - 1;
+        if (next <= 0) {
+          setIsDragActive(false);
+          return 0;
+        }
+        return next;
+      });
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+    };
+
+    const handleDrop = async (e: DragEvent) => {
+      e.preventDefault();
+      setIsDragActive(false);
+      setDragCounter(0);
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        const file = files[0];
+        const isImage = file.type.startsWith("image/");
+        const fileExt = file.name.split(".").pop()?.toLowerCase();
+        const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv"];
+        const isDocument = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExt || "");
+
+        if (!isImage && !isDocument) {
+          toast.error("Unsupported file type!");
+          return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error("Please select a file under 5MB");
+          return;
+        }
+
+        if (attachments.length > 0 || attachedFile) {
+          toast.error("You can only upload one file per message.");
+          return;
+        }
+
+        if (isDocument) {
+          setAttachedFile(file);
+          toast.success(`Document attached: ${file.name}`);
+          return;
+        }
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append("image", file);
+
+        try {
+          const res = await api.post("/upload/image", formData);
+
+          const newAttachment: Attachment = {
+            url: res.data.url,
+            name: file.name,
+            mimeType: file.type,
+            size: file.size,
+          };
+
+          onAttachmentsChange?.([...attachments, newAttachment]);
+          toast.success("Image uploaded successfully");
+        } catch (err) {
+          console.error("Upload failed", err);
+          toast.error("Failed to upload image");
+        } finally {
+          setIsUploading(false);
+        }
+      }
+    };
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDrop);
+
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, [attachments, attachedFile, onAttachmentsChange, isUploading]);
 
   useEffect(() => {
     if (cooldown > 0) {
@@ -367,24 +477,10 @@ const InputArea = ({
         !loading &&
         !isUploading
       ) {
-        handleFormSubmit(e as any);
+        handleFormSubmit(e);
       }
     }
   };
-
-  const ALLOWED_FILE_TYPES = [
-    "application/pdf",
-
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-    // "application/vnd.ms-powerpoint",
-    // "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "text/csv",
-  ];
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -392,7 +488,21 @@ const InputArea = ({
     if (!file) return;
 
     const isImage = file.type.startsWith("image/");
-    const isDocument = ALLOWED_FILE_TYPES.includes(file.type);
+    const fileExt = file.name.split(".").pop()?.toLowerCase();
+    const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx", "xls", "xlsx", "csv"];
+    const isDocument = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(fileExt || "");
+
+    if (!isImage && !isDocument) {
+      toast.error("Unsupported file type!");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Please select a file under 5MB");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
 
     if (attachments.length > 0 || attachedFile) {
       toast.error("You can only upload one file per message.");
@@ -403,20 +513,6 @@ const InputArea = ({
     if (isDocument) {
       setAttachedFile(file);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
-    }
-
-    // Basic validation
-    if (!isImage && !isDocument) {
-      toast.error("Unsupported file type!");
-      return;
-    }
-
-    const MAX_SIZE = isImage ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
-    const maxMB = MAX_SIZE / (1024 * 1024);
-
-    if (file.size > MAX_SIZE) {
-      toast.error(`Image size must be less than ${maxMB}MB`);
       return;
     }
 
@@ -492,7 +588,9 @@ const InputArea = ({
     onAttachmentsChange?.(next);
   };
 
-  const handleFormSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
+  const handleFormSubmit = (
+    e: SyntheticEvent<HTMLFormElement> | KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
     e.preventDefault();
     if (loading || isUploading) return;
 
@@ -504,7 +602,7 @@ const InputArea = ({
     }
 
     // Normal submission (no document)
-    onSubmit(e);
+    onSubmit(e as SyntheticEvent<HTMLFormElement>);
   };
 
   return (
@@ -538,8 +636,25 @@ const InputArea = ({
         <>
           <form
             onSubmit={handleFormSubmit}
-            className="mx-auto max-w-4xl relative "
+            className="mx-auto max-w-4xl relative"
           >
+            {isDragActive && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-sm border-2 border-dashed border-indigo-500/50 rounded-3xl animate-in fade-in duration-150 pointer-events-none select-none">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 animate-bounce">
+                    <Paperclip size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-white tracking-wide">
+                      Drop Files Here
+                    </h3>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Release to attach document or image
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="group relative flex flex-col gap-0 rounded-3xl border border-zinc-800/60 bg-zinc-900/80 p-1 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300 focus-within:border-white/20 backdrop-blur-2xl">
               <ComposerQuotePreview />
 
@@ -599,14 +714,28 @@ const InputArea = ({
               )}
               {attachedFile && (
                 <div className="flex flex-wrap gap-2 px-4 py-2">
-                  <div className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5 flex flex-col items-center justify-center">
+                  <div
+                    onClick={() => {
+                      const objectUrl = URL.createObjectURL(attachedFile);
+                      useChatStore.getState().setActiveZoomedAttachment({
+                        url: objectUrl,
+                        name: attachedFile.name,
+                        mimeType: attachedFile.type,
+                        size: attachedFile.size,
+                      });
+                    }}
+                    className="group/att relative h-16 w-16 rounded-lg overflow-hidden border border-zinc-800/60 bg-white/5 flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
+                  >
                     <FileText size={20} className="text-zinc-300 shrink-0" />
                     <span className="mt-1 line-clamp-2 text-[9px] text-zinc-400 text-center">
                       {attachedFile.name}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setAttachedFile(null)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAttachedFile(null);
+                      }}
                       className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover/att:opacity-100 transition-opacity"
                     >
                       <X size={12} />
@@ -744,7 +873,8 @@ const InputArea = ({
                         cooldown > 0 ||
                         (!input.trim() &&
                           attachments.length === 0 &&
-                          !selectionContext)
+                          !selectionContext &&
+                          !attachedFile)
                           ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
                           : "bg-white text-zinc-900 hover:bg-zinc-200"
                       }`}
