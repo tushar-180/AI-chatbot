@@ -173,11 +173,13 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
 
       hasInitialScrolledRef.current = null;
 
-      shouldAutoScrollRef.current = true;
+      // Don't auto-scroll to bottom when navigating via search results;
+      // let the highlight scroll-into-view handle positioning instead.
+      shouldAutoScrollRef.current = !highlight;
 
       setShowScrollToBottom(false);
     }
-  }, [groupId]);
+  }, [groupId, highlight]);
 
   // AUTO SCROLL ON NEW MESSAGES (while streaming or sending)
   useLayoutEffect(() => {
@@ -299,6 +301,7 @@ const GroupMessageList = forwardRef<{ instantScrollToBottom: () => void }, Group
                     onEditStart={onEditStart}
                     onRetry={(provider, webSearchEnabled) => onRetryMessage?.(msg._id, provider, webSearchEnabled)}
                     onFeedback={(feedback) => onFeedback?.(msg._id, feedback)}
+                    highlight={highlight || undefined}
                   />
                 );
               })}

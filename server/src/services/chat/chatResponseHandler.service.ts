@@ -165,10 +165,11 @@ export async function* streamAssistantResponse(
     const hasFiles = promptMessages.some((m) =>
       m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
     );
+    const attachedFileNames = promptMessages.flatMap((m) => m.attachments || []).map((a: any) => a.name || "");
     const latestUserMsgText = promptMessages.filter(m => m.role === 'user').pop()?.content || "";
     const tools = isWebSearchEnabled 
       ? [] 
-      : await getEnabledMcpTools(String(chat.userId), hasFiles, latestUserMsgText);
+      : await getEnabledMcpTools(String(chat.userId), hasFiles, latestUserMsgText, attachedFileNames);
     const stream = await aiProvider.generateStreamResponse(
       promptMessages,
       activeStream.abortController.signal,
@@ -349,4 +350,4 @@ export async function* streamAssistantResponse(
     chatStreamRegistry.fail(requestId, detailedErrorMessage);
     yield { error: detailedErrorMessage, status: "failed" };
   }
-}
+} 

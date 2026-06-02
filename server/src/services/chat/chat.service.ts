@@ -197,8 +197,9 @@ export const chatService = {
         const hasFiles = promptMessages.some((m) =>
           m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
         );
+        const attachedFileNames = promptMessages.flatMap((m) => m.attachments || []).map((a: any) => a.name || "");
         const latestUserMsgText = promptMessages.filter(m => m.role === 'user').pop()?.content || "";
-        const tools = await getEnabledMcpTools(String(resolvedUserId), hasFiles, latestUserMsgText);
+        const tools = await getEnabledMcpTools(String(resolvedUserId), hasFiles, latestUserMsgText, attachedFileNames);
         const response = await aiProvider.generateResponse(
           promptMessages,
           tools,
@@ -388,8 +389,9 @@ export const chatService = {
       const hasFiles = promptMessages.some((m) =>
         m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
       );
+      const attachedFileNames = promptMessages.flatMap((m) => m.attachments || []).map((a: any) => a.name || "");
       const latestUserMsgText = promptMessages.filter(m => m.role === 'user').pop()?.content || "";
-      const tools = await getEnabledMcpTools(String(chat.userId), hasFiles, latestUserMsgText);
+      const tools = await getEnabledMcpTools(String(chat.userId), hasFiles, latestUserMsgText, attachedFileNames);
       const response = await aiProvider.generateResponse(promptMessages, tools);
       reply = response.text;
       usage = response.usage;

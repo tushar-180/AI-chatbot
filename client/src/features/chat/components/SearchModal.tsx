@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { Search, X, MessageSquare, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useChatList } from "../hooks/useChatList";
 import type { Chat } from "../types/chat.types";
 
@@ -18,6 +19,7 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const { searchChats, selectChat } = useChatList();
+  const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const searchChatsRef = useRef(searchChats);
 
@@ -92,7 +94,11 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
         if (activeIndex >= 0 && activeIndex < results.length) {
           e.preventDefault();
           const selected = results[activeIndex];
-          selectChat(selected._id, query);
+          if (selected.chatType === 'group') {
+            navigate(`/group/${selected._id}?highlight=${encodeURIComponent(query)}`);
+          } else {
+            selectChat(selected._id, query);
+          }
           handleClose();
         }
       }
@@ -160,13 +166,20 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
             </div>
           ) : results.length > 0 ? (
             <div className="p-3">
+              <div className="px-3 pb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+                Found {results.length} {results.length === 1 ? "result" : "results"}
+              </div>
               {results.map((result, index) => (
                 <button
                   key={result._id}
                   data-search-index={index}
                   onMouseEnter={() => setActiveIndex(index)}
                   onClick={() => {
-                    selectChat(result._id, query);
+                    if (result.chatType === 'group') {
+                      navigate(`/group/${result._id}?highlight=${encodeURIComponent(query)}`);
+                    } else {
+                      selectChat(result._id, query);
+                    }
                     handleClose();
                   }}
                   className={`w-full flex items-start gap-4 p-4 rounded-2xl transition-all group text-left mb-1 last:mb-0 border cursor-pointer ${
@@ -181,9 +194,21 @@ const SearchModal = ({ isOpen, onClose }: SearchModalProps) => {
                   
                   <div className="flex-1 min-w-0 py-0.5">
                     <div className="flex items-center justify-between gap-4 mb-1">
-                      <h4 className={`font-semibold truncate transition-colors ${activeIndex === index ? "text-zinc-900 dark:text-white" : "text-zinc-900 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white"}`}>
-                        {highlightMatch(result.title || "Untitled Session", query)}
-                      </h4>
+                      <div className="flex items-center gap-2 overflow-hidden flex-1">
+                        <h4 className={`font-semibold truncate transition-colors ${activeIndex === index ? "text-zinc-900 dark:text-white" : "text-zinc-900 dark:text-white group-hover:text-zinc-900 dark:group-hover:text-white"}`}>
+                          {highlightMatch(result.title || "Untitled Session", query)}
+                        </h4>
+                        {result.chatType === 'group' && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-400 uppercase">
+                            GROUP
+                          </span>
+                        )}
+                        {result.chatType === 'project' && (
+                          <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 uppercase">
+                            Project
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-650 shrink-0">
                         {result.updatedAt
                           ? new Date(result.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })

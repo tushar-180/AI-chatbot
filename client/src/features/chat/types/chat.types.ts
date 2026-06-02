@@ -45,6 +45,7 @@ export type Chat = {
     projectId?: string | null;
     createdAt?: string;
     updatedAt?: string;
+    chatType?: 'personal' | 'project' | 'group';
 };
 export type StreamEventPayload = {
     type?: "message" | "sources";

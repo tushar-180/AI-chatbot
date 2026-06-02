@@ -1,4 +1,5 @@
 import { Chat, Message, TokenUsageRecord } from "../models/Chat.model";
+import { GroupChat, GroupMessage } from "../models/GroupChat.model";
 import type { ChatMessage } from "../types/chat.types";
 import mongoose from "mongoose";
 
@@ -105,7 +106,9 @@ export const chatRepository = {
 
   async searchChats(userId: string, query: string) {
     try {
-      // First, try searching for chats by title
+      const resultsMap = new Map<string, any>();
+
+      // 1. Search Personal/Project Chats by title
       const chatResults = await Chat.find({
         userId,
         title: { $regex: query, $options: "i" },
@@ -114,7 +117,16 @@ export const chatRepository = {
         .limit(10)
         .lean();
 
-      // Second, search in messages content
+      chatResults.forEach((chat) => {
+        resultsMap.set(String(chat._id), {
+          ...chat,
+          matchType: "title",
+          snippet: "",
+          chatType: chat.projectId ? "project" : "personal",
+        });
+      });
+
+      // 2. Search Personal/Project Messages by content
       const messageResults = await Message.find({
         userId,
         content: { $regex: query, $options: "i" },
@@ -122,18 +134,6 @@ export const chatRepository = {
         .limit(20)
         .lean();
 
-      const resultsMap = new Map<string, any>();
-
-      // Add chat results
-      chatResults.forEach((chat) => {
-        resultsMap.set(String(chat._id), {
-          ...chat,
-          matchType: "title",
-          snippet: "",
-        });
-      });
-
-      // Add message results (overwriting or adding snippet)
       for (const msg of messageResults) {
         const chatId = String(msg.chatId);
         const existing = resultsMap.get(chatId);
@@ -142,31 +142,81 @@ export const chatRepository = {
         const index = content.toLowerCase().indexOf(query.toLowerCase());
         const start = Math.max(0, index - 40);
         const end = Math.min(content.length, index + 60);
-        const snippet =
-          (start > 0 ? "..." : "") +
-          content.substring(start, end) +
-          (end < content.length ? "..." : "");
+        const snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "");
 
         if (existing) {
           existing.matchType = "content";
           existing.snippet = snippet;
         } else {
-          const chat = await Chat.findById(chatId)
-            .select("-messages -legacyMessages")
-            .lean();
+          const chat = await Chat.findById(chatId).select("-messages -legacyMessages").lean();
           if (chat && String(chat.userId) === userId) {
             resultsMap.set(chatId, {
               ...chat,
               matchType: "content",
               snippet: snippet,
+              chatType: chat.projectId ? "project" : "personal",
+            });
+          }
+        }
+      }
+
+      // 3. Search GroupChats by title
+      const groupChatResults = await GroupChat.find({
+        "members.userId": userId,
+        title: { $regex: query, $options: "i" },
+      })
+        .limit(10)
+        .lean();
+
+      groupChatResults.forEach((chat) => {
+        resultsMap.set(String(chat._id), {
+          ...chat,
+          matchType: "title",
+          snippet: "",
+          chatType: "group",
+        });
+      });
+
+      // 4. Search GroupMessages by content
+      // First find groups the user is a member of
+      const userGroupChats = await GroupChat.find({ "members.userId": userId }).select("_id").lean();
+      const userGroupChatIds = userGroupChats.map(gc => gc._id);
+
+      const groupMessageResults = await GroupMessage.find({
+        groupId: { $in: userGroupChatIds },
+        content: { $regex: query, $options: "i" },
+      })
+        .limit(20)
+        .lean();
+
+      for (const msg of groupMessageResults) {
+        const chatId = String(msg.groupId);
+        const existing = resultsMap.get(chatId);
+
+        const content = msg.content || "";
+        const index = content.toLowerCase().indexOf(query.toLowerCase());
+        const start = Math.max(0, index - 40);
+        const end = Math.min(content.length, index + 60);
+        const snippet = (start > 0 ? "..." : "") + content.substring(start, end) + (end < content.length ? "..." : "");
+
+        if (existing) {
+          existing.matchType = "content";
+          existing.snippet = snippet;
+        } else {
+          const chat = await GroupChat.findById(chatId).lean();
+          if (chat && chat.members.some(m => m.userId === userId)) {
+            resultsMap.set(chatId, {
+              ...chat,
+              matchType: "content",
+              snippet: snippet,
+              chatType: "group",
             });
           }
         }
       }
 
       const finalResults = Array.from(resultsMap.values()).sort(
-        (a, b) =>
-          new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf(),
+        (a, b) => new Date(b.updatedAt).valueOf() - new Date(a.updatedAt).valueOf(),
       );
 
       return finalResults;

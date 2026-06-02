@@ -99,7 +99,8 @@ export const temporaryChatService = {
       const hasFiles = promptMessages.some((m) =>
         m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
       );
-      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(String(userId), hasFiles, lastUserMessage?.content || "");
+      const attachedFileNames = promptMessages.flatMap((m) => m.attachments || []).map((a: any) => a.name || "");
+      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(String(userId), hasFiles, lastUserMessage?.content || "", attachedFileNames);
 
       const stream = await aiProvider.generateStreamResponse(
         promptMessages,

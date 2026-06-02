@@ -1,7 +1,7 @@
 import { userService } from "../user/user.service";
 import { mcpClientService } from "./mcpClient.service";
 
-export const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true, latestMessageText: string = "") => {
+export const getEnabledMcpTools = async (userId: string, hasFiles: boolean = true, latestMessageText: string = "", attachedFileNames: string[] = []) => {
   const user = await userService.getUserByClerkId(userId);
   const disabledMcpServers = (user?.get("disabledMcpServers") || []) as string[];
   const allTools = await mcpClientService.getActiveTools();
@@ -76,6 +76,20 @@ export const getEnabledMcpTools = async (userId: string, hasFiles: boolean = tru
 
     const toolName = tool.name.toLowerCase();
     const serverName = (tool._serverName || "").toLowerCase();
+
+    const isExcelOrCsvTool = 
+        toolName.includes("excel") || serverName.includes("excel") ||
+        toolName.includes("csv") || serverName.includes("csv");
+
+    if (isExcelOrCsvTool && attachedFileNames.length > 0) {
+        const hasExcelOrCsvFile = attachedFileNames.some(f => {
+            const lower = (f || "").toLowerCase();
+            return lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv');
+        });
+        if (!hasExcelOrCsvFile) {
+            return false;
+        }
+    }
     
     const isFileTool = 
         toolName.includes("excel") || serverName.includes("excel") ||

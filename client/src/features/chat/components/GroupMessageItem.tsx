@@ -78,6 +78,7 @@ interface GroupMessageItemProps {
   onRetry?: (provider?: string, webSearchEnabled?: boolean) => void;
 
   onFeedback?: (feedback: "like" | "dislike" | null) => void;
+  highlight?: string;
 }
 
 interface Provider {
@@ -106,6 +107,21 @@ const getCleanModelName = (id: string) => {
   return afterColon.includes("/")
     ? afterColon.split("/").pop() || afterColon
     : afterColon;
+};
+
+const ensureGroupSearchHighlightStyle = () => {
+  if (typeof document === "undefined") return;
+  if (document.getElementById("group-search-highlight-style")) return;
+
+  const style = document.createElement("style");
+  style.id = "group-search-highlight-style";
+  style.textContent = `
+    ::highlight(group-search-highlight) {
+      background-color: rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+    }
+  `;
+  document.head.appendChild(style);
 };
 
 let cachedProviders: Provider[] | null = null;
@@ -318,6 +334,7 @@ const GroupMessageItem = ({
   onEditStart,
   onRetry,
   onFeedback,
+  highlight,
 }: GroupMessageItemProps) => {
   const { user } = useUser();
   const dbUser = useChatStore((state) => state.dbUser);
@@ -361,6 +378,8 @@ const GroupMessageItem = ({
   const backdropRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
+  const highlightedRef = useRef(false);
+  const lastHighlightedTerm = useRef<string | null>(null);
 
   const [copied, setCopied] = useState(false);
 
@@ -402,6 +421,106 @@ const GroupMessageItem = ({
       backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
     }
   }, [editContent]);
+
+  useEffect(() => {
+    const highlightName = "group-search-highlight";
+    const highlightRegistry = CSS.highlights;
+
+    if (!highlight) {
+      highlightedRef.current = false;
+      lastHighlightedTerm.current = null;
+      highlightRegistry?.delete(highlightName);
+      return;
+    }
+
+    if (highlightedRef.current && lastHighlightedTerm.current === highlight) {
+      return;
+    }
+
+    if (messageRef.current && msg.status !== "streaming") {
+      ensureGroupSearchHighlightStyle();
+      const term = highlight.toLowerCase();
+
+      const walker = document.createTreeWalker(
+        messageRef.current,
+        NodeFilter.SHOW_TEXT,
+      );
+
+      let node: Node | null;
+      const nodes: Text[] = [];
+      let fullText = "";
+
+      while ((node = walker.nextNode())) {
+        nodes.push(node as Text);
+        fullText += node.textContent || "";
+      }
+
+      const startIndex = fullText.toLowerCase().indexOf(term);
+
+      if (startIndex !== -1) {
+        const endIndex = startIndex + term.length;
+        let currentPos = 0;
+        let startNode: Text | null = null;
+        let endNode: Text | null = null;
+        let startOffset = 0;
+        let endOffset = 0;
+
+        nodes.some((textNode) => {
+          const nodeText = textNode.textContent || "";
+
+          const nodeStart = currentPos;
+          const nodeEnd = currentPos + nodeText.length;
+
+          if (!startNode && startIndex >= nodeStart && startIndex <= nodeEnd) {
+            startNode = textNode;
+            startOffset = startIndex - nodeStart;
+          }
+
+          if (!endNode && endIndex >= nodeStart && endIndex <= nodeEnd) {
+            endNode = textNode;
+            endOffset = endIndex - nodeStart;
+          }
+
+          currentPos = nodeEnd;
+
+          return Boolean(startNode && endNode);
+        });
+
+        if (startNode && endNode) {
+          const range = document.createRange();
+          range.setStart(startNode, startOffset);
+          range.setEnd(endNode, endOffset);
+
+          lastHighlightedTerm.current = highlight;
+          highlightedRef.current = true;
+
+          requestAnimationFrame(() => {
+            if (highlightRegistry && "Highlight" in window) {
+              const HighlightCtor = window.Highlight;
+              const registryHighlight =
+                highlightRegistry.get(highlightName) || new HighlightCtor();
+
+              registryHighlight.add(range);
+              highlightRegistry.set(highlightName, registryHighlight);
+            }
+
+            const target =
+              range.startContainer.parentElement || messageRef.current;
+            target?.scrollIntoView({ behavior: "smooth", block: "center" });
+          });
+
+          const timer = setTimeout(() => {
+            highlightRegistry?.delete(highlightName);
+          }, 3000);
+
+          return () => {
+            clearTimeout(timer);
+            highlightRegistry?.delete(highlightName);
+          };
+        }
+      }
+    }
+  }, [highlight, msg.status]);
 
   useEffect(() => {
     if (activeItemRef.current) {
@@ -992,9 +1111,12 @@ const GroupMessageItem = ({
   );
 
   // Convert LaTeX block math \[ \] to $$ $$
-  processedContent = processedContent.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+  processedContent = processedContent.replace(
+    /\\\[([\s\S]*?)\\\]/g,
+    "$$$$$1$$$$",
+  );
   // Convert LaTeX inline math \( \) to $ $
-  processedContent = processedContent.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+  processedContent = processedContent.replace(/\\\(([\s\S]*?)\\\)/g, "$$$1$$");
 
   const citationComponents = isAssistant
     ? {
@@ -1062,6 +1184,10 @@ const GroupMessageItem = ({
 
           <div
             ref={messageRef}
+            key={highlight || "no-highlight"}
+            data-message-role={msg.role}
+            data-message-id={msg._id}
+            data-message-content={msg.content}
             className={`transition-opacity duration-150 ease-out ${
               isMe
                 ? `w-fit max-w-full min-w-0 ${isEditing ? "overflow-visible" : "overflow-hidden"} rounded-2xl border border-white/8 bg-white/3 px-5 py-3.5 text-base leading-[1.8] tracking-[0.01em] text-white shadow-sm`
@@ -1492,7 +1618,9 @@ const GroupMessageItem = ({
                           {availableProviders.map((provider) => (
                             <DropdownMenuItem
                               key={provider.id}
-                              onClick={() => onRetry(provider.id, retryWebSearchEnabled)}
+                              onClick={() =>
+                                onRetry(provider.id, retryWebSearchEnabled)
+                              }
                               className={`flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-colors ${
                                 provider.id === msg.model
                                   ? "!bg-white !text-black"
@@ -1500,7 +1628,9 @@ const GroupMessageItem = ({
                               }`}
                             >
                               {getProviderIcon(provider.id, 12)}
-                              <span className="capitalize">{getModelOnlyName(provider.name)}</span>
+                              <span className="capitalize">
+                                {getModelOnlyName(provider.name)}
+                              </span>
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuSubContent>

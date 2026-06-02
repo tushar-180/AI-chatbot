@@ -607,8 +607,9 @@ export class GroupChatService {
       const hasFiles = promptMessages.some((m) =>
         m.attachments?.some((a: any) => a.mimeType && !a.mimeType.startsWith("image/"))
       );
+      const attachedFileNames = promptMessages.flatMap((m) => m.attachments || []).map((a: any) => a.name || "");
       const lastUserMessage = promptMessages.filter(m => m.role === 'user').pop()?.content || "";
-      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(activeUserId, hasFiles, lastUserMessage);
+      const tools = webSearchEnabled ? [] : await getEnabledMcpTools(activeUserId, hasFiles, lastUserMessage, attachedFileNames);
       await aiService.validateModelAccess(targetProvider);
       const aiProvider = aiService.getProvider(targetProvider);
       const stream = await aiProvider.generateStreamResponse(
